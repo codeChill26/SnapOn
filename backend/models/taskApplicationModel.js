@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { toDbApplicationStatus, fromDbApplicationStatus } = require('../utils/dbEnum');
 
 /**
  * Task Application Model — Database queries for task_applications table (Bids)
@@ -7,21 +8,23 @@ const taskApplicationModel = {
   /**
    * Create a new application/bid
    */
-  async create({ taskId, taskerId, bidPrice, estimatedTime, message }) {
-    const result = await pool.query(
+  async create({ taskId, taskerId, bidPrice, estimatedTime, message }, db = pool) {
+    const result = await db.query(
       `INSERT INTO task_applications (task_id, tasker_id, bid_price, estimated_time, message, status)
-       VALUES ($1, $2, $3, $4, $5, 'PENDING')
+       VALUES ($1, $2, $3, $4, $5, 'pending')
        RETURNING *`,
       [taskId, taskerId, bidPrice, estimatedTime, message]
     );
-    return result.rows[0];
+    const row = result.rows[0];
+    if (row) row.status = fromDbApplicationStatus(row.status);
+    return row;
   },
 
   /**
    * Find all applications for a task
    */
-  async findByTaskId(taskId) {
-    const result = await pool.query(
+  async findByTaskId(taskId, db = pool) {
+    const result = await db.query(
       `SELECT ta.*,
               u.full_name AS tasker_name, u.avatar_url AS tasker_avatar,
               tp.average_rating, tp.bio, tp.location_text
@@ -32,26 +35,31 @@ const taskApplicationModel = {
        ORDER BY ta.id ASC`,
       [taskId]
     );
+    for (const r of result.rows) {
+      r.status = fromDbApplicationStatus(r.status);
+    }
     return result.rows;
   },
 
   /**
    * Check if a tasker has already applied to a task
    */
-  async findByTaskerAndTask(taskerId, taskId) {
-    const result = await pool.query(
+  async findByTaskerAndTask(taskerId, taskId, db = pool) {
+    const result = await db.query(
       `SELECT * FROM task_applications
-       WHERE tasker_id = $1 AND task_id = $2 AND status != 'WITHDRAWN'`,
+       WHERE tasker_id = $1 AND task_id = $2 AND status != 'cancelled'`,
       [taskerId, taskId]
     );
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbApplicationStatus(row.status);
+    return row;
   },
 
   /**
    * Find application by ID
    */
-  async findById(id) {
-    const result = await pool.query(
+  async findById(id, db = pool) {
+    const result = await db.query(
       `SELECT ta.*,
               u.full_name AS tasker_name, u.avatar_url AS tasker_avatar
        FROM task_applications ta
@@ -59,41 +67,49 @@ const taskApplicationModel = {
        WHERE ta.id = $1`,
       [id]
     );
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbApplicationStatus(row.status);
+    return row;
   },
 
   /**
    * Update application status
    */
-  async updateStatus(id, status) {
-    const result = await pool.query(
+  async updateStatus(id, status, db = pool) {
+    const dbStatus = toDbApplicationStatus(status);
+    const result = await db.query(
       'UPDATE task_applications SET status = $2 WHERE id = $1 RETURNING *',
-      [id, status]
+      [id, dbStatus]
     );
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbApplicationStatus(row.status);
+    return row;
   },
 
   /**
    * Reject all pending applications for a task (except the accepted one)
    */
-  async rejectAllExcept(taskId, acceptedApplicationId) {
-    const result = await pool.query(
+  async rejectAllExcept(taskId, acceptedApplicationId, db = pool) {
+    const result = await db.query(
       `UPDATE task_applications
-       SET status = 'REJECTED'
-       WHERE task_id = $1 AND id != $2 AND status = 'PENDING'
+       SET status = 'rejected'
+       WHERE task_id = $1 AND id != $2 AND status = 'pending'
        RETURNING *`,
       [taskId, acceptedApplicationId]
     );
+    for (const r of result.rows) {
+      r.status = fromDbApplicationStatus(r.status);
+    }
     return result.rows;
   },
 
   /**
    * Count pending applications for a task
    */
-  async countPendingByTaskId(taskId) {
-    const result = await pool.query(
+  async countPendingByTaskId(taskId, db = pool) {
+    const result = await db.query(
       `SELECT COUNT(*) as count FROM task_applications
-       WHERE task_id = $1 AND status = 'PENDING'`,
+       WHERE task_id = $1 AND status = 'pending'`,
       [taskId]
     );
     return parseInt(result.rows[0].count);

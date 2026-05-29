@@ -1,5 +1,11 @@
 const pool = require('../config/db');
 const { PAGINATION } = require('../utils/constants');
+const {
+  toDbTaskStatus,
+  fromDbTaskStatus,
+  toDbTaskType,
+  fromDbTaskType,
+} = require('../utils/dbEnum');
 
 /**
  * Task Model — Database queries for tasks table
@@ -20,18 +26,24 @@ const taskModel = {
     deadlineEnd,
     allowInsurance = false,
   }) {
+    const dbTaskType = toDbTaskType(taskType);
     const result = await pool.query(
       `INSERT INTO tasks (
         poster_id, category_id, title, description, task_type,
         status, budget_min, budget_max, deadline_start, deadline_end, allow_insurance
-      ) VALUES ($1, $2, $3, $4, $5, 'OPEN', $6, $7, $8, $9, $10)
+      ) VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9, $10)
       RETURNING *`,
       [
-        posterId, categoryId, title, description, taskType,
+        posterId, categoryId, title, description, dbTaskType,
         budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance,
       ]
     );
-    return result.rows[0];
+    const task = result.rows[0];
+    if (task) {
+      task.status = fromDbTaskStatus(task.status);
+      task.task_type = fromDbTaskType(task.task_type);
+    }
+    return task;
   },
 
   /**
@@ -51,6 +63,10 @@ const taskModel = {
     if (result.rows.length === 0) return null;
 
     const task = result.rows[0];
+
+    // Map enums from DB -> API
+    task.status = fromDbTaskStatus(task.status);
+    task.task_type = fromDbTaskType(task.task_type);
 
     // Get required skills
     const skills = await pool.query(
@@ -82,6 +98,18 @@ const taskModel = {
   },
 
   /**
+   * Find base task row (no joins) — optionally inside a transaction.
+   */
+  async findBaseById(id, db = pool) {
+    const result = await db.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    const task = result.rows[0] || null;
+    if (!task) return null;
+    task.status = fromDbTaskStatus(task.status);
+    task.task_type = fromDbTaskType(task.task_type);
+    return task;
+  },
+
+  /**
    * Find all tasks with filters and pagination
    */
   async findAll({ status, categoryId, taskType, search, page, limit } = {}) {
@@ -95,7 +123,7 @@ const taskModel = {
 
     if (status) {
       whereClause += ` AND t.status = $${paramIndex++}`;
-      params.push(status);
+      params.push(toDbTaskStatus(status));
     }
     if (categoryId) {
       whereClause += ` AND t.category_id = $${paramIndex++}`;
@@ -103,7 +131,7 @@ const taskModel = {
     }
     if (taskType) {
       whereClause += ` AND t.task_type = $${paramIndex++}`;
-      params.push(taskType);
+      params.push(toDbTaskType(taskType));
     }
     if (search) {
       whereClause += ` AND (t.title ILIKE $${paramIndex} OR t.description ILIKE $${paramIndex})`;
@@ -132,6 +160,12 @@ const taskModel = {
        LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
       [...params, currentLimit, offset]
     );
+
+    // Map enums for API
+    for (const t of result.rows) {
+      t.status = fromDbTaskStatus(t.status);
+      t.task_type = fromDbTaskType(t.task_type);
+    }
 
     return {
       tasks: result.rows,
@@ -170,6 +204,11 @@ const taskModel = {
       [posterId, currentLimit, offset]
     );
 
+    for (const t of result.rows) {
+      t.status = fromDbTaskStatus(t.status);
+      t.task_type = fromDbTaskType(t.task_type);
+    }
+
     return {
       tasks: result.rows,
       pagination: {
@@ -184,19 +223,25 @@ const taskModel = {
   /**
    * Update task status
    */
-  async updateStatus(id, status) {
-    const result = await pool.query(
+  async updateStatus(id, status, db = pool) {
+    const dbStatus = toDbTaskStatus(status);
+    const result = await db.query(
       'UPDATE tasks SET status = $2 WHERE id = $1 RETURNING *',
-      [id, status]
+      [id, dbStatus]
     );
-    return result.rows[0] || null;
+    const task = result.rows[0] || null;
+    if (task) {
+      task.status = fromDbTaskStatus(task.status);
+      task.task_type = fromDbTaskType(task.task_type);
+    }
+    return task;
   },
 
   /**
    * Update final price
    */
-  async updateFinalPrice(id, finalPrice) {
-    const result = await pool.query(
+  async updateFinalPrice(id, finalPrice, db = pool) {
+    const result = await db.query(
       'UPDATE tasks SET final_price = $2 WHERE id = $1 RETURNING *',
       [id, finalPrice]
     );

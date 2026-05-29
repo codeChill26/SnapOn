@@ -14,6 +14,7 @@ var applicationRoutes = require('./routes/applicationRoutes');
 var matchingRoutes = require('./routes/matchingRoutes');
 var usersRouter = require("./routes/users");
 var authRouter = require('./routes/auth');
+var walletRoutes = require('./routes/walletRoutes');
 
 const app = express();
 
@@ -61,6 +62,9 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api', applicationRoutes);
 app.use('/api', matchingRoutes);
 
+// Wallet routes
+app.use('/api/wallet', walletRoutes);
+
 // User & Auth routes
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
@@ -85,14 +89,16 @@ app.use(function(err, req, res, next) {
   });
 });
 
-// ==========================================
-// START SERVER
-// ==========================================
-const port = process.env.PORT || 3000;
-
-app.listen(port, () => {
-  console.log(`🚀 Server is running at http://localhost:${port}`);
-  console.log(`📚 Swagger docs at http://localhost:${port}/api-docs`);
-});
-
 module.exports = app;
+
+// ==========================================
+// START SERVER (only when running app.js directly)
+// ==========================================
+if (require.main === module) {
+  const port = process.env.PORT || 3000;
+
+  app.listen(port, () => {
+    console.log(`🚀 Server is running at http://localhost:${port}`);
+    console.log(`📚 Swagger docs at http://localhost:${port}/api-docs`);
+  });
+}

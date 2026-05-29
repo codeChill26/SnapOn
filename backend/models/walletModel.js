@@ -7,8 +7,8 @@ const walletModel = {
   /**
    * Find wallet by user ID
    */
-  async findByUserId(userId) {
-    const result = await pool.query(
+  async findByUserId(userId, db = pool) {
+    const result = await db.query(
       'SELECT * FROM wallets WHERE user_id = $1',
       [userId]
     );
@@ -16,10 +16,32 @@ const walletModel = {
   },
 
   /**
+   * Lock wallet row for update inside a transaction.
+   * Creates wallet if missing.
+   */
+  async lockByUserId(userId, db) {
+    if (!db) throw new Error('lockByUserId requires a db client');
+
+    const result = await db.query(
+      'SELECT * FROM wallets WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+    if (result.rows[0]) return result.rows[0];
+
+    const created = await db.query(
+      `INSERT INTO wallets (user_id, balance, available_balance, locked_balance)
+       VALUES ($1, 0, 0, 0)
+       RETURNING *`,
+      [userId]
+    );
+    return created.rows[0];
+  },
+
+  /**
    * Check if user has sufficient available balance
    */
-  async checkBalance(userId, amount) {
-    const result = await pool.query(
+  async checkBalance(userId, amount, db = pool) {
+    const result = await db.query(
       'SELECT available_balance FROM wallets WHERE user_id = $1',
       [userId]
     );
@@ -30,12 +52,12 @@ const walletModel = {
   /**
    * Create wallet for user (if not exists)
    */
-  async createIfNotExists(userId) {
-    const existing = await this.findByUserId(userId);
+  async createIfNotExists(userId, db = pool) {
+    const existing = await this.findByUserId(userId, db);
     if (existing) return existing;
 
-    const result = await pool.query(
-      `INSERT INTO wallets (user_id, balance, available_balance, pending_balance)
+    const result = await db.query(
+      `INSERT INTO wallets (user_id, balance, available_balance, locked_balance)
        VALUES ($1, 0, 0, 0)
        RETURNING *`,
       [userId]

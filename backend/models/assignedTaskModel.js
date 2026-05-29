@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { toDbAssignedBy, toDbAssignedTaskStatus, fromDbAssignedTaskStatus } = require('../utils/dbEnum');
 
 /**
  * Assigned Task Model — Database queries for assigned_tasks table
@@ -7,21 +8,25 @@ const assignedTaskModel = {
   /**
    * Create an assigned task record
    */
-  async create({ taskId, taskerId, applicationId, assignedBy }) {
-    const result = await pool.query(
+  async create({ taskId, taskerId, applicationId, assignedBy }, db = pool) {
+    const dbAssignedBy = toDbAssignedBy(assignedBy);
+    const dbStatus = toDbAssignedTaskStatus('ASSIGNED');
+    const result = await db.query(
       `INSERT INTO assigned_tasks (task_id, tasker_id, application_id, assigned_by, status)
-       VALUES ($1, $2, $3, $4, 'ASSIGNED')
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [taskId, taskerId, applicationId, assignedBy]
+      [taskId, taskerId, applicationId, dbAssignedBy, dbStatus]
     );
-    return result.rows[0];
+    const row = result.rows[0];
+    if (row) row.status = fromDbAssignedTaskStatus(row.status);
+    return row;
   },
 
   /**
    * Find assigned task by task ID
    */
-  async findByTaskId(taskId) {
-    const result = await pool.query(
+  async findByTaskId(taskId, db = pool) {
+    const result = await db.query(
       `SELECT at.*,
               u.full_name AS tasker_name, u.avatar_url AS tasker_avatar
        FROM assigned_tasks at
@@ -29,18 +34,23 @@ const assignedTaskModel = {
        WHERE at.task_id = $1`,
       [taskId]
     );
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbAssignedTaskStatus(row.status);
+    return row;
   },
 
   /**
    * Update assigned task status
    */
-  async updateStatus(id, status) {
-    const result = await pool.query(
+  async updateStatus(id, status, db = pool) {
+    const dbStatus = toDbAssignedTaskStatus(status);
+    const result = await db.query(
       'UPDATE assigned_tasks SET status = $2 WHERE id = $1 RETURNING *',
-      [id, status]
+      [id, dbStatus]
     );
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbAssignedTaskStatus(row.status);
+    return row;
   },
 };
 

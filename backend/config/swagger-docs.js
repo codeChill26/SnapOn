@@ -256,6 +256,10 @@
  *       - IN_PROGRESS → COMPLETED, CANCELLED
  *       - COMPLETED → (không thể chuyển)
  *       - CANCELLED → (không thể chuyển)
+ *
+ *       **Escrow side-effects** (tự động):
+ *       - IN_PROGRESS → COMPLETED: release escrow (chuyển tiền cho tasker)
+ *       - IN_PROGRESS → CANCELLED: refund escrow (trả lại tiền cho poster)
  *     security:
  *       - DevAuth: []
  *       - BearerAuth: []
@@ -428,6 +432,7 @@
  *       
  *       Sau khi match:
  *       - Tạo record assigned_tasks
+ *       - HOLD escrow (khóa tiền của poster vào pending)
  *       - Task status → IN_PROGRESS
  *       - Application được chọn → ACCEPTED
  *       - Các application còn lại → REJECTED
@@ -462,6 +467,8 @@
  *                       $ref: '#/components/schemas/AssignedTask'
  *                     matchedTasker:
  *                       $ref: '#/components/schemas/RankedApplication'
+ *                     escrow:
+ *                       $ref: '#/components/schemas/Escrow'
  *       400:
  *         description: Task không OPEN hoặc không có applications
  *       403:
@@ -481,6 +488,7 @@
  *       
  *       Sau khi match:
  *       - Tạo record assigned_tasks
+ *       - HOLD escrow (khóa tiền của poster vào pending)
  *       - Task status → IN_PROGRESS
  *       - Application được chọn → ACCEPTED
  *       - Các application còn lại → REJECTED
@@ -517,6 +525,8 @@
  *                       $ref: '#/components/schemas/AssignedTask'
  *                     selectedApplication:
  *                       $ref: '#/components/schemas/Application'
+ *                     escrow:
+ *                       $ref: '#/components/schemas/Escrow'
  *       400:
  *         description: Task không OPEN hoặc application không hợp lệ
  *       403:
@@ -562,4 +572,127 @@
  *         description: Không phải owner
  *       404:
  *         description: Task không tồn tại
+ */
+
+// ==========================================
+// WALLET
+// ==========================================
+
+/**
+ * @swagger
+ * /api/wallet/me:
+ *   get:
+ *     tags: [Wallet]
+ *     summary: Ví của tôi
+ *     description: Lấy số dư ví của user hiện tại.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy ví thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Wallet retrieved successfully.
+ *                 data:
+ *                   $ref: '#/components/schemas/WalletSummary'
+ *       401:
+ *         description: Chưa xác thực
+ */
+
+/**
+ * @swagger
+ * /api/wallet/transactions:
+ *   get:
+ *     tags: [Wallet]
+ *     summary: Lịch sử giao dịch ví
+ *     description: |
+ *       Danh sách giao dịch của ví hiện tại (order theo created_at DESC).
+ *       Cursor là `id` của transaction để phân trang.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Số lượng bản ghi
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Transaction id để lấy trang tiếp theo
+ *     responses:
+ *       200:
+ *         description: Danh sách giao dịch
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Wallet transactions retrieved successfully.
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/WalletTransaction'
+ *       401:
+ *         description: Chưa xác thực
+ */
+
+/**
+ * @swagger
+ * /api/wallet/topup/mock:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: (DEV) Nạp tiền giả lập
+ *     description: |
+ *       DEV-only endpoint để cộng tiền vào ví (available_balance).
+ *       Không dùng cho production.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/WalletTopupMockInput'
+ *     responses:
+ *       200:
+ *         description: Topup thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Topup successful.
+ *                 data:
+ *                   $ref: '#/components/schemas/WalletSummary'
+ *       400:
+ *         description: Amount không hợp lệ
+ *       401:
+ *         description: Chưa xác thực
  */

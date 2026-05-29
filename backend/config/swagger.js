@@ -224,6 +224,66 @@ const options = {
           },
         },
 
+        WalletSummary: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            user_id: { type: 'string', format: 'uuid' },
+            balance: { type: 'number', example: 250000 },
+            available_balance: { type: 'number', example: 200000 },
+            pending_balance: { type: 'number', example: 50000 },
+          },
+        },
+
+        WalletTransaction: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            wallet_id: { type: 'string', format: 'uuid' },
+            type: {
+              type: 'string',
+              enum: ['topup', 'payment', 'refund', 'withdraw', 'earning', 'fee'],
+              example: 'topup',
+            },
+            amount: { type: 'number', example: 100000 },
+            status: {
+              type: 'string',
+              enum: ['pending', 'success', 'failed', 'cancelled'],
+              example: 'success',
+            },
+            reference_id: { type: 'string', format: 'uuid', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+          },
+        },
+
+        WalletTopupMockInput: {
+          type: 'object',
+          required: ['amount'],
+          properties: {
+            amount: { type: 'number', minimum: 0.01, example: 100000 },
+          },
+        },
+
+        Escrow: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            task_id: { type: 'string', format: 'uuid' },
+            poster_id: { type: 'string', format: 'uuid' },
+            tasker_id: { type: 'string', format: 'uuid' },
+            amount: { type: 'number', example: 150000 },
+            platform_fee_amount: { type: 'number', example: 15000 },
+            insurance_fee_amount: { type: 'number', example: 0 },
+            status: {
+              type: 'string',
+              enum: ['holding', 'released', 'refunded', 'disputed'],
+              example: 'holding',
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+
         UpdateStatusInput: {
           type: 'object',
           required: ['status'],
