@@ -297,6 +297,72 @@ await prisma.$executeRaw`
   - `npx prisma migrate dev --name add_xxx`
   - Deploy: `npx prisma migrate deploy`
 
+#### 9.3.1 Lưu ý quan trọng khi dùng Supabase
+`prisma migrate dev` thường cần **shadow database** (yêu cầu quyền `CREATE DATABASE`). Trên Supabase, nhiều trường hợp bạn **không có quyền** này ⇒ chạy `migrate dev` trực tiếp lên Supabase có thể lỗi.
+
+Workflow ổn định nhất (khuyến nghị):
+- **Tạo migration ở local Postgres** bằng `migrate dev`
+- **Deploy lên Supabase** bằng `migrate deploy`
+
+> Mục tiêu: luôn có folder `prisma/migrations/*` để đồng bộ giữa máy dev và Supabase.
+
+#### 9.3.2 Tạo migration ở local (khuyến nghị)
+Chạy trong thư mục `backend/`.
+
+1) Chuẩn bị Postgres local (ví dụ Docker):
+```bash
+docker run --name exe202-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16
+```
+
+2) Trỏ Prisma CLI về DB local (tạm thời):
+- Cách đơn giản: set `DIRECT_URL` và/hoặc `DATABASE_URL` trong `.env` sang local
+
+Ví dụ:
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+DIRECT_URL=postgresql://postgres:postgres@localhost:5432/postgres
+```
+
+3) Generate + chạy migrate dev để sinh migration:
+```bash
+npm run prisma:generate
+npx prisma migrate dev --name <ten_ngan_goi>
+```
+
+4) Commit folder `backend/prisma/migrations/` lên git.
+
+#### 9.3.3 Deploy migration lên Supabase (đồng bộ schema)
+Chạy trong thư mục `backend/`.
+
+1) Trỏ Prisma CLI về Supabase **direct connection** (khuyến nghị dùng `DIRECT_URL`):
+```env
+DATABASE_URL=<pooler_or_direct_url>
+DIRECT_URL=<supabase_direct_url_port_5432>?sslmode=require
+```
+
+2) Apply migrations lên Supabase:
+```bash
+npx prisma migrate deploy
+```
+
+3) Kiểm tra trạng thái:
+```bash
+npx prisma migrate status
+```
+
+> Nếu app runtime dùng pooler, bạn vẫn có thể để `DATABASE_URL` là pooler; nhưng Prisma CLI nên ưu tiên `DIRECT_URL` (repo đã cấu hình trong `prisma.config.ts`).
+
+#### 9.3.4 Sync nhanh (không migration) — chỉ nên dùng cho dev/POC
+Nếu bạn chỉ cần “đẩy schema lên Supabase cho nhanh” và chấp nhận **không có lịch sử migration**:
+```bash
+npx prisma db push
+```
+
+Rủi ro:
+- Dễ bị drift giữa các máy/dev
+- Khó rollback
+- Không phù hợp production
+
 ---
 
 ## 10) Troubleshooting thường gặp (Supabase)
@@ -317,6 +383,8 @@ await prisma.$executeRaw`
 ## 11) Quick commands (cheat sheet)
 
 ```bash
+# Run inside backend/
+
 # Generate Prisma client
 npm run prisma:generate
 
@@ -325,6 +393,18 @@ npm run prisma:pull
 
 # Open Prisma Studio
 npm run prisma:studio
+
+# Create a migration (recommended: run against LOCAL Postgres)
+npx prisma migrate dev --name <ten_ngan_goi>
+
+# Apply migrations to Supabase (or any target DB)
+npx prisma migrate deploy
+
+# Migration status
+npx prisma migrate status
+
+# Quick sync without migrations (dev/POC)
+npx prisma db push
 
 # Test DB
 npm run db:ping

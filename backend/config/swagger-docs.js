@@ -608,6 +608,182 @@
  *         description: Chưa xác thực
  */
 
+// ==========================================
+// ESCROW
+// ==========================================
+
+/**
+ * @swagger
+ * /api/escrows/me:
+ *   get:
+ *     tags: [Escrow]
+ *     summary: Danh sách escrow của tôi
+ *     description: |
+ *       Lấy danh sách escrows mà user hiện tại là poster hoặc tasker.
+ *       Hỗ trợ filter theo role/status và phân trang đơn giản.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [all, poster, tasker]
+ *           default: all
+ *         description: Lọc theo vai trò của user trong escrow
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [holding, released, refunded, disputed]
+ *         description: Lọc theo trạng thái escrow
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Số lượng bản ghi
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Escrow id để lấy trang tiếp theo
+ *     responses:
+ *       200:
+ *         description: Danh sách escrow
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Escrows retrieved successfully.
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Escrow'
+ *       401:
+ *         description: Chưa xác thực
+ */
+
+/**
+ * @swagger
+ * /api/escrows/{taskId}:
+ *   get:
+ *     tags: [Escrow]
+ *     summary: Lấy escrow theo taskId
+ *     description: |
+ *       Lấy thông tin escrow gắn với 1 task.
+ *       Chỉ poster hoặc tasker của escrow mới xem được.
+ *
+ *       Lưu ý: `taskId` là id của task (không phải escrow id).
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Lấy escrow thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Escrow retrieved successfully.
+ *                 data:
+ *                   $ref: '#/components/schemas/Escrow'
+ *       403:
+ *         description: Không có quyền xem escrow này
+ *       404:
+ *         description: Không tìm thấy escrow cho task
+ *       401:
+ *         description: Chưa xác thực
+ */
+
+// ==========================================
+// USERS
+// ==========================================
+
+/**
+ * @swagger
+ * /api/users/profile:
+ *   get:
+ *     tags: [Users]
+ *     summary: Profile user hiện tại
+ *     description: Trả về thông tin user sau khi authenticate.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy profile thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User authenticated successfully
+ *                 user:
+ *                   $ref: '#/components/schemas/UserProfile'
+ *       401:
+ *         description: Chưa xác thực
+ */
+
+// ==========================================
+// AUTH
+// ==========================================
+
+/**
+ * @swagger
+ * /api/auth/sync-user:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Sync user từ Firebase vào DB
+ *     description: |
+ *       Dùng Firebase ID token để đồng bộ user vào database (upsert theo firebase_uid)
+ *       và tự tạo wallet (nếu chưa có).
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SyncUserResponse'
+ *       400:
+ *         description: Firebase user thiếu uid/email
+ *       401:
+ *         description: Chưa xác thực
+ *       500:
+ *         description: Sync user failed
+ */
+
 /**
  * @swagger
  * /api/wallet/transactions:

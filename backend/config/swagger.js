@@ -284,6 +284,60 @@ const options = {
           },
         },
 
+        UserProfile: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            firebaseUid: { type: 'string', nullable: true, example: 'firebase_uid_123' },
+            fullName: { type: 'string', nullable: true, example: 'Nguyễn Văn A' },
+            email: { type: 'string', nullable: true, example: 'a@example.com' },
+            phone: { type: 'string', nullable: true, example: '0900000000' },
+            avatarUrl: { type: 'string', nullable: true },
+            status: { type: 'string', example: 'active' },
+            isVerified: { type: 'boolean', example: false },
+          },
+        },
+
+        UserDb: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            firebase_uid: { type: 'string', example: 'firebase_uid_123' },
+            email: { type: 'string', example: 'a@example.com' },
+            full_name: { type: 'string', nullable: true, example: 'Nguyễn Văn A' },
+            phone: { type: 'string', nullable: true },
+            avatar_url: { type: 'string', nullable: true },
+            role: { type: 'string', enum: ['hirer', 'tasker', 'admin'], example: 'hirer' },
+            status: { type: 'string', enum: ['active', 'inactive', 'banned'], example: 'active' },
+            is_verified: { type: 'boolean', example: false },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+
+        Wallet: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            user_id: { type: 'string', format: 'uuid' },
+            balance: { type: 'number', example: 250000 },
+            available_balance: { type: 'number', example: 200000 },
+            pending_balance: { type: 'number', example: 50000 },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+
+        SyncUserResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'User synced successfully' },
+            user: { $ref: '#/components/schemas/UserDb' },
+            wallet: { $ref: '#/components/schemas/Wallet' },
+          },
+        },
+
         UpdateStatusInput: {
           type: 'object',
           required: ['status'],

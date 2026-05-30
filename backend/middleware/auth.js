@@ -83,6 +83,14 @@ const authenticate = async (req, res, next) => {
         isVerified: user.is_verified,
       };
 
+      // For compatibility with routes expecting firebase payload
+      req.firebaseUser = {
+        uid: user.firebase_uid,
+        email: user.email,
+        name: user.full_name,
+        picture: user.avatar_url,
+      };
+
       return next();
     }
 
@@ -99,6 +107,9 @@ const authenticate = async (req, res, next) => {
 
     // Verify Firebase ID token
     const decodedToken = await admin.auth().verifyIdToken(token);
+
+    // For compatibility with routes expecting firebase payload
+    req.firebaseUser = decodedToken;
 
     // Find user in database by firebase_uid
     const result = await pool.query(

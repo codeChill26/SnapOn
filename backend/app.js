@@ -15,6 +15,7 @@ var matchingRoutes = require('./routes/matchingRoutes');
 var usersRouter = require("./routes/users");
 var authRouter = require('./routes/auth');
 var walletRoutes = require('./routes/walletRoutes');
+var escrowRoutes = require('./routes/escrowRoutes');
 
 const app = express();
 
@@ -64,6 +65,9 @@ app.use('/api', matchingRoutes);
 
 // Wallet routes
 app.use('/api/wallet', walletRoutes);
+
+// Escrow routes
+app.use('/api/escrows', escrowRoutes);
 
 // User & Auth routes
 app.use("/api/users", usersRouter);
