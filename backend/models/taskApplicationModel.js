@@ -114,6 +114,38 @@ const taskApplicationModel = {
     );
     return parseInt(result.rows[0].count);
   },
+
+  /**
+   * Update bid/application details
+   */
+  async update(id, { bidPrice, estimatedTime, message }, db = pool) {
+    const result = await db.query(
+      `UPDATE task_applications
+       SET bid_price = COALESCE($2, bid_price),
+           estimated_time = COALESCE($3, estimated_time),
+           message = COALESCE($4, message),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id, bidPrice, estimatedTime, message]
+    );
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbApplicationStatus(row.status);
+    return row;
+  },
+
+  /**
+   * Delete an application (Hard delete)
+   */
+  async delete(id, db = pool) {
+    const result = await db.query(
+      'DELETE FROM task_applications WHERE id = $1 RETURNING *',
+      [id]
+    );
+    const row = result.rows[0] || null;
+    if (row) row.status = fromDbApplicationStatus(row.status);
+    return row;
+  },
 };
 
 module.exports = taskApplicationModel;

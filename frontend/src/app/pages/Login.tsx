@@ -5,9 +5,11 @@ import {
   loginWithGoogle,
   registerWithEmail,
 } from "../../imports/authService";
+import { useApp } from "../context/AppContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { fetchProfile } = useApp();
 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState("");
@@ -51,6 +53,9 @@ export default function Login() {
       localStorage.setItem("wallet", JSON.stringify(syncData.wallet));
 
       console.log("Synced user:", syncData);
+      
+      // Update global context
+      await fetchProfile();
 
       navigate("/");
     } catch (err: any) {
@@ -75,6 +80,9 @@ export default function Login() {
     localStorage.setItem("wallet", JSON.stringify(syncData.wallet));
 
     console.log("Synced Google user:", syncData);
+    
+    // Update global context
+    await fetchProfile();
 
     navigate("/");
   } catch (err: any) {

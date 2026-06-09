@@ -279,6 +279,64 @@ const taskModel = {
     );
     return result.rows[0];
   },
+
+  /**
+   * Update task details
+   */
+  async update(id, {
+    categoryId,
+    title,
+    description,
+    taskType,
+    budgetMin,
+    budgetMax,
+    deadlineStart,
+    deadlineEnd,
+    allowInsurance,
+  }, db = pool) {
+    const dbTaskType = taskType ? toDbTaskType(taskType) : undefined;
+    const result = await db.query(
+      `UPDATE tasks
+       SET category_id = COALESCE($2, category_id),
+           title = COALESCE($3, title),
+           description = COALESCE($4, description),
+           task_type = COALESCE($5, task_type),
+           budget_min = COALESCE($6, budget_min),
+           budget_max = COALESCE($7, budget_max),
+           deadline_start = COALESCE($8, deadline_start),
+           deadline_end = COALESCE($9, deadline_end),
+           allow_insurance = COALESCE($10, allow_insurance),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [
+        id, categoryId, title, description, dbTaskType,
+        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance
+      ]
+    );
+    const task = result.rows[0] || null;
+    if (task) {
+      task.status = fromDbTaskStatus(task.status);
+      task.task_type = fromDbTaskType(task.task_type);
+    }
+    return task;
+  },
+
+  /**
+   * Delete a task
+   */
+  async delete(id, db = pool) {
+    const result = await db.query(
+      'DELETE FROM tasks WHERE id = $1 RETURNING *',
+      [id]
+    );
+    const task = result.rows[0] || null;
+    if (task) {
+      task.status = fromDbTaskStatus(task.status);
+      task.task_type = fromDbTaskType(task.task_type);
+    }
+    return task;
+  },
 };
 
 module.exports = taskModel;

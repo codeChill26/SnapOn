@@ -35,4 +35,22 @@ router.patch(
   applicationController.withdrawApplication
 );
 
+// PATCH /api/applications/:id — Update application details
+router.patch(
+  '/applications/:id',
+  authenticate,
+  applicationValidator.updateApplication,
+  validate,
+  applicationController.updateApplication
+);
+
+// DELETE /api/applications/:id — Delete application
+router.delete(
+  '/applications/:id',
+  authenticate,
+  applicationValidator.applicationIdParam,
+  validate,
+  applicationController.deleteApplication
+);
+
 module.exports = router;
