@@ -10,8 +10,8 @@ const taskApplicationModel = {
    */
   async create({ taskId, taskerId, bidPrice, estimatedTime, message }, db = pool) {
     const result = await db.query(
-      `INSERT INTO task_applications (task_id, tasker_id, bid_price, estimated_time, message, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending')
+      `INSERT INTO task_applications (id, task_id, tasker_id, bid_price, estimated_time, message, status)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'pending')
        RETURNING *`,
       [taskId, taskerId, bidPrice, estimatedTime, message]
     );

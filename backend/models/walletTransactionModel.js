@@ -4,12 +4,12 @@ const pool = require('../config/db');
  * WalletTransaction Model — DB queries for wallet_transactions
  */
 const walletTransactionModel = {
-  async create({ walletId, type, amount, status = 'pending', referenceId = null }, db = pool) {
+  async create({ walletId, type, amount, status = 'PENDING', referenceId = null, orderCode = null }, db = pool) {
     const result = await db.query(
-      `INSERT INTO wallet_transactions (wallet_id, type, amount, status, reference_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO wallet_transactions (id, wallet_id, type, amount, status, reference_id, order_code)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [walletId, type, amount, status, referenceId]
+      [walletId, type, amount, status, referenceId, orderCode]
     );
     return result.rows[0] || null;
   },
@@ -18,6 +18,14 @@ const walletTransactionModel = {
     const result = await db.query(
       'UPDATE wallet_transactions SET status = $2 WHERE id = $1 RETURNING *',
       [id, status]
+    );
+    return result.rows[0] || null;
+  },
+
+  async findByOrderCode(orderCode, db = pool) {
+    const result = await db.query(
+      'SELECT * FROM wallet_transactions WHERE order_code = $1 LIMIT 1',
+      [orderCode]
     );
     return result.rows[0] || null;
   },

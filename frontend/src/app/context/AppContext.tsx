@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '../../imports/firebase';
 
 export interface Job {
   id: string;
@@ -247,6 +249,9 @@ interface AppContextType {
   topUpWallet: (role: 'hirer' | 'worker', amount: number) => void;
   fetchProfile: () => Promise<void>;
   updateProfile: (fields: { fullName?: string; phone?: string; avatarUrl?: string }) => Promise<boolean>;
+  firebaseUser: any;
+  authLoading: boolean;
+  logout: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -344,6 +349,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [hirerUser] = useState({ name: 'Nguyễn Thị Hoa', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NguoiDung1' });
   const [adminUser] = useState({ name: 'Admin', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AdminUser2024' });
   
@@ -394,6 +402,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         role: 'worker' as const
       };
 
+  const logout = useCallback(async () => {
+    try {
+      await signOut(auth);
+      localStorage.removeItem('firebaseToken');
+      localStorage.removeItem('appUser');
+      localStorage.removeItem('wallet');
+      setDbUser(null);
+      _setUserRole('hirer');
+      setHirerWallet(500000);
+      setWorkerWallet(500000);
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  }, []);
+
   const fetchProfile = useCallback(async () => {
     try {
       const token = localStorage.getItem('firebaseToken');
@@ -419,6 +442,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       const res = await fetch('http://localhost:3000/api/users/profile', { headers });
+      if (res.status === 401) {
+        console.warn('Unauthorized user token. Logging out...');
+        await logout();
+        return;
+      }
       if (!res.ok) throw new Error('Failed to fetch profile');
       const data = await res.json();
       if (data.success && data.user) {
@@ -431,6 +459,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Fetch wallet balance from database
         try {
           const walletRes = await fetch('http://localhost:3000/api/wallet/me', { headers });
+          if (walletRes.status === 401) {
+            await logout();
+            return;
+          }
           if (walletRes.ok) {
             const walletData = await walletRes.json();
             if (walletData.success && walletData.data) {
@@ -446,14 +478,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error('Error fetching user profile:', err);
     }
-  }, []);
+  }, [logout]);
 
-  // Sync profile and wallet balance from database on mount (e.g., after page refresh)
+  // Listen to Firebase auth state changes and sync profile/tokens
   useEffect(() => {
-    const token = localStorage.getItem('firebaseToken');
-    if (token) {
-      fetchProfile();
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      setAuthLoading(false);
+
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          localStorage.setItem('firebaseToken', token);
+          
+          // Sync or fetch profile with the fresh token
+          await fetchProfile();
+        } catch (err) {
+          console.error("Error updating token on auth state change:", err);
+        }
+      } else {
+        // Clear local storage & state if logged out
+        localStorage.removeItem('firebaseToken');
+        localStorage.removeItem('appUser');
+        localStorage.removeItem('wallet');
+        setDbUser(null);
+        _setUserRole('hirer');
+        setHirerWallet(500000);
+        setWorkerWallet(500000);
+      }
+    });
+
+    return () => unsubscribe();
   }, [fetchProfile]);
 
   const updateProfile = useCallback(async (fields: { fullName?: string; phone?: string; avatarUrl?: string }) => {
@@ -900,7 +955,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workerStatus, workerCurrentJobId,
       hirerWallet, workerWallet,
       addJob, applyToJob, matchJob, closeBidding, completeJob, setUserRole, topUpWallet,
-      fetchProfile, updateProfile
+      fetchProfile, updateProfile,
+      firebaseUser, authLoading, logout
     }}>
       {children}
     </AppContext.Provider>
@@ -928,6 +984,9 @@ export function useApp() {
       topUpWallet: () => {},
       fetchProfile: async () => {},
       updateProfile: async () => false,
+      firebaseUser: null,
+      authLoading: false,
+      logout: async () => {},
     } as AppContextType;
   }
   return ctx;

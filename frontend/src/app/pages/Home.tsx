@@ -4,8 +4,6 @@ import { PlusCircle, TrendingUp, Shield, Zap, Star, ArrowRight, CheckCircle, Map
 import { motion, AnimatePresence, useInView, animate } from 'motion/react';
 import { useApp, CATEGORIES } from '../context/AppContext';
 import { JobCard } from '../components/JobCard';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../../imports/firebase';
 
 // ─── Images ────────────────────────────────────────────────
 const IMG_ERRANDS = 'https://images.unsplash.com/photo-1659634082994-36a7107e5178?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080';
@@ -150,16 +148,9 @@ function HeroSlideshow() {
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { jobs, currentUser } = useApp();
+  const { jobs, currentUser, firebaseUser } = useApp();
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsLoggedIn(!!user);
-    });
-    return () => unsubscribe();
-  }, []);
+  const isLoggedIn = !!firebaseUser;
 
   const handleSelectNow = () => {
     if (!isLoggedIn) {
@@ -521,17 +512,10 @@ function ServiceCard({ icon, title, price, img, delay }: { icon: string; title: 
 
 // ─── Main component ──────────────────────────────────────────
 export default function Home() {
-  const { jobs, currentUser } = useApp();
+  const { jobs, currentUser, firebaseUser } = useApp();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'matched'>('all');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsLoggedIn(!!user);
-    });
-    return () => unsubscribe();
-  }, []);
+  const isLoggedIn = !!firebaseUser;
 
   const isWorker = currentUser.role === 'worker';
 

@@ -53,16 +53,16 @@ const escrowService = {
 
     const escrowInsert = await db.query(
       `INSERT INTO escrows (
-         task_id, poster_id, tasker_id,
+         id, task_id, poster_id, tasker_id,
          amount, platform_fee_amount, insurance_fee_amount,
          status
        )
        VALUES (
-         $1, $2, $3,
+         gen_random_uuid(), $1, $2, $3,
          $4,
          ROUND($4::numeric * $5::numeric, 2),
          0,
-         'holding'
+         'HOLDING'
        )
        RETURNING *`,
       [taskId, posterId, taskerId, amt, feeRate]
@@ -83,9 +83,9 @@ const escrowService = {
     await walletTransactionModel.create(
       {
         walletId: posterWallet.id,
-        type: 'payment',
+        type: 'ESCROW_HOLD',
         amount: amt,
-        status: 'pending',
+        status: 'PENDING',
         referenceId: escrow.id,
       },
       db
@@ -112,7 +112,7 @@ const escrowService = {
     const escrow = escrows.rows[0];
     if (!escrow) return null;
 
-    if (escrow.status !== 'holding') return escrow;
+    if (escrow.status !== 'HOLDING') return escrow;
 
     const amount = Number(escrow.amount);
     const fee = Number(escrow.platform_fee_amount || 0);
@@ -142,7 +142,7 @@ const escrowService = {
     // Update escrow
     const updatedEscrow = await db.query(
       `UPDATE escrows
-       SET status = 'released'
+       SET status = 'RELEASED'
        WHERE id = $1
        RETURNING *`,
       [escrow.id]
@@ -152,11 +152,11 @@ const escrowService = {
     const posterPaymentTx = await walletTransactionModel.findByReference(
       posterWallet.id,
       escrow.id,
-      'payment',
+      'ESCROW_HOLD',
       db
     );
-    if (posterPaymentTx && posterPaymentTx.status === 'pending') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'success', db);
+    if (posterPaymentTx && posterPaymentTx.status === 'PENDING') {
+      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'SUCCESS', db);
     }
 
     // Tasker ledger
@@ -164,9 +164,9 @@ const escrowService = {
       await walletTransactionModel.create(
         {
           walletId: taskerWallet.id,
-          type: 'earning',
+          type: 'ESCROW_RELEASE',
           amount: net,
-          status: 'success',
+          status: 'SUCCESS',
           referenceId: escrow.id,
         },
         db
@@ -177,9 +177,9 @@ const escrowService = {
       await walletTransactionModel.create(
         {
           walletId: taskerWallet.id,
-          type: 'fee',
+          type: 'PLATFORM_FEE',
           amount: fee,
-          status: 'success',
+          status: 'SUCCESS',
           referenceId: escrow.id,
         },
         db
@@ -206,7 +206,7 @@ const escrowService = {
     const escrow = escrows.rows[0];
     if (!escrow) return null;
 
-    if (escrow.status !== 'holding') return escrow;
+    if (escrow.status !== 'HOLDING') return escrow;
 
     const amount = Number(escrow.amount);
     const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
@@ -221,7 +221,7 @@ const escrowService = {
 
     const updatedEscrow = await db.query(
       `UPDATE escrows
-       SET status = 'refunded'
+       SET status = 'REFUNDED'
        WHERE id = $1
        RETURNING *`,
       [escrow.id]
@@ -230,19 +230,19 @@ const escrowService = {
     const posterPaymentTx = await walletTransactionModel.findByReference(
       posterWallet.id,
       escrow.id,
-      'payment',
+      'ESCROW_HOLD',
       db
     );
-    if (posterPaymentTx && posterPaymentTx.status === 'pending') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'cancelled', db);
+    if (posterPaymentTx && posterPaymentTx.status === 'PENDING') {
+      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'CANCELLED', db);
     }
 
     await walletTransactionModel.create(
       {
         walletId: posterWallet.id,
-        type: 'refund',
+        type: 'REFUND',
         amount,
-        status: 'success',
+        status: 'SUCCESS',
         referenceId: escrow.id,
       },
       db

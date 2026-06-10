@@ -29,9 +29,9 @@ const taskModel = {
     const dbTaskType = toDbTaskType(taskType);
     const result = await pool.query(
       `INSERT INTO tasks (
-        poster_id, category_id, title, description, task_type,
+        id, poster_id, category_id, title, description, task_type,
         status, budget_min, budget_max, deadline_start, deadline_end, allow_insurance
-      ) VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9, $10)
+      ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'open', $6, $7, $8, $9, $10)
       RETURNING *`,
       [
         posterId, categoryId, title, description, dbTaskType,
@@ -255,11 +255,11 @@ const taskModel = {
     if (!skillIds || skillIds.length === 0) return [];
 
     const values = skillIds
-      .map((_, i) => `($1, $${i + 2})`)
+      .map((_, i) => `(gen_random_uuid(), $1, $${i + 2})`)
       .join(', ');
 
     const result = await pool.query(
-      `INSERT INTO task_required_skills (task_id, skill_id)
+      `INSERT INTO task_required_skills (id, task_id, skill_id)
        VALUES ${values}
        RETURNING *`,
       [taskId, ...skillIds]
@@ -272,8 +272,8 @@ const taskModel = {
    */
   async addLocation(taskId, { locationType, address, latitude, longitude }) {
     const result = await pool.query(
-      `INSERT INTO task_locations (task_id, location_type, address, latitude, longitude)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO task_locations (id, task_id, location_type, address, latitude, longitude)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
        RETURNING *`,
       [taskId, locationType, address, latitude, longitude]
     );

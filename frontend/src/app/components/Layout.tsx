@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut } from 'lucide-react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from '../../imports/firebase';
+import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useLocation, useNavigate, Link, Outlet } from 'react-router';
 import { SnapOnLogo } from './SnapOnLogo';
@@ -21,26 +19,76 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     workerWallet,
     topUpWallet,
     fetchProfile,
+    firebaseUser,
+    authLoading,
+    logout,
   } = useApp();
 
   const [showWallet, setShowWallet] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
+
+  // Listen to PayOS redirect search query params
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setAuthLoading(false);
+    const searchParams = new URLSearchParams(location.search);
+    const orderCode = searchParams.get('orderCode');
+    const status = searchParams.get('status');
+    const code = searchParams.get('code');
 
-      if (user) {
-        const saved = localStorage.getItem('appUser');
-        if (!saved) {
-          setUserRole('hirer');
+    if (orderCode && (status === 'PAID' || code === '00')) {
+      const verifyPayOSPayment = async () => {
+        try {
+          const token = localStorage.getItem('firebaseToken');
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          const appUserStr = localStorage.getItem('appUser');
+          if (appUserStr) {
+            const appUser = JSON.parse(appUserStr);
+            if (appUser.id) {
+              headers['x-user-id'] = appUser.id;
+            }
+          }
+
+          // Call check status API on backend to update database
+          const res = await fetch(`http://localhost:3000/api/wallet/topup/payos/status/${orderCode}`, {
+            headers,
+          });
+          if (res.ok) {
+            const statusData = await res.json();
+            if (statusData.success && statusData.data?.status === 'SUCCESS') {
+              console.log('🎉 PayOS payment verified successfully!');
+              // Re-fetch profile/wallet to show the updated balance
+              await fetchProfile();
+              setPaymentSuccessToast(true);
+              setTimeout(() => {
+                setPaymentSuccessToast(false);
+              }, 5000);
+            }
+          }
+        } catch (err) {
+          console.error('Error verifying payment status on redirect:', err);
+        } finally {
+          // Remove the PayOS parameters from URL search to keep URL clean and prevent double verification
+          const cleanParams = new URLSearchParams(location.search);
+          cleanParams.delete('orderCode');
+          cleanParams.delete('status');
+          cleanParams.delete('code');
+          cleanParams.delete('id');
+          cleanParams.delete('cancel');
+          const newSearch = cleanParams.toString();
+          navigate({
+            pathname: location.pathname,
+            search: newSearch ? `?${newSearch}` : '',
+          }, { replace: true });
         }
-      }
-    });
+      };
 
-    return () => unsubscribe();
-  }, [setUserRole]);
+      verifyPayOSPayment();
+    }
+  }, [location.search, location.pathname, navigate, fetchProfile]);
 
   // Route protection
   useEffect(() => {
@@ -72,11 +120,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   const currentJob = workerCurrentJobId ? jobs.find(j => j.id === workerCurrentJobId) : null;
 
   const handleLogout = async () => {
-    await signOut(auth);
-    localStorage.removeItem('firebaseToken');
-    localStorage.removeItem('appUser');
-    localStorage.removeItem('wallet');
-    await fetchProfile();
+    await logout();
     navigate('/login');
   };
 
@@ -337,6 +381,21 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           })}
         </div>
       </nav>
+
+      {/* Success toast */}
+      <AnimatePresence>
+        {paymentSuccessToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] bg-green-500 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2"
+          >
+            <CheckCircle className="w-5 h-5" />
+            <span style={{ fontWeight: 600 }}>Nạp tiền thành công! Số dư ví của bạn đã được cập nhật 🎉</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Wallet Modal */}
       <WalletModal
