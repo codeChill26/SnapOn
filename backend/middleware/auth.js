@@ -15,17 +15,30 @@ const AUTH_MODE = process.env.AUTH_MODE || 'firebase';
 // Initialize Firebase Admin SDK (chỉ khi AUTH_MODE = firebase)
 if (AUTH_MODE === 'firebase' && !admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-    console.log('✅ Firebase Admin SDK initialized');
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (clientEmail && privateKey) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, '\n'),
+        }),
+      });
+      console.log('✅ Firebase Admin SDK initialized with Service Account credentials');
+    } else if (projectId) {
+      admin.initializeApp({
+        projectId,
+      });
+      console.log(`✅ Firebase Admin SDK initialized with Project ID: ${projectId} (Token verification mode)`);
+    } else {
+      throw new Error('Neither service account credentials nor Firebase Project ID was found in environment variables.');
+    }
   } catch (err) {
     console.warn('⚠️  Firebase Admin SDK not initialized:', err.message);
-    console.warn('   Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY in .env');
+    console.warn('   Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (or at least VITE_FIREBASE_PROJECT_ID) in .env');
   }
 } else if (AUTH_MODE === 'dev') {
   console.log('🔓 Auth running in DEV MODE — Firebase is bypassed');
@@ -58,7 +71,7 @@ const authenticate = async (req, res, next) => {
       }
 
       const result = await pool.query(
-        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, status, is_verified FROM users WHERE id = $1',
+        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE id = $1',
         [userId]
       );
 
@@ -79,6 +92,7 @@ const authenticate = async (req, res, next) => {
         email: user.email,
         phone: user.phone,
         avatarUrl: user.avatar_url,
+        role: user.role,
         status: user.status,
         isVerified: user.is_verified,
       };
@@ -111,9 +125,14 @@ const authenticate = async (req, res, next) => {
     // For compatibility with routes expecting firebase payload
     req.firebaseUser = decodedToken;
 
-    // Find user in database by firebase_uid
+    // Check if this is a sync-user request (which is used for registration/syncing new users)
+    const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
+    if (isSyncUser) {
+      return next();
+    }
+
     const result = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, status, is_verified FROM users WHERE firebase_uid = $1',
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE firebase_uid = $1',
       [decodedToken.uid]
     );
 
@@ -135,6 +154,7 @@ const authenticate = async (req, res, next) => {
       email: user.email,
       phone: user.phone,
       avatarUrl: user.avatar_url,
+      role: user.role,
       status: user.status,
       isVerified: user.is_verified,
     };

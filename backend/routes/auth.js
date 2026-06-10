@@ -21,21 +21,20 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
 
     const upsertUserQuery = `
       INSERT INTO users (
+        id,
         firebase_uid,
         email,
         full_name,
         avatar_url,
-        role,
         status,
         is_verified
       )
-      VALUES ($1, $2, $3, $4, 'hirer', 'active', false)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
       ON CONFLICT (firebase_uid)
       DO UPDATE SET
         email = EXCLUDED.email,
         full_name = COALESCE(EXCLUDED.full_name, users.full_name),
-        avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
-        updated_at = CURRENT_TIMESTAMP
+        avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
       RETURNING *;
     `;
 
@@ -50,12 +49,13 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
 
     const createWalletQuery = `
       INSERT INTO wallets (
+        id,
         user_id,
         balance,
         available_balance,
-        pending_balance
+        locked_balance
       )
-      VALUES ($1, 0, 0, 0)
+      VALUES (gen_random_uuid(), $1, 0, 0, 0)
       ON CONFLICT (user_id)
       DO NOTHING;
     `;
@@ -76,6 +76,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
       wallet: walletResult.rows[0],
     });
   } catch (error) {
+    console.error('❌ Sync user error:', error);
     await client.query('ROLLBACK');
 
     return res.status(500).json({

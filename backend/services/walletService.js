@@ -17,7 +17,7 @@ const walletService = {
       user_id: wallet.user_id,
       balance: parseFloat(wallet.balance),
       available_balance: parseFloat(wallet.available_balance),
-      pending_balance: parseFloat(wallet.pending_balance),
+      pending_balance: parseFloat(wallet.locked_balance),
     };
   },
 
@@ -61,7 +61,7 @@ const walletService = {
         user_id: w.user_id,
         balance: parseFloat(w.balance),
         available_balance: parseFloat(w.available_balance),
-        pending_balance: parseFloat(w.pending_balance),
+        pending_balance: parseFloat(w.locked_balance),
       };
     });
   },

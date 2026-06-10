@@ -20,22 +20,37 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     hirerWallet,
     workerWallet,
     topUpWallet,
+    fetchProfile,
   } = useApp();
 
   const [showWallet, setShowWallet] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
+      setAuthLoading(false);
 
       if (user) {
-        // Khi đăng nhập thành công, luôn set role mặc định là hirer
-        setUserRole('hirer');
+        const saved = localStorage.getItem('appUser');
+        if (!saved) {
+          setUserRole('hirer');
+        }
       }
     });
 
     return () => unsubscribe();
   }, [setUserRole]);
+
+  // Route protection
+  useEffect(() => {
+    if (!authLoading && !firebaseUser) {
+      const protectedPaths = ['/profile', '/activity', '/post', '/worker'];
+      if (protectedPaths.includes(location.pathname)) {
+        navigate('/login');
+      }
+    }
+  }, [authLoading, firebaseUser, location.pathname, navigate]);
 
   const isWorker = currentUser.role === 'worker';
   const isAdmin = currentUser.role === 'admin';
@@ -59,6 +74,9 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   const handleLogout = async () => {
     await signOut(auth);
     localStorage.removeItem('firebaseToken');
+    localStorage.removeItem('appUser');
+    localStorage.removeItem('wallet');
+    await fetchProfile();
     navigate('/login');
   };
 
@@ -87,8 +105,10 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 ? [{ path: '/worker', label: '🔍 Tìm việc' }]
                 : [{ path: firebaseUser ? '/post' : '/login', label: '+ Đăng việc' }]
               ),
-              { path: '/activity', label: '📊 Hoạt động' },
-              { path: '/profile', label: '👤 Hồ sơ' },
+              ...(firebaseUser ? [
+                { path: '/activity', label: '📊 Hoạt động' },
+                { path: '/profile', label: '👤 Hồ sơ' }
+              ] : [])
             ].map(({ path, label }) => {
               const active = location.pathname === path;
               return (
@@ -134,31 +154,47 @@ export function Layout({ children }: { children?: React.ReactNode }) {
               <div className="flex items-center gap-2">
                 <Link
                   to="/profile"
-                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-orange-200 bg-orange-50 hover:bg-orange-100 transition"
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border transition ${
+                    isWorker
+                      ? 'border-blue-300 bg-blue-50/50 hover:bg-blue-100/50'
+                      : 'border-orange-200 bg-orange-50 hover:bg-orange-100'
+                  }`}
                 >
                   <img
                     src={
-                      firebaseUser.photoURL ||
                       currentUser.avatar ||
+                      firebaseUser.photoURL ||
                       'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser'
                     }
-                    alt={firebaseUser.displayName || firebaseUser.email || 'User'}
+                    alt={currentUser.name || firebaseUser.displayName || 'User'}
                     className="w-7 h-7 rounded-full bg-white"
                   />
 
                   <div className="text-left">
                     <p className="text-xs text-gray-800 leading-tight" style={{ fontWeight: 700 }}>
-                      {firebaseUser.displayName || 'Hirer'}
+                      {currentUser.name || firebaseUser.displayName || 'Guest'}
                     </p>
-                    <p className="text-xs text-orange-500 leading-tight">
-                      Người thuê việc
+                    <p className={`text-xs leading-tight ${isWorker ? 'text-blue-200' : 'text-orange-500'}`}>
+                      {isWorker ? 'Người tìm việc' : 'Người thuê việc'}
                     </p>
                   </div>
                 </Link>
 
                 <button
+                  onClick={() => setUserRole(isWorker ? 'hirer' : 'worker')}
+                  className={`px-3 py-1.5 rounded-full text-xs transition border flex items-center gap-1 cursor-pointer ${
+                    isWorker
+                      ? 'border-blue-400 bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'border-orange-300 bg-orange-500 hover:bg-orange-600 text-white'
+                  }`}
+                  style={{ fontWeight: 600 }}
+                >
+                  🔄 {isWorker ? 'Thuê việc' : 'Tìm việc'}
+                </button>
+
+                <button
                   onClick={handleLogout}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-xs transition"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-xs transition cursor-pointer"
                   style={{ fontWeight: 600 }}
                 >
                   <LogOut className="w-4 h-4" />

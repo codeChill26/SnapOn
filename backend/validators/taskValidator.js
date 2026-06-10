@@ -20,7 +20,14 @@ const taskValidator = {
 
     body('category_id')
       .notEmpty().withMessage('Category is required.')
-      .isUUID().withMessage('Category ID must be a valid UUID.'),
+      .custom(value => {
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+        const isSlug = ['errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others'].includes(value);
+        if (!isUUID && !isSlug) {
+          throw new Error('Category must be a valid UUID or category slug.');
+        }
+        return true;
+      }),
 
     body('task_type')
       .notEmpty().withMessage('Task type is required.')
@@ -138,6 +145,71 @@ const taskValidator = {
       .optional()
       .trim()
       .isLength({ max: 255 }).withMessage('Search query must not exceed 255 characters.'),
+  ],
+
+  /**
+   * Validation rules for updating a task
+   */
+  updateTask: [
+    param('id')
+      .isUUID().withMessage('Task ID must be a valid UUID.'),
+
+    body('title')
+      .optional()
+      .trim()
+      .isLength({ min: 5, max: 255 }).withMessage('Title must be between 5 and 255 characters.'),
+
+    body('description')
+      .optional()
+      .trim()
+      .isLength({ min: 10, max: 2000 }).withMessage('Description must be between 10 and 2000 characters.'),
+
+    body('category_id')
+      .optional()
+      .custom(value => {
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+        const isSlug = ['errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others'].includes(value);
+        if (!isUUID && !isSlug) {
+          throw new Error('Category must be a valid UUID or category slug.');
+        }
+        return true;
+      }),
+
+    body('task_type')
+      .optional()
+      .isIn(['ONLINE', 'OFFLINE']).withMessage('Task type must be ONLINE or OFFLINE.'),
+
+    body('budget_min')
+      .optional()
+      .isFloat({ min: 0 }).withMessage('Minimum budget must be a positive number.'),
+
+    body('budget_max')
+      .optional()
+      .isFloat({ min: 0 }).withMessage('Maximum budget must be a positive number.')
+      .custom((value, { req }) => {
+        if (req.body.budget_min && parseFloat(value) < parseFloat(req.body.budget_min)) {
+          throw new Error('Maximum budget must be greater than or equal to minimum budget.');
+        }
+        return true;
+      }),
+
+    body('deadline_start')
+      .optional()
+      .isISO8601().withMessage('Deadline start must be a valid date.'),
+
+    body('deadline_end')
+      .optional()
+      .isISO8601().withMessage('Deadline end must be a valid date.')
+      .custom((value, { req }) => {
+        if (req.body.deadline_start && new Date(value) <= new Date(req.body.deadline_start)) {
+          throw new Error('Deadline end must be after deadline start.');
+        }
+        return true;
+      }),
+
+    body('allow_insurance')
+      .optional()
+      .isBoolean().withMessage('Allow insurance must be true or false.'),
   ],
 };
 
