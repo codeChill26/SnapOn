@@ -5,12 +5,15 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 
 type RegisterNavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<RegisterNavProp>();
+  const { devLogin } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -29,8 +32,8 @@ export const RegisterScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      Alert.alert('Thành công', 'Đăng ký tài khoản thành công!');
-      navigation.navigate('Login');
+      await authService.devRegister(email, name, password, phone);
+      await devLogin(email, name);
     } catch (error: any) {
       Alert.alert('Đăng ký thất bại', error.message || 'Có lỗi xảy ra');
     } finally {

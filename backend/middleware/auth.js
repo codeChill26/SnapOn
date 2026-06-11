@@ -51,10 +51,18 @@ const authenticate = async (req, res, next) => {
     // DEV MODE
     // =====================
     if (AUTH_MODE === 'dev') {
-      const userId = req.headers['x-user-id'];
+      let userId = req.headers['x-user-id'];
+
+      // Fallback: if no x-user-id, try Authorization: Bearer <userId>
+      if (!userId) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          userId = authHeader.split('Bearer ')[1];
+        }
+      }
 
       if (!userId) {
-        return error(res, 'DEV MODE: Header "x-user-id" is required.', 401);
+        return error(res, 'DEV MODE: Header "x-user-id" or "Authorization: Bearer <userId>" is required.', 401);
       }
 
       const result = await pool.query(

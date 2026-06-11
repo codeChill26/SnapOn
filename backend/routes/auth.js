@@ -3,6 +3,11 @@ const router = express.Router();
 
 const pool = require('../config/db');
 const verifyFirebaseToken = require('../middleware/auth');
+const authController = require('../controllers/auth');
+
+// Dev-only: login/register without Firebase
+router.post('/dev/login', authController.devLogin);
+router.post('/dev/register', authController.devRegister);
 
 router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
   const client = await pool.connect();

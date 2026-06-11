@@ -9,6 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (token: string) => Promise<void>;
+  devLogin: (email: string, name?: string, role?: string) => Promise<User>;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
   switchRole: (role: UserRole) => Promise<void>;
@@ -54,6 +55,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const devLogin = useCallback(async (email: string, name?: string, role?: string) => {
+    try {
+      const { user, token } = await authService.devLogin(email, name, role);
+      await storage.setToken(token);
+      await storage.setUserData(user);
+      await storage.setRole(user.role);
+      setToken(token);
+      setUser(user);
+      return user;
+    } catch (error) {
+      console.error('Dev login failed:', error);
+      throw error;
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     await storage.clearAll();
     setToken(null);
@@ -82,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         isAuthenticated: !!token && !!user,
         login,
+        devLogin,
         logout,
         updateUser,
         switchRole,

@@ -12,7 +12,7 @@ type LoginNavProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<LoginNavProp>();
-  const { login } = useAuth();
+  const { devLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,8 +24,7 @@ export const LoginScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      const mockToken = 'mock-firebase-token';
-      await login(mockToken);
+      await devLogin(email);
     } catch (error: any) {
       Alert.alert('Đăng nhập thất bại', error.message || 'Có lỗi xảy ra');
     } finally {
