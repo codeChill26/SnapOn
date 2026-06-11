@@ -6,6 +6,7 @@ import {
   registerWithEmail,
 } from "../../imports/authService";
 import { useApp } from "../context/AppContext";
+import api from "../../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,17 +20,10 @@ export default function Login() {
   const [error, setError] = useState("");
 
   const syncUserWithBackend = async (token: string) => {
-    const response = await fetch("http://localhost:3000/api/auth/sync-user", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.post("/auth/sync-user", { firebaseToken: token });
+    const data = response.data;
 
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
+    if (!data.success) {
       throw new Error(data.message || "Không thể đồng bộ user với backend.");
     }
 

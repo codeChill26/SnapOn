@@ -1,5 +1,7 @@
 const Config = {
   API_BASE_URL: 'http://localhost:3000/api',
+  // Set this to your deployed backend URL to use remote API instead of local
+  DEPLOYED_API_URL: 'https://snapon-1.onrender.com/api',
   FIREBASE: {
     apiKey: 'AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ',
     authDomain: 'hcm202-2d75e.firebaseapp.com',
