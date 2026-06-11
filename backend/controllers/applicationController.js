@@ -148,6 +148,97 @@ const applicationController = {
       return error(res, 'Failed to withdraw application.', 500);
     }
   },
+
+  /**
+   * PATCH /api/applications/:id
+   * Update application bid details (Tasker only — owner check)
+   */
+  async updateApplication(req, res) {
+    try {
+      const { id } = req.params;
+      const taskerId = req.user.id;
+      const { bid_price, estimated_time, message } = req.body;
+
+      // 1. Check application exists
+      const application = await taskApplicationModel.findById(id);
+      if (!application) {
+        return error(res, 'Application not found.', 404);
+      }
+
+      // 2. Check ownership
+      if (application.tasker_id !== taskerId) {
+        return error(res, 'You can only update your own applications.', 403);
+      }
+
+      // 3. Check application is PENDING
+      if (application.status !== APPLICATION_STATUS.PENDING) {
+        return error(res, 'You can only update pending applications.', 400);
+      }
+
+      // 4. Check parent task is still OPEN
+      const task = await taskModel.findById(application.task_id);
+      if (!task || task.status !== TASK_STATUS.OPEN) {
+        return error(res, 'The parent task is no longer accepting bids.', 400);
+      }
+
+      // 5. Check price boundaries if updating bid price
+      if (bid_price) {
+        if (parseFloat(bid_price) > parseFloat(task.budget_max)) {
+          return error(res, `Bid price cannot exceed the maximum budget of ${task.budget_max}.`, 400);
+        }
+        if (parseFloat(bid_price) < parseFloat(task.budget_min)) {
+          return error(res, `Bid price cannot be less than the minimum budget of ${task.budget_min}.`, 400);
+        }
+      }
+
+      // 6. Perform update
+      const updatedApplication = await taskApplicationModel.update(id, {
+        bidPrice: bid_price,
+        estimatedTime: estimated_time,
+        message,
+      });
+
+      return success(res, updatedApplication, 'Application updated successfully.');
+    } catch (err) {
+      console.error('Update application error:', err);
+      return error(res, 'Failed to update application.', 500);
+    }
+  },
+
+  /**
+   * DELETE /api/applications/:id
+   * Delete application bid (Tasker only — owner check)
+   */
+  async deleteApplication(req, res) {
+    try {
+      const { id } = req.params;
+      const taskerId = req.user.id;
+
+      // 1. Check application exists
+      const application = await taskApplicationModel.findById(id);
+      if (!application) {
+        return error(res, 'Application not found.', 404);
+      }
+
+      // 2. Check ownership
+      if (application.tasker_id !== taskerId) {
+        return error(res, 'You can only delete your own applications.', 403);
+      }
+
+      // 3. Check application is PENDING
+      if (application.status !== APPLICATION_STATUS.PENDING) {
+        return error(res, 'You can only delete pending applications.', 400);
+      }
+
+      // 4. Perform delete
+      await taskApplicationModel.delete(id);
+
+      return success(res, null, 'Application deleted successfully.');
+    } catch (err) {
+      console.error('Delete application error:', err);
+      return error(res, 'Failed to delete application.', 500);
+    }
+  },
 };
 
 module.exports = applicationController;

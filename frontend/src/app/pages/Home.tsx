@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { PlusCircle, TrendingUp, Shield, Zap, Star, ArrowRight, CheckCircle, MapPin } from 'lucide-react';
 import { motion, AnimatePresence, useInView, animate } from 'motion/react';
 import { useApp, CATEGORIES } from '../context/AppContext';
 import { JobCard } from '../components/JobCard';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../../imports/firebase';
 
 // ─── Images ────────────────────────────────────────────────
 const IMG_ERRANDS = 'https://images.unsplash.com/photo-1659634082994-36a7107e5178?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080';
@@ -148,7 +150,27 @@ function HeroSlideshow() {
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { jobs } = useApp();
+  const { jobs, currentUser } = useApp();
+  const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSelectNow = () => {
+    if (!isLoggedIn) {
+      navigate('/login');
+    } else if (currentUser.role === 'worker') {
+      navigate('/worker');
+    } else {
+      navigate('/post');
+    }
+  };
+
   const activeCount = jobs.filter(j => j.status === 'active').length;
 
   const startTimers = () => {
@@ -376,9 +398,10 @@ function HeroSlideshow() {
 
                   {/* Accept button */}
                   <motion.button
+                    onClick={handleSelectNow}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.97 }}
-                    className="w-full mt-3 py-2.5 rounded-xl text-white text-sm transition"
+                    className="w-full mt-3 py-2.5 rounded-xl text-white text-sm transition cursor-pointer"
                     style={{ background: slide.accent, fontWeight: 600 }}
                   >
                     ✅ Chọn ngay
@@ -501,6 +524,14 @@ export default function Home() {
   const { jobs, currentUser } = useApp();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'matched'>('all');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const isWorker = currentUser.role === 'worker';
 
@@ -707,16 +738,37 @@ export default function Home() {
             </h2>
             <p className="text-orange-100 mb-7 text-sm">Miễn phí đăng ký · Không cần thẻ tín dụng · Tìm người trong 5 phút</p>
             <div className="flex flex-wrap gap-3 justify-center">
-              <Link
-                to="/login"
-                className="flex items-center gap-2 bg-white text-gray-900 hover:bg-orange-50 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                style={{ fontWeight: 700 }}
-              >
-                Đăng nhập / Đăng ký
-              </Link>
-              <Link to="/worker" className="flex items-center gap-2 bg-white/20 text-white border border-white/30 px-7 py-3.5 rounded-xl hover:bg-white/30 hover:-translate-y-0.5 transition-all backdrop-blur-sm" style={{ fontWeight: 600 }}>
-                Tìm việc làm thêm <ArrowRight className="w-4 h-4" />
-              </Link>
+              {!isLoggedIn ? (
+                <>
+                  <Link
+                    to="/login"
+                    className="flex items-center gap-2 bg-white text-gray-900 hover:bg-orange-50 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                    style={{ fontWeight: 700 }}
+                  >
+                    Đăng nhập / Đăng ký
+                  </Link>
+                  <Link to="/worker" className="flex items-center gap-2 bg-white/20 text-white border border-white/30 px-7 py-3.5 rounded-xl hover:bg-white/30 hover:-translate-y-0.5 transition-all backdrop-blur-sm" style={{ fontWeight: 600 }}>
+                    Tìm việc làm thêm <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </>
+              ) : isWorker ? (
+                <Link
+                  to="/worker"
+                  className="flex items-center gap-2 bg-white text-gray-900 hover:bg-orange-50 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                  style={{ fontWeight: 700 }}
+                >
+                  Tìm việc làm thêm <ArrowRight className="w-4 h-4" />
+                </Link>
+              ) : (
+                <Link
+                  to="/post"
+                  className="flex items-center gap-2 bg-white text-gray-900 hover:bg-orange-50 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                  style={{ fontWeight: 700 }}
+                >
+                  <PlusCircle className="w-5 h-5 text-orange-500" />
+                  Đăng việc ngay
+                </Link>
+              )}
             </div>
             <div className="flex items-center justify-center gap-5 mt-6 text-orange-100 text-xs">
               {['Đã xác minh danh tính', 'Bảo đảm thanh toán', 'Hỗ trợ 24/7'].map(t => (

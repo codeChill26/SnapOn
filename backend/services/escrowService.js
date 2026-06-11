@@ -74,7 +74,7 @@ const escrowService = {
     await db.query(
       `UPDATE wallets
        SET available_balance = available_balance - $2,
-           pending_balance = pending_balance + $2
+           locked_balance = locked_balance + $2
        WHERE id = $1`,
       [posterWallet.id, amt]
     );
@@ -124,7 +124,7 @@ const escrowService = {
     // Poster: pending -> out (balance decreases)
     await db.query(
       `UPDATE wallets
-       SET pending_balance = pending_balance - $2,
+       SET locked_balance = locked_balance - $2,
            balance = balance - $2
        WHERE id = $1`,
       [posterWallet.id, amount]
@@ -213,7 +213,7 @@ const escrowService = {
 
     await db.query(
       `UPDATE wallets
-       SET pending_balance = pending_balance - $2,
+       SET locked_balance = locked_balance - $2,
            available_balance = available_balance + $2
        WHERE id = $1`,
       [posterWallet.id, amount]

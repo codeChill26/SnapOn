@@ -99,10 +99,11 @@ function StatCard({ icon: Icon, label, value, sub, gradient, delay }: {
 //  MY ACTIVITY - JOB CARD
 // ═══════════════════════════════════════════════════════
 function JobActivityCard({ job, isWorker, index }: { job: Job; isWorker: boolean; index: number }) {
+  const { currentUser } = useApp();
   const sc = STATUS_CONFIG[job.status];
   const matchedWorker = job.aiMatchId ? job.applicants.find(a => a.workerId === job.aiMatchId) : null;
-  const demoApplied = job.applicants.some(a => a.workerId === DEMO_WORKER.id);
-  const demoApplicant = job.applicants.find(a => a.workerId === DEMO_WORKER.id);
+  const demoApplied = job.applicants.some(a => a.workerId === currentUser.id);
+  const demoApplicant = job.applicants.find(a => a.workerId === currentUser.id);
 
   return (
     <motion.div
@@ -159,13 +160,13 @@ function JobActivityCard({ job, isWorker, index }: { job: Job; isWorker: boolean
                       <p className="text-gray-400 text-[10px]">Báo giá: <span className="text-blue-600" style={{ fontWeight: 700 }}>{fmt(demoApplicant.bidPrice)}</span></p>
                     </div>
                   </div>
-                  {job.status === 'matched' && job.aiMatchId === DEMO_WORKER.id && (
+                  {job.status === 'matched' && job.aiMatchId === currentUser.id && (
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-50 text-green-600 text-[10px]" style={{ fontWeight: 700 }}><Sparkles className="w-3 h-3" />Bạn được chọn!</div>
                   )}
-                  {job.status === 'matched' && job.aiMatchId !== DEMO_WORKER.id && (
+                  {job.status === 'matched' && job.aiMatchId !== currentUser.id && (
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-50 text-gray-400 text-[10px]" style={{ fontWeight: 600 }}>Không được chọn</div>
                   )}
-                  {job.status === 'completed' && job.aiMatchId === DEMO_WORKER.id && (
+                  {job.status === 'completed' && job.aiMatchId === currentUser.id && (
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-50 text-green-600 text-[10px]" style={{ fontWeight: 700 }}><ArrowDownLeft className="w-3 h-3" />+{fmt(job.price)}</div>
                   )}
                 </div>
@@ -411,10 +412,10 @@ export default function Activity() {
   // ── My Activity data ──
   const relevantJobs = useMemo(() => {
     if (isWorker) {
-      return jobs.filter(j => j.applicants.some(a => a.workerId === DEMO_WORKER.id) || j.aiMatchId === DEMO_WORKER.id);
+      return jobs.filter(j => j.applicants.some(a => a.workerId === currentUser.id) || j.aiMatchId === currentUser.id);
     }
     return jobs.filter(j => j.hirerName === currentUser.name);
-  }, [jobs, isWorker, currentUser.name]);
+  }, [jobs, isWorker, currentUser.name, currentUser.id]);
 
   const filteredMyJobs = useMemo(() => {
     if (filter === 'all') return relevantJobs;
@@ -426,21 +427,21 @@ export default function Activity() {
     const matched = relevantJobs.filter(j => j.status === 'matched').length;
     const completed = relevantJobs.filter(j => j.status === 'completed').length;
     const totalSpent = relevantJobs.filter(j => j.status === 'matched' || j.status === 'completed').reduce((s, j) => s + j.price, 0);
-    const totalEarned = relevantJobs.filter(j => j.status === 'completed' && j.aiMatchId === DEMO_WORKER.id).reduce((s, j) => s + j.price, 0);
+    const totalEarned = relevantJobs.filter(j => j.status === 'completed' && j.aiMatchId === currentUser.id).reduce((s, j) => s + j.price, 0);
     return { active, matched, completed, total: relevantJobs.length, totalSpent, totalEarned };
-  }, [relevantJobs]);
+  }, [relevantJobs, currentUser.id]);
 
   const transactions = useMemo(() => {
     const txns: { type: 'in' | 'out'; amount: number; label: string; time: string }[] = [];
     relevantJobs.forEach(j => {
       if (isWorker) {
-        if (j.status === 'completed' && j.aiMatchId === DEMO_WORKER.id) txns.push({ type: 'in', amount: j.price, label: j.title, time: timeAgo(j.postedAt) });
+        if (j.status === 'completed' && j.aiMatchId === currentUser.id) txns.push({ type: 'in', amount: j.price, label: j.title, time: timeAgo(j.postedAt) });
       } else {
         if (j.status === 'matched' || j.status === 'completed') txns.push({ type: 'out', amount: j.price, label: j.title, time: timeAgo(j.postedAt) });
       }
     });
     return txns.slice(0, 5);
-  }, [relevantJobs, isWorker]);
+  }, [relevantJobs, isWorker, currentUser.id]);
 
   const MY_FILTERS: { key: TabFilter; label: string; count: number }[] = [
     { key: 'all', label: 'Tất cả', count: relevantJobs.length },

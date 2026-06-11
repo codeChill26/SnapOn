@@ -30,10 +30,19 @@ const taskController = {
         location,
       } = req.body;
 
+      // Support slug-to-UUID lookup if category_id is a slug
+      let finalCategoryId = category_id;
+      if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
+        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
+        if (catRes.rows[0]) {
+          finalCategoryId = catRes.rows[0].id;
+        }
+      }
+
       // 1. Create the task
       const task = await taskModel.create({
         posterId,
-        categoryId: category_id,
+        categoryId: finalCategoryId,
         title,
         description,
         taskType: task_type,
@@ -208,6 +217,106 @@ const taskController = {
       console.error('Update task status error:', err);
       const statusCode = err.statusCode || 500;
       return error(res, err.message || 'Failed to update task status.', statusCode);
+    }
+  },
+
+  /**
+   * PATCH /api/tasks/:id
+   * Update task details (Poster only — owner check)
+   */
+  async updateTask(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const {
+        title,
+        description,
+        category_id,
+        task_type,
+        budget_min,
+        budget_max,
+        deadline_start,
+        deadline_end,
+        allow_insurance,
+      } = req.body;
+
+      // 1. Check task exists
+      const task = await taskModel.findById(id);
+      if (!task) {
+        return error(res, 'Task not found.', 404);
+      }
+
+      // 2. Check ownership
+      if (task.poster_id !== userId) {
+        return error(res, 'You can only update your own tasks.', 403);
+      }
+
+      // 3. Check status is OPEN (cannot update tasks once matched or completed)
+      if (task.status !== TASK_STATUS.OPEN) {
+        return error(res, 'You can only update open tasks.', 400);
+      }
+
+      // Resolve category UUID if slug is sent
+      let finalCategoryId = category_id;
+      if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
+        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
+        if (catRes.rows[0]) {
+          finalCategoryId = catRes.rows[0].id;
+        }
+      }
+
+      // 4. Perform update
+      const updatedTask = await taskModel.update(id, {
+        categoryId: finalCategoryId,
+        title,
+        description,
+        taskType: task_type,
+        budgetMin: budget_min,
+        budgetMax: budget_max,
+        deadlineStart: deadline_start,
+        deadlineEnd: deadline_end,
+        allowInsurance: allow_insurance,
+      });
+
+      return success(res, updatedTask, 'Task updated successfully.');
+    } catch (err) {
+      console.error('Update task error:', err);
+      return error(res, 'Failed to update task.', 500);
+    }
+  },
+
+  /**
+   * DELETE /api/tasks/:id
+   * Delete a task (Poster only — owner check)
+   */
+  async deleteTask(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      // 1. Check task exists
+      const task = await taskModel.findById(id);
+      if (!task) {
+        return error(res, 'Task not found.', 404);
+      }
+
+      // 2. Check ownership
+      if (task.poster_id !== userId) {
+        return error(res, 'You can only delete your own tasks.', 403);
+      }
+
+      // 3. Check status is OPEN (cannot delete in-progress/completed tasks)
+      if (task.status !== TASK_STATUS.OPEN) {
+        return error(res, 'You can only delete open tasks.', 400);
+      }
+
+      // 4. Perform delete
+      await taskModel.delete(id);
+
+      return success(res, null, 'Task deleted successfully.');
+    } catch (err) {
+      console.error('Delete task error:', err);
+      return error(res, 'Failed to delete task.', 500);
     }
   },
 };

@@ -54,4 +54,22 @@ router.patch(
   taskController.updateTaskStatus
 );
 
+// PATCH /api/tasks/:id — Update task details
+router.patch(
+  '/:id',
+  authenticate,
+  taskValidator.updateTask,
+  validate,
+  taskController.updateTask
+);
+
+// DELETE /api/tasks/:id — Delete a task
+router.delete(
+  '/:id',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.deleteTask
+);
+
 module.exports = router;
