@@ -8,6 +8,8 @@ import {
 import { useApp } from "../context/AppContext";
 import api from "../../services/api";
 
+const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'firebase';
+
 export default function Login() {
   const navigate = useNavigate();
   const { fetchProfile } = useApp();
@@ -29,10 +31,33 @@ export default function Login() {
 
     return data;
   };
+
+  const handleDevAuth = async () => {
+    const endpoint = isRegisterMode ? "/auth/dev/register" : "/auth/dev/login";
+    const response = await api.post(endpoint, { email, fullName: email.split('@')[0] });
+    const data = response.data;
+
+    if (!data.success) {
+      throw new Error(data.message || "Đăng nhập thất bại.");
+    }
+
+    localStorage.setItem("firebaseToken", data.token);
+    localStorage.setItem("appUser", JSON.stringify(data.user));
+    localStorage.setItem("wallet", JSON.stringify(data.wallet));
+
+    await fetchProfile();
+    navigate("/");
+  };
+
   const handleEmailAuth = async () => {
     try {
       setLoading(true);
       setError("");
+
+      if (AUTH_MODE === 'dev') {
+        await handleDevAuth();
+        return;
+      }
 
       const user = isRegisterMode
         ? await registerWithEmail(email, password)

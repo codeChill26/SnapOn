@@ -3,6 +3,8 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../../imports/firebase';
 import api from '../../services/api';
 
+const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'firebase';
+
 export interface Job {
   id: string;
   title: string;
@@ -386,7 +388,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await signOut(auth);
+      if (AUTH_MODE !== 'dev') {
+        await signOut(auth);
+      }
       localStorage.removeItem('firebaseToken');
       localStorage.removeItem('appUser');
       localStorage.removeItem('wallet');
@@ -445,6 +449,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Listen to Firebase auth state changes and sync profile/tokens
   useEffect(() => {
+    if (AUTH_MODE === 'dev') {
+      setAuthLoading(false);
+      const token = localStorage.getItem('firebaseToken');
+      if (token) {
+        fetchProfile();
+      }
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);

@@ -2,6 +2,43 @@ const admin = require('firebase-admin');
 const pool = require('../config/db');
 const { error } = require('../utils/responseHandler');
 
+/** Look up a user by their database UUID */
+async function findUserById(userId) {
+  const result = await pool.query(
+    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE id = $1',
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
+/** Attach user data to request and call next */
+function attachUser(req, user, res, next) {
+  if (user.status === 'BANNED') {
+    return error(res, 'Your account has been banned.', 403);
+  }
+
+  req.user = {
+    id: user.id,
+    firebaseUid: user.firebase_uid,
+    fullName: user.full_name,
+    email: user.email,
+    phone: user.phone,
+    avatarUrl: user.avatar_url,
+    role: user.role,
+    status: user.status,
+    isVerified: user.is_verified,
+  };
+
+  req.firebaseUser = {
+    uid: user.firebase_uid,
+    email: user.email,
+    name: user.full_name,
+    picture: user.avatar_url,
+  };
+
+  return next();
+}
+
 // ============================================================
 // DEV MODE: Khi AUTH_MODE=dev, bỏ qua Firebase verification.
 // Chỉ cần truyền header: x-user-id = <UUID của user trong DB>
@@ -10,7 +47,15 @@ const { error } = require('../utils/responseHandler');
 // sẽ dùng Firebase ID token bình thường.
 // ============================================================
 
-const AUTH_MODE = process.env.AUTH_MODE || 'firebase';
+const FIREBASE_CONFIGURED = !!(process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID);
+
+let AUTH_MODE = process.env.AUTH_MODE || 'firebase';
+
+// Auto-fallback: if Firebase is not configured, use dev mode
+if (AUTH_MODE === 'firebase' && !FIREBASE_CONFIGURED) {
+  console.log('🔓 Firebase not configured — automatically switching to DEV MODE');
+  AUTH_MODE = 'dev';
+}
 
 // Initialize Firebase Admin SDK (chỉ khi AUTH_MODE = firebase)
 if (AUTH_MODE === 'firebase' && !admin.apps.length) {
@@ -38,11 +83,14 @@ if (AUTH_MODE === 'firebase' && !admin.apps.length) {
     }
   } catch (err) {
     console.warn('⚠️  Firebase Admin SDK not initialized:', err.message);
-    console.warn('   Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (or at least VITE_FIREBASE_PROJECT_ID) in .env');
+    console.warn('   Automatically falling back to DEV MODE');
+    AUTH_MODE = 'dev';
   }
-} else if (AUTH_MODE === 'dev') {
+}
+
+if (AUTH_MODE === 'dev') {
   console.log('🔓 Auth running in DEV MODE — Firebase is bypassed');
-  console.log('   Use header "x-user-id: <user-uuid>" to authenticate');
+  console.log('   Use header "x-user-id: <user-uuid>" or login via /api/auth/dev/login');
 }
 
 /**
@@ -64,48 +112,54 @@ const authenticate = async (req, res, next) => {
     // DEV MODE
     // =====================
     if (AUTH_MODE === 'dev') {
-      const userId = req.headers['x-user-id'];
+      // For sync-user in dev mode: decode Firebase JWT from body (no verification)
+      const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
+      if (isSyncUser) {
+        const firebaseToken = req.body?.firebaseToken;
+        if (firebaseToken) {
+          try {
+            const payload = JSON.parse(
+              Buffer.from(firebaseToken.split('.')[1], 'base64url').toString()
+            );
+            req.firebaseUser = {
+              uid: payload.sub || payload.user_id || 'dev-uid',
+              email: payload.email || 'dev@snapon.vn',
+              name: payload.name || 'Dev User',
+              picture: payload.picture || '',
+            };
+            return next();
+          } catch (e) {
+            // JWT decode failed, fall through
+          }
+        }
+        // No token in body, try x-user-id
+        const fallbackId = req.headers['x-user-id'];
+        if (fallbackId) {
+          const user = await findUserById(fallbackId);
+          if (user) return attachUser(req, user, res, next);
+        }
+        return error(res, 'DEV MODE: Cannot sync user. Provide firebaseToken in body or x-user-id header.', 401);
+      }
+
+      let userId = req.headers['x-user-id'];
+
+      // Fallback: use Bearer token as user ID (in dev mode, token = user UUID)
+      if (!userId) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          userId = authHeader.split('Bearer ')[1];
+        }
+      }
 
       if (!userId) {
-        return error(res, 'DEV MODE: Header "x-user-id" is required.', 401);
+        return error(res, 'DEV MODE: Header "x-user-id" or Bearer token is required.', 401);
       }
 
-      const result = await pool.query(
-        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE id = $1',
-        [userId]
-      );
-
-      if (result.rows.length === 0) {
+      const user = await findUserById(userId);
+      if (!user) {
         return error(res, 'User not found with the provided ID.', 404);
       }
-
-      const user = result.rows[0];
-
-      if (user.status === 'BANNED') {
-        return error(res, 'Your account has been banned.', 403);
-      }
-
-      req.user = {
-        id: user.id,
-        firebaseUid: user.firebase_uid,
-        fullName: user.full_name,
-        email: user.email,
-        phone: user.phone,
-        avatarUrl: user.avatar_url,
-        role: user.role,
-        status: user.status,
-        isVerified: user.is_verified,
-      };
-
-      // For compatibility with routes expecting firebase payload
-      req.firebaseUser = {
-        uid: user.firebase_uid,
-        email: user.email,
-        name: user.full_name,
-        picture: user.avatar_url,
-      };
-
-      return next();
+      return attachUser(req, user, res, next);
     }
 
     // =====================
@@ -119,13 +173,10 @@ const authenticate = async (req, res, next) => {
 
     const token = authHeader.split('Bearer ')[1];
 
-    // Verify Firebase ID token
     const decodedToken = await admin.auth().verifyIdToken(token);
 
-    // For compatibility with routes expecting firebase payload
     req.firebaseUser = decodedToken;
 
-    // Check if this is a sync-user request (which is used for registration/syncing new users)
     const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
     if (isSyncUser) {
       return next();
@@ -140,26 +191,7 @@ const authenticate = async (req, res, next) => {
       return error(res, 'User not found. Please register first.', 404);
     }
 
-    const user = result.rows[0];
-
-    if (user.status === 'BANNED') {
-      return error(res, 'Your account has been banned.', 403);
-    }
-
-    // Attach user info to request
-    req.user = {
-      id: user.id,
-      firebaseUid: user.firebase_uid,
-      fullName: user.full_name,
-      email: user.email,
-      phone: user.phone,
-      avatarUrl: user.avatar_url,
-      role: user.role,
-      status: user.status,
-      isVerified: user.is_verified,
-    };
-
-    next();
+    return attachUser(req, result.rows[0], res, next);
   } catch (err) {
     console.error('Auth middleware error:', err.message);
 
