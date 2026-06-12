@@ -16,6 +16,10 @@ const options = {
         url: 'http://localhost:3000',
         description: 'Development server',
       },
+      {
+        url: "https://snapon-1.onrender.com",
+        description: "Production server",
+      },
     ],
     components: {
       securitySchemes: {
