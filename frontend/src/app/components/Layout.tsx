@@ -334,7 +334,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
             const active = location.pathname === path;
             return (
               <Link
-                key={path}
+                key={`${path}-${label}`}
                 to={path}
                 className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${isWorker
                   ? active ? 'text-white' : 'text-blue-300'
@@ -344,7 +344,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 {path === '/profile' ? (
                   <div className="relative">
                     <img
-                      src={currentUser.avatar}
+                      src={currentUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=SnapOn'}
                       alt=""
                       className={`w-6 h-6 rounded-full border-2 ${active
                         ? isWorker ? 'border-white' : 'border-orange-400'

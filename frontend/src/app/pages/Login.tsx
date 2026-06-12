@@ -5,6 +5,7 @@ import {
   loginWithGoogle,
   registerWithEmail,
 } from "../../imports/authService";
+import { auth } from "../../imports/firebase";
 import { useApp } from "../context/AppContext";
 import api from "../../services/api";
 
@@ -85,31 +86,35 @@ export default function Login() {
   };
 
   const handleGoogleLogin = async () => {
-  try {
-    setLoading(true);
-    setError("");
+    try {
+      setLoading(true);
+      setError("");
 
-    const user = await loginWithGoogle();
-    const token = await user.getIdToken();
+      if (!auth) {
+        throw new Error("Firebase chưa được cấu hình. Vui lòng kiểm tra biến môi trường.");
+      }
 
-    const syncData = await syncUserWithBackend(token);
+      const user = await loginWithGoogle();
+      const token = await user.getIdToken();
 
-    localStorage.setItem("firebaseToken", token);
-    localStorage.setItem("appUser", JSON.stringify(syncData.user));
-    localStorage.setItem("wallet", JSON.stringify(syncData.wallet));
+      const syncData = await syncUserWithBackend(token);
 
-    console.log("Synced Google user:", syncData);
-    
-    // Update global context
-    await fetchProfile();
+      localStorage.setItem("firebaseToken", token);
+      localStorage.setItem("appUser", JSON.stringify(syncData.user));
+      localStorage.setItem("wallet", JSON.stringify(syncData.wallet));
 
-    navigate("/");
-  } catch (err: any) {
-    setError(err.message || "Đăng nhập Google thất bại.");
-  } finally {
-    setLoading(false);
-  }
-};
+      console.log("Synced Google user:", syncData);
+      
+      // Update global context
+      await fetchProfile();
+
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message || "Đăng nhập Google thất bại.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center px-4">

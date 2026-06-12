@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
-import { useApp, DEMO_WORKER, CATEGORIES } from '../context/AppContext';
+import { useApp, CATEGORIES } from '../context/AppContext';
 
 // ─── Helper ──────────────────────────────────────────────────
 function fmt(n: number) {
@@ -429,21 +429,21 @@ function WorkerProfile() {
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'feedback' | 'settings'>('profile');
 
   // Editable fields
-  const [name,    setName]    = useState(currentUser.name || DEMO_WORKER.name);
-  const [phone,   setPhone]   = useState(currentUser.phone || '0901 234 567');
-  const [email,   setEmail]   = useState(currentUser.email || 'minh.demo@snapon.vn');
+  const [name,    setName]    = useState(currentUser.name || '');
+  const [phone,   setPhone]   = useState(currentUser.phone || '');
+  const [email,   setEmail]   = useState(currentUser.email || '');
   const [area,    setArea]    = useState('Quận 1, TP.HCM');
-  const [bio,     setBio]     = useState(DEMO_WORKER.bio);
+  const [bio,     setBio]     = useState((currentUser as any).bio || '');
   const [editBio, setEditBio] = useState(false);
   const [draftBio, setDraftBio] = useState(bio);
-  const [skills,  setSkills]  = useState([...DEMO_WORKER.skills]);
+  const [skills,  setSkills]  = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState('');
   const [addingSkill, setAddingSkill] = useState(false);
 
   useEffect(() => {
-    setName(currentUser.name || DEMO_WORKER.name);
-    setPhone(currentUser.phone || '0901 234 567');
-    setEmail(currentUser.email || 'minh.demo@snapon.vn');
+    setName(currentUser.name || '');
+    setPhone(currentUser.phone || '');
+    setEmail(currentUser.email || '');
   }, [currentUser]);
 
   const handleSavePhone = async (val: string) => {
@@ -535,7 +535,7 @@ function WorkerProfile() {
         {/* Stats row */}
         <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
           {[
-            { v: DEMO_WORKER.completedJobs, l: 'Việc done' },
+            { v: (currentUser as any).completed_jobs || 0, l: 'Việc done' },
             { v: appliedJobs.length,        l: 'Đã apply' },
             { v: workerReviews.length,       l: 'Đánh giá' },
             { v: fmt(totalEarned) + '₫',    l: 'Tổng thu' },

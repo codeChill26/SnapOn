@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X, Wallet, CheckCircle, ArrowLeft, Sparkles, Shield, TrendingUp,
-  CreditCard, Zap, Clock, ChevronRight, BadgeCheck, ArrowUpRight, Gift
+  CreditCard, Zap, Clock, ChevronRight, BadgeCheck, ArrowUpRight, Gift, ArrowDownLeft, Landmark
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -57,16 +57,21 @@ function Particle({ delay, isWorker }: { delay: number; isWorker: boolean }) {
 export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: WalletModalProps) {
   const { fetchProfile } = useApp();
   const [step, setStep] = useState<Step>('select');
+  const [mode, setMode] = useState<'topup' | 'withdraw'>('topup');
   const [selected, setSelected] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [countdown, setCountdown] = useState(4);
   const [progress, setProgress] = useState(0);
-
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [orderCode, setOrderCode] = useState<number | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [initialBalance, setInitialBalance] = useState(balance);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
 
   // Stable QR value — generated once when entering QR step
   const qrValueRef = useRef('');
@@ -201,6 +206,31 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
     }
   }, [step, selected, checkoutUrl]);
 
+  const handleWithdraw = async () => {
+    const amt = parseInt(withdrawAmount.replace(/\D/g, ''), 10);
+    if (!amt || amt <= 0) { setErrorMsg('Vui lòng nhập số tiền hợp lệ.'); return; }
+    if (!bankName.trim()) { setErrorMsg('Vui lòng nhập tên ngân hàng.'); return; }
+    if (!bankAccountNumber.trim()) { setErrorMsg('Vui lòng nhập số tài khoản.'); return; }
+    if (amt > balance) { setErrorMsg('Số dư không đủ để rút.'); return; }
+
+    try {
+      setWithdrawLoading(true);
+      setErrorMsg('');
+      const res = await api.post('/wallet/withdraw', { amount: amt, bankName: bankName.trim(), bankAccountNumber: bankAccountNumber.trim() });
+      if (res.data.success) {
+        setWithdrawSuccess(true);
+        await fetchProfile();
+      } else {
+        throw new Error(res.data.message || 'Không thể tạo yêu cầu rút tiền.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.message || err.message || 'Lỗi khi tạo yêu cầu rút tiền.');
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
   const accentGradient = isWorker
     ? 'from-blue-600 via-indigo-600 to-violet-600'
     : 'from-orange-500 via-amber-500 to-yellow-500';
@@ -328,173 +358,303 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                     transition={{ duration: 0.25 }}
                     className="p-5"
                   >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className={`w-4 h-4 ${accentText}`} />
-                        <p className="text-gray-800 text-sm" style={{ fontWeight: 700 }}>Nạp tiền vào ví</p>
-                      </div>
-                      <div className="flex items-center gap-1 text-gray-400 text-xs">
-                        <Zap className="w-3 h-3" />
-                        <span>Xử lý tức thì</span>
-                      </div>
-                    </div>
-
-                    {/* Preset grid */}
-                    <div className="grid grid-cols-3 gap-2">
-                      {PRESETS.map(p => {
-                        const isActive = selected === p.amount;
-                        return (
-                          <motion.button
-                            key={p.amount}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.96 }}
-                            onClick={() => handlePresetSelect(p.amount)}
-                            className={`relative py-3 px-2 rounded-2xl border-2 text-center transition-all ${
-                              isActive
-                                ? `${accentBorder} ${accentBgLight} ring-4 ${accentRing}/30`
-                                : 'border-gray-100 bg-gray-50/80 hover:border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {/* Popular badge */}
-                            {p.popular && (
-                              <span className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] px-2 py-0.5 rounded-full text-white ${accentBg}`}
-                                style={{ fontWeight: 700 }}>
-                                HOT
-                              </span>
-                            )}
-                            {/* Bonus badge */}
-                            {p.bonus && (
-                              <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] px-2 py-0.5 rounded-full bg-green-500 text-white"
-                                style={{ fontWeight: 700 }}>
-                                {p.bonus}
-                              </span>
-                            )}
-
-                            <span className="text-lg block mb-0.5">{p.icon}</span>
-                            <span className={`block text-sm ${isActive ? accentText : 'text-gray-800'}`}
-                              style={{ fontWeight: 800 }}>
-                              {p.label}
-                            </span>
-                            <span className="block text-[10px] text-gray-400 mt-0.5" style={{ fontWeight: 500 }}>
-                              {p.desc}
-                            </span>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Custom Amount Input */}
-                    <div className="mt-4 text-left">
-                      <label className="block text-xs text-gray-400 mb-1.5 font-medium">Hoặc nhập số tiền khác</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={customAmount}
-                          onChange={handleCustomAmountChange}
-                          placeholder="Nhập số tiền (ví dụ: 100000)..."
-                          className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
-                            isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
-                          }`}
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
-                      </div>
-                      {selected !== null && selected < 1000 && (
-                        <p className="text-red-500 text-[10px] mt-1 font-semibold">Số tiền nạp tối thiểu là 1.000₫</p>
-                      )}
-                    </div>
-
-                    {/* Summary */}
-                    <AnimatePresence>
-                      {selected && selected >= 1000 && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                          animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
-                          exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className={`p-4 rounded-2xl bg-gradient-to-r ${accentGradientSubtle} border border-gray-100`}>
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-500">Số tiền nạp</span>
-                              <span className={accentText} style={{ fontWeight: 700 }}>{fmt(selected)}</span>
-                            </div>
-                            <div className="w-full h-px bg-gray-200/50 my-2.5" />
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-500">Số dư sau nạp</span>
-                              <div className="flex items-center gap-1.5">
-                                <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />
-                                <span className="text-gray-900" style={{ fontWeight: 800 }}>{fmt(balance + selected)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {errorMsg && (
-                      <div className="mt-3 text-xs text-red-500 bg-red-50 border border-red-100 px-3 py-2 rounded-xl text-center">
-                        {errorMsg}
-                      </div>
-                    )}
-
-                    {/* CTA Buttons */}
-                    <div className="flex flex-col gap-2 mt-5">
-                      <motion.button
-                        whileHover={selected && selected >= 1000 ? { scale: 1.01 } : {}}
-                        whileTap={selected && selected >= 1000 ? { scale: 0.98 } : {}}
-                        disabled={!selected || selected < 1000 || paymentLoading}
-                        onClick={handlePayOSTopUp}
-                        className={`w-full py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 ${
-                          selected && selected >= 1000
-                            ? `bg-gradient-to-r ${accentGradient} text-white shadow-lg hover:shadow-xl`
-                            : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                    {/* Mode tabs */}
+                    <div className="flex items-center gap-1 mb-4 bg-gray-100 rounded-xl p-1">
+                      <button
+                        onClick={() => { setMode('topup'); setErrorMsg(''); setSelected(null); setCustomAmount(''); }}
+                        className={`flex-1 py-2 rounded-lg text-xs transition-all ${
+                          mode === 'topup' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                         }`}
                         style={{ fontWeight: 700 }}
                       >
-                        {selected ? (
-                          selected >= 1000 ? (
+                        <CreditCard className="w-3.5 h-3.5 inline mr-1" />
+                        Nạp tiền
+                      </button>
+                      <button
+                        onClick={() => { setMode('withdraw'); setErrorMsg(''); setSelected(null); setCustomAmount(''); }}
+                        className={`flex-1 py-2 rounded-lg text-xs transition-all ${
+                          mode === 'withdraw' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                        style={{ fontWeight: 700 }}
+                      >
+                        <ArrowDownLeft className="w-3.5 h-3.5 inline mr-1" />
+                        Rút tiền
+                      </button>
+                    </div>
+
+                    {mode === 'topup' && (
+                      <>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className={`w-4 h-4 ${accentText}`} />
+                            <p className="text-gray-800 text-sm" style={{ fontWeight: 700 }}>Nạp tiền vào ví</p>
+                          </div>
+                          <div className="flex items-center gap-1 text-gray-400 text-xs">
+                            <Zap className="w-3 h-3" />
+                            <span>Xử lý tức thì</span>
+                          </div>
+                        </div>
+
+                        {/* Preset grid */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {PRESETS.map(p => {
+                            const isActive = selected === p.amount;
+                            return (
+                              <motion.button
+                                key={p.amount}
+                                whileHover={{ scale: 1.03 }}
+                                whileTap={{ scale: 0.96 }}
+                                onClick={() => handlePresetSelect(p.amount)}
+                                className={`relative py-3 px-2 rounded-2xl border-2 text-center transition-all ${
+                                  isActive
+                                    ? `${accentBorder} ${accentBgLight} ring-4 ${accentRing}/30`
+                                    : 'border-gray-100 bg-gray-50/80 hover:border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                {p.popular && (
+                                  <span className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] px-2 py-0.5 rounded-full text-white ${accentBg}`}
+                                    style={{ fontWeight: 700 }}>
+                                    HOT
+                                  </span>
+                                )}
+                                {p.bonus && (
+                                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] px-2 py-0.5 rounded-full bg-green-500 text-white"
+                                    style={{ fontWeight: 700 }}>
+                                    {p.bonus}
+                                  </span>
+                                )}
+                                <span className="text-lg block mb-0.5">{p.icon}</span>
+                                <span className={`block text-sm ${isActive ? accentText : 'text-gray-800'}`}
+                                  style={{ fontWeight: 800 }}>
+                                  {p.label}
+                                </span>
+                                <span className="block text-[10px] text-gray-400 mt-0.5" style={{ fontWeight: 500 }}>
+                                  {p.desc}
+                                </span>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Custom Amount Input */}
+                        <div className="mt-4 text-left">
+                          <label className="block text-xs text-gray-400 mb-1.5 font-medium">Hoặc nhập số tiền khác</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={customAmount}
+                              onChange={handleCustomAmountChange}
+                              placeholder="Nhập số tiền (ví dụ: 100000)..."
+                              className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
+                                isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
+                              }`}
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
+                          </div>
+                          {selected !== null && selected < 1000 && (
+                            <p className="text-red-500 text-[10px] mt-1 font-semibold">Số tiền nạp tối thiểu là 1.000₫</p>
+                          )}
+                        </div>
+
+                        {/* Summary */}
+                        <AnimatePresence>
+                          {selected && selected >= 1000 && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                              animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+                              exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden"
+                            >
+                              <div className={`p-4 rounded-2xl bg-gradient-to-r ${accentGradientSubtle} border border-gray-100`}>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-500">Số tiền nạp</span>
+                                  <span className={accentText} style={{ fontWeight: 700 }}>{fmt(selected)}</span>
+                                </div>
+                                <div className="w-full h-px bg-gray-200/50 my-2.5" />
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-500">Số dư sau nạp</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />
+                                    <span className="text-gray-900" style={{ fontWeight: 800 }}>{fmt(balance + selected)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {errorMsg && (
+                          <div className="mt-3 text-xs text-red-500 bg-red-50 border border-red-100 px-3 py-2 rounded-xl text-center">
+                            {errorMsg}
+                          </div>
+                        )}
+
+                        {/* CTA Buttons */}
+                        <div className="flex flex-col gap-2 mt-5">
+                          <motion.button
+                            whileHover={selected && selected >= 1000 ? { scale: 1.01 } : {}}
+                            whileTap={selected && selected >= 1000 ? { scale: 0.98 } : {}}
+                            disabled={!selected || selected < 1000 || paymentLoading}
+                            onClick={handlePayOSTopUp}
+                            className={`w-full py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 ${
+                              selected && selected >= 1000
+                                ? `bg-gradient-to-r ${accentGradient} text-white shadow-lg hover:shadow-xl`
+                                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                            }`}
+                            style={{ fontWeight: 700 }}
+                          >
+                            {selected ? (
+                              selected >= 1000 ? (
+                                <>
+                                  <CreditCard className="w-4 h-4" />
+                                  {paymentLoading ? 'Đang kết nối...' : `Nạp tiền qua PayOS ${fmtShort(selected)}`}
+                                  <ChevronRight className="w-4 h-4" />
+                                </>
+                              ) : (
+                                'Số tiền tối thiểu 1.000₫'
+                              )
+                            ) : (
+                              'Chọn mệnh giá để tiếp tục'
+                            )}
+                          </motion.button>
+
+                          {selected && selected >= 1000 && (
+                            <button
+                              onClick={() => setStep('qr')}
+                              className="w-full py-2 rounded-xl text-[11px] text-gray-400 hover:text-gray-600 transition"
+                              style={{ fontWeight: 500 }}
+                            >
+                              🧪 Chế độ thử nghiệm (Nạp ảo)
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Trust badges */}
+                        <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-gray-300">
+                          <div className="flex items-center gap-1">
+                            <Shield className="w-3 h-3" />
+                            <span>Bảo mật</span>
+                          </div>
+                          <div className="w-0.5 h-3 bg-gray-200 rounded-full" />
+                          <div className="flex items-center gap-1">
+                            <Zap className="w-3 h-3" />
+                            <span>Tức thì</span>
+                          </div>
+                          <div className="w-0.5 h-3 bg-gray-200 rounded-full" />
+                          <div className="flex items-center gap-1">
+                            <BadgeCheck className="w-3 h-3" />
+                            <span>An toàn</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {mode === 'withdraw' && (
+                      <>
+                        <div className="flex items-center gap-2 mb-4">
+                          <ArrowDownLeft className={`w-4 h-4 ${accentText}`} />
+                          <p className="text-gray-800 text-sm" style={{ fontWeight: 700 }}>Rút tiền về tài khoản ngân hàng</p>
+                        </div>
+
+                        <p className="text-xs text-gray-400 mb-4">
+                          Số dư khả dụng: <span style={{ fontWeight: 700 }} className="text-gray-800">{fmt(balance)}</span>
+                        </p>
+
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Số tiền rút</label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={withdrawAmount}
+                                onChange={(e) => setWithdrawAmount(e.target.value.replace(/\D/g, ''))}
+                                placeholder="Nhập số tiền..."
+                                className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
+                                  isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
+                                }`}
+                              />
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Tên ngân hàng</label>
+                            <input
+                              type="text"
+                              value={bankName}
+                              onChange={(e) => setBankName(e.target.value)}
+                              placeholder="VD: Vietcombank, Techcombank..."
+                              className="w-full px-4 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-medium focus:bg-white focus:outline-none transition-all focus:border-gray-300"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Số tài khoản</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={bankAccountNumber}
+                              onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                              placeholder="Nhập số tài khoản..."
+                              className="w-full px-4 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-medium focus:bg-white focus:outline-none transition-all focus:border-gray-300"
+                            />
+                          </div>
+                        </div>
+
+                        {errorMsg && (
+                          <div className="mt-3 text-xs text-red-500 bg-red-50 border border-red-100 px-3 py-2 rounded-xl text-center">
+                            {errorMsg}
+                          </div>
+                        )}
+
+                        <motion.button
+                          whileHover={!withdrawLoading && withdrawAmount && bankName && bankAccountNumber ? { scale: 1.01 } : {}}
+                          whileTap={!withdrawLoading && withdrawAmount && bankName && bankAccountNumber ? { scale: 0.98 } : {}}
+                          disabled={withdrawLoading || !withdrawAmount || !bankName || !bankAccountNumber}
+                          onClick={handleWithdraw}
+                          className={`w-full py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 mt-4 ${
+                            withdrawAmount && bankName && bankAccountNumber
+                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:shadow-xl'
+                              : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                          }`}
+                          style={{ fontWeight: 700 }}
+                        >
+                          {withdrawLoading ? (
                             <>
-                              <CreditCard className="w-4 h-4" />
-                              {paymentLoading ? 'Đang kết nối...' : `Nạp tiền qua PayOS ${fmtShort(selected)}`}
-                              <ChevronRight className="w-4 h-4" />
+                              <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                              Đang xử lý...
                             </>
                           ) : (
-                            'Số tiền tối thiểu 1.000₫'
-                          )
-                        ) : (
-                          'Chọn mệnh giá để tiếp tục'
+                            <>
+                              <Landmark className="w-4 h-4" />
+                              Gửi yêu cầu rút tiền
+                            </>
+                          )}
+                        </motion.button>
+
+                        {withdrawSuccess && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mt-4 p-4 rounded-2xl bg-green-50 border border-green-100 text-center"
+                          >
+                            <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                            <p className="text-green-800 text-sm font-bold">Yêu cầu rút tiền đã được gửi!</p>
+                            <p className="text-green-600 text-xs mt-1">Vui lòng chờ admin xử lý.</p>
+                            <button
+                              onClick={() => { setWithdrawSuccess(false); setWithdrawAmount(''); setBankName(''); setBankAccountNumber(''); }}
+                              className="mt-3 text-xs text-green-600 underline"
+                            >
+                              Tiếp tục
+                            </button>
+                          </motion.div>
                         )}
-                      </motion.button>
-
-                      {selected && selected >= 1000 && (
-                        <button
-                          onClick={() => setStep('qr')}
-                          className="w-full py-2 rounded-xl text-[11px] text-gray-400 hover:text-gray-600 transition"
-                          style={{ fontWeight: 500 }}
-                        >
-                          🧪 Chế độ thử nghiệm (Nạp ảo)
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Trust badges */}
-                    <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-gray-300">
-                      <div className="flex items-center gap-1">
-                        <Shield className="w-3 h-3" />
-                        <span>Bảo mật</span>
-                      </div>
-                      <div className="w-0.5 h-3 bg-gray-200 rounded-full" />
-                      <div className="flex items-center gap-1">
-                        <Zap className="w-3 h-3" />
-                        <span>Tức thì</span>
-                      </div>
-                      <div className="w-0.5 h-3 bg-gray-200 rounded-full" />
-                      <div className="flex items-center gap-1">
-                        <BadgeCheck className="w-3 h-3" />
-                        <span>An toàn</span>
-                      </div>
-                    </div>
+                      </>
+                    )}
                   </motion.div>
                 )}
 

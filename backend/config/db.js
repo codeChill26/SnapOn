@@ -39,7 +39,7 @@ if (!poolConfig.host) {
 
 poolConfig.max = 20;
 poolConfig.idleTimeoutMillis = 30000;
-poolConfig.connectionTimeoutMillis = 5000;
+poolConfig.connectionTimeoutMillis = 500000;
 
 const pool = new Pool(poolConfig);
 

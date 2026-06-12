@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp, CATEGORIES, haversineDistance, DEMO_WORKER, type Worker } from '../context/AppContext';
+import { useApp, CATEGORIES, haversineDistance, type Worker } from '../context/AppContext';
 import { JobCard } from '../components/JobCard';
 import { MapPicker } from '../components/MapPicker';
 import { CountdownTimer } from '../components/CountdownTimer';
@@ -117,17 +117,17 @@ export default function WorkerDashboard() {
   }, [currentUser.role, setUserRole]);
 
   const activeWorker = {
-    id: currentUser.role === 'worker' ? currentUser.id || 'demo' : 'demo',
-    name: currentUser.role === 'worker' ? currentUser.name : DEMO_WORKER.name,
-    avatar: currentUser.role === 'worker' ? currentUser.avatar : DEMO_WORKER.avatar,
-    bio: currentUser.role === 'worker' ? (currentUser as any).bio || DEMO_WORKER.bio : DEMO_WORKER.bio,
-    rating: DEMO_WORKER.rating,
-    completedJobs: DEMO_WORKER.completedJobs,
+    id: currentUser.id || 'worker',
+    name: currentUser.name || 'Người làm',
+    avatar: currentUser.avatar || '',
+    bio: (currentUser as any).bio || '',
+    rating: parseFloat((currentUser as any).rating) || 0,
+    completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
   };
 
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number; address: string }>({
-    lat: DEMO_WORKER.lat,
-    lng: DEMO_WORKER.lng,
+    lat: 10.7769,
+    lng: 106.7009,
     address: 'Quận 1, TP. Hồ Chí Minh',
   });
   const [geoLoading, setGeoLoading] = useState(false);
@@ -214,7 +214,7 @@ export default function WorkerDashboard() {
         avatar: activeWorker.avatar,
         lat: myLocation.lat,
         lng: myLocation.lng,
-        skills: DEMO_WORKER.skills,
+        skills: (currentUser as any).skills || [],
         rating: activeWorker.rating,
         completedJobs: activeWorker.completedJobs,
         bio: activeWorker.bio,

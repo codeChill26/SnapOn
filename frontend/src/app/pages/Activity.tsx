@@ -9,7 +9,7 @@ import {
   Flame, Eye, Heart, ChevronDown, TrendingUp as TUp, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp, DEMO_WORKER, CATEGORIES, type Job } from '../context/AppContext';
+import { useApp, CATEGORIES, type Job } from '../context/AppContext';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + '₫';
 const fmtShort = (n: number) => {

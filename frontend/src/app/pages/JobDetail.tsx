@@ -7,7 +7,7 @@ import {
   Target, BarChart3, FlameKindling, ExternalLink, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp, haversineDistance, DEMO_WORKER, scoreApplicants } from '../context/AppContext';
+import { useApp, haversineDistance, scoreApplicants } from '../context/AppContext';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { MapPicker } from '../components/MapPicker';
 import { UserProfileModal, type HirerProfileData, type WorkerProfileData } from '../components/UserProfileModal';
@@ -69,7 +69,7 @@ function WorkerJobDetailView() {
   const isOnThisJob    = workerCurrentJobId === job.id && workerStatus === 'on_job';
   const canApply       = job.status === 'active' && job.expiresAt > Date.now() && !alreadyApplied && !applied && workerStatus === 'available';
   const workerBusy     = workerStatus === 'on_job' && workerCurrentJobId !== job.id;
-  const distance       = haversineDistance(DEMO_WORKER.lat, DEMO_WORKER.lng, job.location.lat, job.location.lng);
+  const distance       = haversineDistance(10.7769, 106.7009, job.location.lat, job.location.lng);
 
   // Competitiveness hint based on bid
   const bidRatio = (bidPrice - job.priceMin) / (job.priceMax - job.priceMin || 1);
@@ -82,12 +82,12 @@ function WorkerJobDetailView() {
       id: currentUser.id,
       name: currentUser.name,
       avatar: currentUser.avatar,
-      lat: DEMO_WORKER.lat,
-      lng: DEMO_WORKER.lng,
-      skills: (currentUser as any).skills || DEMO_WORKER.skills,
-      rating: DEMO_WORKER.rating,
-      completedJobs: DEMO_WORKER.completedJobs,
-      bio: (currentUser as any).bio || DEMO_WORKER.bio,
+      lat: 10.7769,
+      lng: 106.7009,
+      skills: (currentUser as any).skills || [],
+      rating: parseFloat((currentUser as any).rating) || 0,
+      completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
+      bio: (currentUser as any).bio || '',
     };
     applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
     setApplied(true);

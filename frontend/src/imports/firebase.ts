@@ -10,7 +10,22 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+const hasFirebaseConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+let auth: any = null;
+let googleProvider: any = null;
+
+if (hasFirebaseConfig) {
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    googleProvider = new GoogleAuthProvider();
+    console.log('✅ Firebase initialized');
+  } catch (err) {
+    console.warn('⚠️ Firebase initialization failed:', err);
+  }
+} else {
+  console.warn('⚠️ Firebase config missing (VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID). Firebase auth disabled.');
+}
+
+export { auth, googleProvider };

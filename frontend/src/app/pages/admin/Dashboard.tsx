@@ -38,27 +38,8 @@ export default function Dashboard() {
   });
   const categoryData = Object.entries(categoryCount).map(([name, value]) => ({ name, value }));
 
-  // Revenue trend (mock data - in real app would be time-series)
-  const revenueTrendData = [
-    { day: 'Mon', revenue: 1200000, jobs: 8 },
-    { day: 'Tue', revenue: 1500000, jobs: 10 },
-    { day: 'Wed', revenue: 1100000, jobs: 7 },
-    { day: 'Thu', revenue: 1800000, jobs: 12 },
-    { day: 'Fri', revenue: 2100000, jobs: 14 },
-    { day: 'Sat', revenue: 2500000, jobs: 16 },
-    { day: 'Sun', revenue: 1900000, jobs: 13 },
-  ];
-
-  // Applications trend
-  const applicationsTrendData = [
-    { hour: '8h', applications: 12 },
-    { hour: '10h', applications: 18 },
-    { hour: '12h', applications: 25 },
-    { hour: '14h', applications: 30 },
-    { hour: '16h', applications: 22 },
-    { hour: '18h', applications: 28 },
-    { hour: '20h', applications: 15 },
-  ];
+  const revenueTrendData: { day: string; revenue: number; jobs: number }[] = [];
+  const applicationsTrendData: { hour: string; applications: number }[] = [];
 
   const stats = [
     {
