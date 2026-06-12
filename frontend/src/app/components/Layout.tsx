@@ -3,6 +3,7 @@ import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckC
 import { useApp } from '../context/AppContext';
 import { useLocation, useNavigate, Link, Outlet } from 'react-router';
 import { SnapOnLogo } from './SnapOnLogo';
+import api from '../../services/api';
 import { AnimatePresence, motion } from 'motion/react';
 import { WalletModal } from './WalletModal';
 
@@ -38,27 +39,10 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       const verifyPayOSPayment = async () => {
         try {
           const token = localStorage.getItem('firebaseToken');
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-          };
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
-          const appUserStr = localStorage.getItem('appUser');
-          if (appUserStr) {
-            const appUser = JSON.parse(appUserStr);
-            if (appUser.id) {
-              headers['x-user-id'] = appUser.id;
-            }
-          }
-
           // Call check status API on backend to update database
-          const res = await fetch(`http://localhost:3000/api/wallet/topup/payos/status/${orderCode}`, {
-            headers,
-          });
-          if (res.ok) {
-            const statusData = await res.json();
-            if (statusData.success && statusData.data?.status === 'SUCCESS') {
+          const res = await api.get(`/wallet/topup/payos/status/${orderCode}`);
+          const statusData = res.data;
+          if (statusData.success && statusData.data?.status === 'SUCCESS') {
               console.log('🎉 PayOS payment verified successfully!');
               // Re-fetch profile/wallet to show the updated balance
               await fetchProfile();
@@ -67,7 +51,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 setPaymentSuccessToast(false);
               }, 5000);
             }
-          }
         } catch (err) {
           console.error('Error verifying payment status on redirect:', err);
         } finally {

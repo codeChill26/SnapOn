@@ -410,27 +410,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      };
-
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) {
-          headers['x-user-id'] = appUser.id;
+      const res = await api.get('/users/profile').catch((err) => {
+        if (err.response?.status === 401) {
+          console.warn('Unauthorized user token. Logging out...');
+          logout();
         }
-      }
-
-      const res = await fetch('http://localhost:3000/api/users/profile', { headers });
-      if (res.status === 401) {
-        console.warn('Unauthorized user token. Logging out...');
-        await logout();
-        return;
-      }
-      if (!res.ok) throw new Error('Failed to fetch profile');
-      const data = await res.json();
+        throw err;
+      });
+      const data = res.data;
       if (data.success && data.user) {
         setDbUser(data.user);
         localStorage.setItem('appUser', JSON.stringify(data.user));
@@ -440,18 +427,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Fetch wallet balance from database
         try {
-          const walletRes = await fetch('http://localhost:3000/api/wallet/me', { headers });
-          if (walletRes.status === 401) {
-            await logout();
-            return;
-          }
-          if (walletRes.ok) {
-            const walletData = await walletRes.json();
-            if (walletData.success && walletData.data) {
-              const balance = parseFloat(walletData.data.available_balance || walletData.data.balance || 0);
-              setHirerWallet(balance);
-              setWorkerWallet(balance);
-            }
+          const walletRes = await api.get('/wallet/me');
+          const walletData = walletRes.data;
+          if (walletData.success && walletData.data) {
+            const balance = parseFloat(walletData.data.available_balance || walletData.data.balance || 0);
+            setHirerWallet(balance);
+            setWorkerWallet(balance);
           }
         } catch (walletErr) {
           console.error('Error fetching wallet balance:', walletErr);

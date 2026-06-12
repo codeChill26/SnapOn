@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { useApp } from '../context/AppContext';
+import api from '../../services/api';
 
 type Step = 'select' | 'loading' | 'waiting_payment' | 'qr' | 'success';
 
@@ -118,32 +119,11 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       setStep('loading');
 
       const token = localStorage.getItem('firebaseToken');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      const res = await api.post('/wallet/topup/payos/create', { amount: selected });
+      const data = res.data;
+      if (!res.data.success) {
+        throw new Error(data.message || 'Không thể tạo liên kết thanh toán.');
       }
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) {
-          headers['x-user-id'] = appUser.id;
-        }
-      }
-
-      const res = await fetch('http://localhost:3000/api/wallet/topup/payos/create', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ amount: selected }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Không thể tạo liên kết thanh toán.');
-      }
-
-      const data = await res.json();
       if (data.success && data.data?.checkoutUrl) {
         setCheckoutUrl(data.data.checkoutUrl);
         setOrderCode(data.data.orderCode);
@@ -169,29 +149,10 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
   const handleCheckBalance = async () => {
     try {
       if (orderCode) {
-        const token = localStorage.getItem('firebaseToken');
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        const appUserStr = localStorage.getItem('appUser');
-        if (appUserStr) {
-          const appUser = JSON.parse(appUserStr);
-          if (appUser.id) {
-            headers['x-user-id'] = appUser.id;
-          }
-        }
-
-        const res = await fetch(`http://localhost:3000/api/wallet/topup/payos/status/${orderCode}`, {
-          headers,
-        });
-        if (res.ok) {
-          const statusData = await res.json();
-          if (statusData.success && statusData.data?.status === 'SUCCESS') {
-            setStep('success');
-          }
+        const res = await api.get(`/wallet/topup/payos/status/${orderCode}`);
+        const statusData = res.data;
+        if (statusData.success && statusData.data?.status === 'SUCCESS') {
+          setStep('success');
         }
       }
       await fetchProfile();
