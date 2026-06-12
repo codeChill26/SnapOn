@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../../imports/firebase';
+import api from '../../services/api';
 
 export interface Job {
   id: string;
@@ -262,25 +263,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Load tasks on mount
   const fetchJobs = useCallback(async () => {
     try {
-      const token = localStorage.getItem('firebaseToken');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) {
-          headers['x-user-id'] = appUser.id;
-        }
-      }
-
-      const res = await fetch('http://localhost:3000/api/tasks', { headers });
-      if (!res.ok) throw new Error('Failed to fetch tasks');
-      const data = await res.json();
+      const res = await api.get('/tasks');
+      const data = res.data;
       if (data.success && Array.isArray(data.data)) {
         // Map tasks to frontend format
         const mappedJobs = data.data.map((task: any) => ({
@@ -309,11 +293,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         
         const jobsWithApps = await Promise.all(mappedJobs.map(async (job: any) => {
           try {
-            const appRes = await fetch(`http://localhost:3000/api/tasks/${job.id}/applications`, { headers });
-            if (appRes.ok) {
-              const appData = await appRes.json();
-              if (appData.success && Array.isArray(appData.data)) {
-                job.applicants = appData.data.map((app: any) => ({
+            const appRes = await api.get(`/tasks/${job.id}/applications`);
+            const appData = appRes.data;
+            if (appData.success && Array.isArray(appData.data)) {
+              job.applicants = appData.data.map((app: any) => ({
                   id: app.id,
                   workerId: app.tasker_id,
                   name: app.tasker_name || 'Tasker',
@@ -332,7 +315,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                   job.aiMatchId = job.applicants[0]?.workerId;
                 }
               }
-            }
           } catch (e) {
             console.error('Error fetching applications for task:', job.id, e);
           }
@@ -516,27 +498,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('firebaseToken');
       if (!token) return false;
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      };
-
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) {
-          headers['x-user-id'] = appUser.id;
-        }
-      }
-
-      const res = await fetch('http://localhost:3000/api/users/profile', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(fields),
-      });
-
-      if (!res.ok) throw new Error('Failed to update profile');
-      const data = await res.json();
+      const res = await api.put('/users/profile', fields);
+      const data = res.data;
       if (data.success && data.user) {
         setDbUser(data.user);
         localStorage.setItem('appUser', JSON.stringify(data.user));
@@ -555,28 +518,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       try {
         const dbRole = role === 'worker' ? 'tasker' : role;
-        const appUserStr = localStorage.getItem('appUser');
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        };
-        if (appUserStr) {
-          const appUser = JSON.parse(appUserStr);
-          if (appUser.id) {
-            headers['x-user-id'] = appUser.id;
-          }
-        }
-        const res = await fetch('http://localhost:3000/api/users/role', {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ role: dbRole }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.user) {
-            setDbUser(data.user);
-            localStorage.setItem('appUser', JSON.stringify(data.user));
-          }
+        const res = await api.put('/users/role', { role: dbRole });
+        const data = res.data;
+        if (data.success && data.user) {
+          setDbUser(data.user);
+          localStorage.setItem('appUser', JSON.stringify(data.user));
         }
         // Refresh wallet balance when switching roles to ensure consistency
         await fetchProfile();
@@ -588,44 +534,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addJob = useCallback((jobData: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>) => {
     const id = 'j' + Date.now();
-    const token = localStorage.getItem('firebaseToken');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    const appUserStr = localStorage.getItem('appUser');
-    if (appUserStr) {
-      const appUser = JSON.parse(appUserStr);
-      if (appUser.id) {
-        headers['x-user-id'] = appUser.id;
-      }
-    }
 
     // Call backend API in background to save
-    fetch('http://localhost:3000/api/tasks', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        title: jobData.title,
-        description: jobData.description,
-        category_id: jobData.category,
-        task_type: 'OFFLINE',
-        budget_min: jobData.priceMin,
-        budget_max: jobData.priceMax,
-        location: {
-          location_type: 'TASK_LOCATION',
-          address: jobData.location.address,
-          latitude: jobData.location.lat,
-          longitude: jobData.location.lng,
-        }
-      })
+    api.post('/tasks', {
+      title: jobData.title,
+      description: jobData.description,
+      category_id: jobData.category,
+      task_type: 'OFFLINE',
+      budget_min: jobData.priceMin,
+      budget_max: jobData.priceMax,
+      location: {
+        location_type: 'TASK_LOCATION',
+        address: jobData.location.address,
+        latitude: jobData.location.lat,
+        longitude: jobData.location.lng,
+      }
     })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        console.log('Task saved to backend database:', data.data);
+    .then(res => {
+      if (res.data.success) {
+        console.log('Task saved to backend database:', res.data.data);
         fetchJobs();
       }
     })
@@ -690,35 +617,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const applyToJob = useCallback((jobId: string, worker: Worker, note: string, bidPrice: number) => {
-    const token = localStorage.getItem('firebaseToken');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    const appUserStr = localStorage.getItem('appUser');
-    if (appUserStr) {
-      const appUser = JSON.parse(appUserStr);
-      if (appUser.id) {
-        headers['x-user-id'] = appUser.id;
-      }
-    }
-
     // Send application to backend database
-    fetch(`http://localhost:3000/api/tasks/${jobId}/applications`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        bid_price: bidPrice,
-        estimated_time: '2 hours',
-        message: note
-      })
+    api.post(`/tasks/${jobId}/applications`, {
+      bid_price: bidPrice,
+      estimated_time: '2 hours',
+      message: note
     })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        console.log('Application bid saved to backend database:', data.data);
+    .then(res => {
+      if (res.data.success) {
+        console.log('Application bid saved to backend database:', res.data.data);
         fetchJobs();
       }
     })
@@ -777,23 +684,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Backend escrow system handles wallet deduction (holdForMatch)
     const token = localStorage.getItem('firebaseToken');
     if (token && winner?.id) {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) headers['x-user-id'] = appUser.id;
-      }
-      fetch(`http://localhost:3000/api/tasks/${jobId}/manual-match`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ application_id: winner.id })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
+      api.post(`/tasks/${jobId}/manual-match`, { application_id: winner.id })
+      .then(res => {
+        if (res.data.success) {
           console.log('Manual match saved to backend');
           fetchProfile(); // Refresh wallet balance from DB (escrow deducted)
         }
@@ -837,22 +730,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Backend escrow system handles wallet deduction (holdForMatch)
     const token = localStorage.getItem('firebaseToken');
     if (token) {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) headers['x-user-id'] = appUser.id;
-      }
-      fetch(`http://localhost:3000/api/tasks/${jobId}/auto-match`, {
-        method: 'POST',
-        headers
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
+      api.post(`/tasks/${jobId}/auto-match`)
+      .then(res => {
+        if (res.data.success) {
           console.log('Auto-match saved to backend');
           fetchProfile(); // Refresh wallet balance from DB (escrow deducted)
         }
@@ -879,23 +759,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Backend escrow system handles payment distribution (releaseForTask)
     const token = localStorage.getItem('firebaseToken');
     if (token) {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
-      const appUserStr = localStorage.getItem('appUser');
-      if (appUserStr) {
-        const appUser = JSON.parse(appUserStr);
-        if (appUser.id) headers['x-user-id'] = appUser.id;
-      }
-      fetch(`http://localhost:3000/api/tasks/${jobId}/status`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status: 'COMPLETED' })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
+      api.patch(`/tasks/${jobId}/status`, { status: 'COMPLETED' })
+      .then(res => {
+        if (res.data.success) {
           console.log('Completed status saved to backend');
           fetchProfile(); // Refresh wallet balance from DB (escrow released)
         }
@@ -918,28 +784,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
-    const appUserStr = localStorage.getItem('appUser');
-    if (appUserStr) {
-      const appUser = JSON.parse(appUserStr);
-      if (appUser.id) headers['x-user-id'] = appUser.id;
-    }
     try {
-      const res = await fetch('http://localhost:3000/api/wallet/topup/mock', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ amount })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          const balance = parseFloat(data.data.available_balance || data.data.balance || 0);
-          setHirerWallet(balance);
-          setWorkerWallet(balance);
-        }
+      const res = await api.post('/wallet/topup/mock', { amount });
+      const data = res.data;
+      if (data.success && data.data) {
+        const balance = parseFloat(data.data.available_balance || data.data.balance || 0);
+        setHirerWallet(balance);
+        setWorkerWallet(balance);
       }
     } catch (e) {
       console.error('Error topping up wallet on backend:', e);
