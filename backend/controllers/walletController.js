@@ -93,6 +93,22 @@ const walletController = {
       return error(res, err.message || 'Failed to check payment status.', status);
     }
   },
+
+  /**
+   * POST /api/wallet/withdraw
+   */
+  async withdraw(req, res) {
+    try {
+      const userId = req.user.id;
+      const { amount, bankName, bankAccountNumber } = req.body;
+      const result = await walletService.withdraw(userId, amount, bankName, bankAccountNumber);
+      return success(res, result, 'Withdrawal request submitted successfully.');
+    } catch (err) {
+      console.error('Withdraw error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to process withdrawal.', status);
+    }
+  },
 };
 
 module.exports = walletController;

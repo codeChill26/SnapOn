@@ -98,4 +98,30 @@ router.put("/role", verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// DELETE /api/users/profile — Delete user account (soft-delete: set status to BANNED)
+router.delete("/profile", verifyFirebaseToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET status = 'BANNED', full_name = concat(full_name, '_deleted_', gen_random_uuid())
+       WHERE id = $1 AND status != 'BANNED'
+       RETURNING id, email, status`,
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found or already deleted." });
+    }
+
+    return res.json({
+      success: true,
+      message: "Account deleted successfully.",
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Delete account error:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+});
+
 module.exports = router;

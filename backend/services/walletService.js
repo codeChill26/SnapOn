@@ -233,6 +233,61 @@ const walletService = {
       return { transactionId: transaction.id, status };
     });
   },
+
+  async withdraw(userId, amount, bankName, bankAccountNumber) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      const err = new Error('Amount must be a positive number');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return withDbTx(async (db) => {
+      const wallet = await walletModel.lockByUserId(userId, db);
+
+      const availBalance = parseFloat(wallet.available_balance);
+      if (availBalance < amt) {
+        const err = new Error('Insufficient balance');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const updated = await db.query(
+        `UPDATE wallets
+         SET available_balance = available_balance - $2,
+             balance = balance - $2
+         WHERE id = $1
+         RETURNING *`,
+        [wallet.id, amt]
+      );
+
+      await walletTransactionModel.create(
+        {
+          walletId: wallet.id,
+          type: 'WITHDRAW',
+          amount: amt,
+          status: 'PENDING',
+          referenceId: null,
+        },
+        db
+      );
+
+      await db.query(
+        `INSERT INTO withdraw_requests (id, user_id, amount, bank_name, bank_account_number, status)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, 'pending')`,
+        [userId, amt, bankName, bankAccountNumber]
+      );
+
+      const w = updated.rows[0];
+      return {
+        id: w.id,
+        user_id: w.user_id,
+        balance: parseFloat(w.balance),
+        available_balance: parseFloat(w.available_balance),
+        pending_balance: parseFloat(w.locked_balance),
+      };
+    });
+  },
 };
 
 module.exports = walletService;

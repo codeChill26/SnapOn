@@ -52,4 +52,17 @@ router.get(
   walletController.checkPayOSPaymentStatus
 );
 
+// Withdrawal
+router.post(
+  '/withdraw',
+  authenticate,
+  [
+    body('amount').notEmpty().isFloat({ min: 10000 }),
+    body('bankName').notEmpty().isString(),
+    body('bankAccountNumber').notEmpty().isString(),
+  ],
+  validate,
+  walletController.withdraw
+);
+
 module.exports = router;
