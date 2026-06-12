@@ -22,7 +22,10 @@ const taskValidator = {
       .notEmpty().withMessage('Category is required.')
       .custom(value => {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
-        const isSlug = ['errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others'].includes(value);
+        const isSlug = [
+          'errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others',
+          'repair', 'cleaning', 'moving', 'electrical', 'plumbing', 'painting', 'gardening', 'it', 'tutoring', 'healthcare', 'other'
+        ].includes(value);
         if (!isUUID && !isSlug) {
           throw new Error('Category must be a valid UUID or category slug.');
         }
@@ -135,7 +138,17 @@ const taskValidator = {
 
     query('category_id')
       .optional()
-      .isUUID().withMessage('Category ID must be a valid UUID.'),
+      .custom(value => {
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+        const isSlug = [
+          'errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others',
+          'repair', 'cleaning', 'moving', 'electrical', 'plumbing', 'painting', 'gardening', 'it', 'tutoring', 'healthcare', 'other'
+        ].includes(value);
+        if (!isUUID && !isSlug) {
+          throw new Error('Category ID must be a valid UUID or category slug.');
+        }
+        return true;
+      }),
 
     query('task_type')
       .optional()
@@ -168,7 +181,10 @@ const taskValidator = {
       .optional()
       .custom(value => {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
-        const isSlug = ['errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others'].includes(value);
+        const isSlug = [
+          'errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others',
+          'repair', 'cleaning', 'moving', 'electrical', 'plumbing', 'painting', 'gardening', 'it', 'tutoring', 'healthcare', 'other'
+        ].includes(value);
         if (!isUUID && !isSlug) {
           throw new Error('Category must be a valid UUID or category slug.');
         }

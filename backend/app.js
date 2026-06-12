@@ -16,8 +16,31 @@ var usersRouter = require("./routes/users");
 var authRouter = require('./routes/auth');
 var walletRoutes = require('./routes/walletRoutes');
 var escrowRoutes = require('./routes/escrowRoutes');
+var chatRoutes = require('./routes/chatRoutes');
+
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Save io to express app instance
+app.set('io', io);
+
+// Socket.io Middleware and Handlers
+const socketAuth = require('./middleware/socketAuth');
+const socketHandler = require('./services/socketHandler');
+
+io.use(socketAuth);
+io.on('connection', (socket) => {
+  socketHandler(io, socket);
+});
 
 // Security & CORS
 app.use(helmet());
@@ -69,6 +92,9 @@ app.use('/api/wallet', walletRoutes);
 // Escrow routes
 app.use('/api/escrows', escrowRoutes);
 
+// Chat routes
+app.use('/api/chat', chatRoutes);
+
 // User & Auth routes
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
@@ -101,8 +127,8 @@ module.exports = app;
 if (require.main === module) {
   const port = process.env.PORT || 3000;
 
-  app.listen(port, () => {
+  server.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Server is running at http://localhost:${port}`);
     console.log(`📚 Swagger docs at http://localhost:${port}/api-docs`);
   });
-}
+}

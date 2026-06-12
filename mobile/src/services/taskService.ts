@@ -44,15 +44,21 @@ export const taskService = {
     if (filters.task_type) params.task_type = filters.task_type;
     if (filters.search) params.search = filters.search;
 
-    const response = await api.get<ApiResponse<PaginatedResponse<Task>>>('/tasks', { params });
-    return response.data.data;
+    const response = await api.get<any>('/tasks', { params });
+    return {
+      data: response.data.data || [],
+      pagination: response.data.pagination || { page: 1, limit: 10, total: 0, totalPages: 0 },
+    };
   },
 
   async getMyTasks(params: PaginationParams = {}): Promise<PaginatedResponse<Task>> {
-    const response = await api.get<ApiResponse<PaginatedResponse<Task>>>('/tasks/my-tasks', {
+    const response = await api.get<any>('/tasks/my-tasks', {
       params: { page: params.page || 1, limit: params.limit || 10 },
     });
-    return response.data.data;
+    return {
+      data: response.data.data || [],
+      pagination: response.data.pagination || { page: 1, limit: 10, total: 0, totalPages: 0 },
+    };
   },
 
   async getTaskById(id: string): Promise<Task> {

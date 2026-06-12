@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
@@ -93,25 +93,46 @@ export const ActivityScreen: React.FC = () => {
         style={styles.filterRow}
         contentContainerStyle={styles.filterContent}
       >
-        {STATUS_FILTERS.map(filter => (
-          <TouchableOpacity
-            key={filter.key}
-            style={[
-              styles.filterChip,
-              statusFilter === filter.key && styles.filterChipActive,
-            ]}
-            onPress={() => setStatusFilter(filter.key)}
-          >
-            <Text
+        {STATUS_FILTERS.map(filter => {
+          const isActive = statusFilter === filter.key;
+          let activeBg = Colors.primary;
+          let activeBorder = Colors.primary;
+
+          if (filter.key === 'OPEN') {
+            activeBg = Colors.statusOpen;
+            activeBorder = Colors.statusOpen;
+          } else if (filter.key === 'IN_PROGRESS') {
+            activeBg = Colors.statusInProgress;
+            activeBorder = Colors.statusInProgress;
+          } else if (filter.key === 'COMPLETED') {
+            activeBg = Colors.statusCompleted;
+            activeBorder = Colors.statusCompleted;
+          } else if (filter.key === 'CANCELLED') {
+            activeBg = Colors.statusCancelled;
+            activeBorder = Colors.statusCancelled;
+          }
+
+          return (
+            <TouchableOpacity
+              key={filter.key}
               style={[
-                styles.filterText,
-                statusFilter === filter.key && styles.filterTextActive,
+                styles.filterChip,
+                isActive ? { backgroundColor: activeBg, borderColor: activeBorder } : null,
               ]}
+              onPress={() => setStatusFilter(filter.key)}
+              activeOpacity={0.7}
             >
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.filterText,
+                  isActive && styles.filterTextActive,
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       <View style={styles.listSection}>
@@ -132,7 +153,7 @@ export const ActivityScreen: React.FC = () => {
   );
 };
 
-import { TouchableOpacity } from 'react-native';
+// Removed duplicate import
 
 const styles = StyleSheet.create({
   container: {
@@ -171,6 +192,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   filterChipActive: {
     backgroundColor: Colors.primary,

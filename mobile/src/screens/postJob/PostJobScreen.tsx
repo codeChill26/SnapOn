@@ -7,6 +7,7 @@ import { Card } from '../../components/ui/Card';
 import { CategoryGrid } from '../../components/common/CategoryGrid';
 import { taskService } from '../../services/taskService';
 import { useApp } from '../../context/AppContext';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface PostJobForm {
   title: string;
@@ -104,9 +105,38 @@ export const PostJobScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Đăng việc mới</Text>
-        <Text style={styles.stepIndicator}>Bước {step}/3</Text>
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>Đăng việc mới</Text>
+        <View style={styles.progressBarWrapper}>
+          <View style={styles.progressStep}>
+            <View style={[styles.stepCircle, step >= 1 && styles.stepCircleActive]}>
+              {step > 1 ? (
+                <Ionicons name="checkmark" size={14} color={Colors.textWhite} />
+              ) : (
+                <Text style={[styles.stepNumber, step >= 1 && styles.stepNumberActive]}>1</Text>
+              )}
+            </View>
+            <Text style={[styles.stepText, step >= 1 && styles.stepTextActive]}>Thông tin</Text>
+          </View>
+          <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
+          <View style={styles.progressStep}>
+            <View style={[styles.stepCircle, step >= 2 && styles.stepCircleActive]}>
+              {step > 2 ? (
+                <Ionicons name="checkmark" size={14} color={Colors.textWhite} />
+              ) : (
+                <Text style={[styles.stepNumber, step >= 2 && styles.stepNumberActive]}>2</Text>
+              )}
+            </View>
+            <Text style={[styles.stepText, step >= 2 && styles.stepTextActive]}>Ngân sách</Text>
+          </View>
+          <View style={[styles.progressLine, step >= 3 && styles.progressLineActive]} />
+          <View style={styles.progressStep}>
+            <View style={[styles.stepCircle, step >= 3 && styles.stepCircleActive]}>
+              <Text style={[styles.stepNumber, step >= 3 && styles.stepNumberActive]}>3</Text>
+            </View>
+            <Text style={[styles.stepText, step >= 3 && styles.stepTextActive]}>Xác nhận</Text>
+          </View>
+        </View>
       </View>
 
       {/* Step 1: Basic Info */}
@@ -123,7 +153,7 @@ export const PostJobScreen: React.FC = () => {
             />
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Danh mục</Text>
+              <Text style={styles.fieldLabel}>Danh mục công việc</Text>
               <CategoryGrid
                 onSelect={(id) => updateForm('categoryId', id)}
                 selectedId={form.categoryId}
@@ -147,7 +177,13 @@ export const PostJobScreen: React.FC = () => {
 
           <Button
             title="Tiếp theo"
-            onPress={() => setStep(2)}
+            onPress={() => {
+              if (!form.title || !form.categoryId) {
+                Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và chọn danh mục');
+                return;
+              }
+              setStep(2);
+            }}
             size="lg"
             style={styles.nextButton}
           />
@@ -161,7 +197,7 @@ export const PostJobScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Ngân sách & Thời hạn</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Ngân sách dự kiến</Text>
+              <Text style={styles.fieldLabel}>Ngân sách gợi ý</Text>
               <View style={styles.presetRow}>
                 {PRESET_PRICES.map(amount => (
                   <TouchableOpacity
@@ -189,7 +225,7 @@ export const PostJobScreen: React.FC = () => {
 
             <View style={styles.priceRow}>
               <Input
-                label="Tối thiểu"
+                label="Tối thiểu (VND)"
                 placeholder="50,000"
                 value={form.budgetMin}
                 onChangeText={v => updateForm('budgetMin', v)}
@@ -197,7 +233,7 @@ export const PostJobScreen: React.FC = () => {
                 style={styles.halfInput}
               />
               <Input
-                label="Tối đa"
+                label="Tối đa (VND)"
                 placeholder="100,000"
                 value={form.budgetMax}
                 onChangeText={v => updateForm('budgetMax', v)}
@@ -207,7 +243,7 @@ export const PostJobScreen: React.FC = () => {
             </View>
 
             <Input
-              label="Thời hạn (ngày)"
+              label="Thời hạn thực hiện (ngày)"
               placeholder="3"
               value={form.deadlineDays}
               onChangeText={v => updateForm('deadlineDays', v)}
@@ -215,34 +251,47 @@ export const PostJobScreen: React.FC = () => {
             />
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Loại hình</Text>
+              <Text style={styles.fieldLabel}>Loại hình làm việc</Text>
               <View style={styles.typeRow}>
-                {(['ONLINE', 'OFFLINE', 'HYBRID'] as const).map(type => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeChip,
-                      form.taskType === type && styles.typeChipActive,
-                    ]}
-                    onPress={() => updateForm('taskType', type)}
-                  >
-                    <Text
+                {(['ONLINE', 'OFFLINE', 'HYBRID'] as const).map(type => {
+                  const isSelected = form.taskType === type;
+                  let iconName: any = 'map-marker-outline';
+                  if (type === 'ONLINE') iconName = 'laptop';
+                  if (type === 'HYBRID') iconName = 'transit-connection-variant';
+                  return (
+                    <TouchableOpacity
+                      key={type}
                       style={[
-                        styles.typeText,
-                        form.taskType === type && styles.typeTextActive,
+                        styles.typeChip,
+                        isSelected && styles.typeChipActive,
                       ]}
+                      onPress={() => updateForm('taskType', type)}
+                      activeOpacity={0.7}
                     >
-                      {type === 'ONLINE' ? 'Online' : type === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <MaterialCommunityIcons
+                        name={iconName}
+                        size={18}
+                        color={isSelected ? Colors.textWhite : Colors.textSecondary}
+                        style={{ marginBottom: 4 }}
+                      />
+                      <Text
+                        style={[
+                          styles.typeText,
+                          isSelected && styles.typeTextActive,
+                        ]}
+                      >
+                        {type === 'ONLINE' ? 'Online' : type === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
             {form.taskType !== 'ONLINE' && (
               <Input
-                label="Địa chỉ"
-                placeholder="Nhập địa chỉ làm việc"
+                label="Địa điểm làm việc"
+                placeholder="Nhập địa chỉ làm việc chi tiết"
                 value={form.address}
                 onChangeText={v => updateForm('address', v)}
               />
@@ -259,7 +308,13 @@ export const PostJobScreen: React.FC = () => {
             />
             <Button
               title="Tiếp theo"
-              onPress={() => setStep(3)}
+              onPress={() => {
+                if (!form.budgetMin || !form.budgetMax) {
+                  Alert.alert('Thiếu thông tin', 'Vui lòng điền đầy đủ ngân sách');
+                  return;
+                }
+                setStep(3);
+              }}
               size="lg"
               style={styles.halfButton}
             />
@@ -270,35 +325,62 @@ export const PostJobScreen: React.FC = () => {
       {/* Step 3: Review & Submit */}
       {step === 3 && (
         <View>
-          <Card style={styles.formCard}>
-            <Text style={styles.sectionTitle}>Xem lại thông tin</Text>
+          <Card style={styles.receiptCard}>
+            <View style={styles.receiptHeader}>
+              <Ionicons name="document-text" size={32} color={Colors.primary} />
+              <Text style={styles.receiptTitle}>Xem lại thông tin</Text>
+              <Text style={styles.receiptSubtitle}>Vui lòng kiểm tra lại trước khi đăng việc</Text>
+            </View>
 
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Tiêu đề:</Text>
-              <Text style={styles.reviewValue}>{form.title}</Text>
-            </View>
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Ngân sách:</Text>
-              <Text style={styles.reviewValue}>
-                {parseInt(form.budgetMin).toLocaleString()} - {parseInt(form.budgetMax).toLocaleString()} VND
-              </Text>
-            </View>
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Thời hạn:</Text>
-              <Text style={styles.reviewValue}>{form.deadlineDays} ngày</Text>
-            </View>
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Loại hình:</Text>
-              <Text style={styles.reviewValue}>
-                {form.taskType === 'ONLINE' ? 'Online' : form.taskType === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
-              </Text>
-            </View>
-            {form.address ? (
-              <View style={styles.reviewItem}>
-                <Text style={styles.reviewLabel}>Địa chỉ:</Text>
-                <Text style={styles.reviewValue}>{form.address}</Text>
+            <View style={styles.receiptDivider} />
+
+            <View style={styles.receiptBody}>
+              <View style={styles.receiptRow}>
+                <Ionicons name="bookmark-outline" size={18} color={Colors.textSecondary} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Tiêu đề</Text>
+                  <Text style={styles.reviewValue}>{form.title}</Text>
+                </View>
               </View>
-            ) : null}
+
+              <View style={styles.receiptRow}>
+                <Ionicons name="cash-outline" size={18} color={Colors.textSecondary} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Ngân sách dự kiến</Text>
+                  <Text style={styles.reviewValue}>
+                    {parseInt(form.budgetMin).toLocaleString('vi-VN')} - {parseInt(form.budgetMax).toLocaleString('vi-VN')} VND
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptRow}>
+                <Ionicons name="calendar-outline" size={18} color={Colors.textSecondary} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Thời hạn thực hiện</Text>
+                  <Text style={styles.reviewValue}>{form.deadlineDays} ngày</Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptRow}>
+                <Ionicons name="earth-outline" size={18} color={Colors.textSecondary} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Loại hình công việc</Text>
+                  <Text style={styles.reviewValue}>
+                    {form.taskType === 'ONLINE' ? 'Online' : form.taskType === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
+                  </Text>
+                </View>
+              </View>
+
+              {form.address ? (
+                <View style={styles.receiptRow}>
+                  <Ionicons name="location-outline" size={18} color={Colors.textSecondary} style={styles.receiptRowIcon} />
+                  <View style={styles.receiptContent}>
+                    <Text style={styles.reviewLabel}>Địa chỉ làm việc</Text>
+                    <Text style={styles.reviewValue}>{form.address}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
           </Card>
 
           <View style={styles.buttonRow}>
@@ -332,25 +414,73 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingTop: 20,
+  headerContainer: {
+    paddingTop: 24,
+    paddingBottom: 24,
+    marginBottom: 20,
   },
-  title: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: '800',
     color: Colors.text,
+    marginBottom: 20,
   },
-  stepIndicator: {
+  progressBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  progressStep: {
+    alignItems: 'center',
+    width: 60,
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  stepCircleActive: {
+    backgroundColor: Colors.primary,
+  },
+  stepNumber: {
     fontSize: 14,
-    color: Colors.primary,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  stepNumberActive: {
+    color: Colors.textWhite,
+  },
+  stepText: {
+    fontSize: 11,
     fontWeight: '600',
+    color: Colors.textLight,
+  },
+  stepTextActive: {
+    color: Colors.text,
+  },
+  progressLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: Colors.border,
+    marginTop: -18,
+    marginHorizontal: -10,
+    zIndex: -1,
+  },
+  progressLineActive: {
+    backgroundColor: Colors.primary,
   },
   formCard: {
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 17,
@@ -391,7 +521,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   presetChipActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primary + '15',
     borderColor: Colors.primary,
   },
   presetText: {
@@ -400,7 +530,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   presetTextActive: {
-    color: Colors.textWhite,
+    color: Colors.primary,
   },
   priceRow: {
     flexDirection: 'row',
@@ -411,24 +541,26 @@ const styles = StyleSheet.create({
   },
   typeRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   typeChip: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: Colors.border,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
   },
   typeChipActive: {
-    backgroundColor: Colors.secondary,
-    borderColor: Colors.secondary,
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   typeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: Colors.text,
+    color: Colors.textSecondary,
   },
   typeTextActive: {
     color: Colors.textWhite,
@@ -443,22 +575,66 @@ const styles = StyleSheet.create({
   halfButton: {
     flex: 1,
   },
-  reviewItem: {
+  receiptCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+    padding: 20,
+    marginBottom: 20,
+  },
+  receiptHeader: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  receiptTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+    marginTop: 8,
+  },
+  receiptSubtitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  receiptDivider: {
+    height: 1,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginVertical: 16,
+    borderRadius: 1,
+  },
+  receiptBody: {
+    gap: 16,
+  },
+  receiptRow: {
     flexDirection: 'row',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  receiptRowIcon: {
+    marginTop: 2,
+  },
+  receiptContent: {
+    flex: 1,
   },
   reviewLabel: {
-    width: 100,
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
   reviewValue: {
-    flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.text,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { CATEGORIES } from '../../constants/categories';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface CategoryGridProps {
   onSelect: (categoryId: string, categoryName: string) => void;
@@ -12,24 +13,29 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({ onSelect, selectedId
   return (
     <View style={styles.grid}>
       {CATEGORIES.map((category) => {
-        const isSelected = category.id === selectedId;
+        const isSelected = category.slug === selectedId;
         return (
           <TouchableOpacity
-            key={category.id}
+            key={category.slug}
             style={[
               styles.item,
-              isSelected && { backgroundColor: category.color + '20', borderColor: category.color },
+              isSelected && { backgroundColor: category.color + '10', borderColor: category.color },
             ]}
-            onPress={() => onSelect(category.id, category.name)}
+            onPress={() => onSelect(category.slug, category.name)}
             activeOpacity={0.7}
           >
-            <View style={[styles.iconContainer, { backgroundColor: category.color + '20' }]}>
-              <Text style={styles.iconText}>
-                {category.name.substring(0, 1)}
-              </Text>
+            <View style={[
+              styles.iconContainer,
+              { backgroundColor: isSelected ? category.color : category.color + '15' }
+            ]}>
+              <MaterialCommunityIcons
+                name={category.icon as any}
+                size={22}
+                color={isSelected ? Colors.textWhite : category.color}
+              />
             </View>
             <Text
-              style={[styles.name, isSelected && { color: category.color }]}
+              style={[styles.name, isSelected && { color: category.color, fontWeight: '700' }]}
               numberOfLines={1}
             >
               {category.name}

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { User, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { storage } from '../utils/storage';
+import { socketService } from '../services/socketService';
 
 interface AuthContextType {
   user: User | null;
@@ -24,6 +25,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     loadStoredAuth();
   }, []);
+
+  useEffect(() => {
+    if (token && user) {
+      socketService.connect(user.id);
+    } else {
+      socketService.disconnect();
+    }
+  }, [token, user]);
 
   const loadStoredAuth = async () => {
     try {

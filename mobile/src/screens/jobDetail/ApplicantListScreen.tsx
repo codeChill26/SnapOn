@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -17,6 +18,7 @@ type ApplicantListRouteProp = RouteProp<RootStackParamList, 'ApplicantList'>;
 
 export const ApplicantListScreen: React.FC = () => {
   const route = useRoute<ApplicantListRouteProp>();
+  const navigation = useNavigation<any>();
   const [applicants, setApplicants] = useState<TaskApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -90,9 +92,22 @@ export const ApplicantListScreen: React.FC = () => {
                     size={44}
                   />
                   <View style={styles.applicantInfo}>
-                    <Text style={styles.applicantName}>
-                      {applicant.taskerName || 'N/A'}
-                    </Text>
+                    <View style={styles.nameChatContainer}>
+                      <Text style={styles.applicantName}>
+                        {applicant.taskerName || 'N/A'}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('ChatDetail', {
+                          otherUserId: applicant.taskerId,
+                          otherUserName: applicant.taskerName || 'N/A',
+                          otherUserAvatar: applicant.taskerAvatar,
+                        })}
+                        style={styles.chatIconBadge}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={15} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
                     <View style={styles.ratingRow}>
                       <Text style={styles.ratingIcon}>★</Text>
                       <Text style={styles.ratingText}>
@@ -145,8 +160,7 @@ export const ApplicantListScreen: React.FC = () => {
     </ScrollView>
   );
 };
-
-import { TouchableOpacity } from 'react-native';
+// Cleaned up duplicate import
 
 const styles = StyleSheet.create({
   container: {
@@ -194,6 +208,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
+  },
+  nameChatContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chatIconBadge: {
+    padding: 3,
+    backgroundColor: Colors.primary + '15',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   ratingRow: {
     flexDirection: 'row',

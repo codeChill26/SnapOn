@@ -1,41 +1,39 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { PostJobScreen } from '../screens/postJob/PostJobScreen';
 import { WorkerDashboardScreen } from '../screens/worker/WorkerDashboardScreen';
+import { ChatListScreen } from '../screens/chat/ChatListScreen';
 import { ActivityScreen } from '../screens/activity/ActivityScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { UserRole } from '../types';
-
-type TabIcon = { focused: boolean; color: string; size: number };
-
-const TabIcon = ({ label, focused }: { label: string; focused: boolean }) => (
-  <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{label}</Text>
-);
+import { Ionicons } from '@expo/vector-icons';
 
 interface TabConfig {
   name: string;
   label: string;
-  icon: string;
+  iconFocused: string;
+  iconOutline: string;
   component: React.ComponentType<any>;
   roles: UserRole[];
 }
 
 const tabConfigs: TabConfig[] = [
-  { name: 'Home', label: 'Trang chủ', icon: '🏠', component: HomeScreen, roles: ['hirer', 'worker'] },
-  { name: 'PostJob', label: 'Đăng việc', icon: '📝', component: PostJobScreen, roles: ['hirer'] },
-  { name: 'WorkerDashboard', label: 'Việc gần', icon: '📍', component: WorkerDashboardScreen, roles: ['worker'] },
-  { name: 'Activity', label: 'Hoạt động', icon: '📋', component: ActivityScreen, roles: ['hirer', 'worker'] },
-  { name: 'Profile', label: 'Cá nhân', icon: '👤', component: ProfileScreen, roles: ['hirer', 'worker'] },
+  { name: 'Home', label: 'Trang chủ', iconFocused: 'home', iconOutline: 'home-outline', component: HomeScreen, roles: ['hirer', 'worker'] },
+  { name: 'PostJob', label: 'Đăng việc', iconFocused: 'add-circle', iconOutline: 'add-circle-outline', component: PostJobScreen, roles: ['hirer'] },
+  { name: 'WorkerDashboard', label: 'Việc gần', iconFocused: 'map', iconOutline: 'map-outline', component: WorkerDashboardScreen, roles: ['worker'] },
+  { name: 'ChatList', label: 'Tin nhắn', iconFocused: 'chatbubble-ellipses', iconOutline: 'chatbubble-ellipses-outline', component: ChatListScreen, roles: ['hirer', 'worker'] },
+  { name: 'Activity', label: 'Hoạt động', iconFocused: 'clipboard', iconOutline: 'clipboard-outline', component: ActivityScreen, roles: ['hirer', 'worker'] },
+  { name: 'Profile', label: 'Cá nhân', iconFocused: 'person', iconOutline: 'person-outline', component: ProfileScreen, roles: ['hirer', 'worker'] },
 ];
 
 export type MainTabParamList = {
   Home: undefined;
   PostJob: undefined;
   WorkerDashboard: undefined;
+  ChatList: undefined;
   Activity: undefined;
   Profile: undefined;
 };
@@ -74,8 +72,12 @@ export const MainTabNavigator: React.FC = () => {
           component={tab.component}
           options={{
             tabBarLabel: tab.label,
-            tabBarIcon: ({ focused }) => (
-              <TabIcon label={tab.icon} focused={focused} />
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons
+                name={focused ? (tab.iconFocused as any) : (tab.iconOutline as any)}
+                size={size || 22}
+                color={color}
+              />
             ),
           }}
         />

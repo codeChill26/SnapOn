@@ -120,7 +120,20 @@ const authenticate = async (req, res, next) => {
     const token = authHeader.split('Bearer ')[1];
 
     // Verify Firebase ID token
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    let decodedToken;
+    if (token && token.startsWith('mock-firebase-token')) {
+      const email = token.split(':')[1] || 'mock-user@example.com';
+      const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
+      const name = email.split('@')[0];
+      decodedToken = {
+        uid,
+        email,
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        picture: 'https://via.placeholder.com/150',
+      };
+    } else {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    }
 
     // For compatibility with routes expecting firebase payload
     req.firebaseUser = decodedToken;
@@ -174,4 +187,76 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+const verifyTokenForSocket = async (token, xUserId) => {
+  // If in dev mode, we can use xUserId
+  if (AUTH_MODE === 'dev') {
+    if (!xUserId) {
+      throw new Error('DEV MODE: User ID is required.');
+    }
+    const result = await pool.query(
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE id = $1',
+      [xUserId]
+    );
+    if (result.rows.length === 0) {
+      throw new Error('User not found.');
+    }
+    const user = result.rows[0];
+    if (user.status === 'BANNED') {
+      throw new Error('User is banned.');
+    }
+    return {
+      id: user.id,
+      firebaseUid: user.firebase_uid,
+      fullName: user.full_name,
+      avatarUrl: user.avatar_url,
+      email: user.email,
+      role: user.role
+    };
+  }
+
+  // Firebase / Mock Token mode
+  if (!token) {
+    throw new Error('No token provided.');
+  }
+
+  let decodedToken;
+  if (token.startsWith('mock-firebase-token')) {
+    const email = token.split(':')[1] || 'mock-user@example.com';
+    const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
+    const name = email.split('@')[0];
+    decodedToken = {
+      uid,
+      email,
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      picture: 'https://via.placeholder.com/150',
+    };
+  } else {
+    decodedToken = await admin.auth().verifyIdToken(token);
+  }
+
+  const result = await pool.query(
+    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE firebase_uid = $1',
+    [decodedToken.uid]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('User not found.');
+  }
+
+  const user = result.rows[0];
+  if (user.status === 'BANNED') {
+    throw new Error('User is banned.');
+  }
+
+  return {
+    id: user.id,
+    firebaseUid: user.firebase_uid,
+    fullName: user.full_name,
+    avatarUrl: user.avatar_url,
+    email: user.email,
+    role: user.role
+  };
+};
+
 module.exports = authenticate;
+module.exports.verifyTokenForSocket = verifyTokenForSocket;

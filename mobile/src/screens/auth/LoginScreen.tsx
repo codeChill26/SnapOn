@@ -24,7 +24,7 @@ export const LoginScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      const mockToken = 'mock-firebase-token';
+      const mockToken = `mock-firebase-token:${email}`;
       await login(mockToken);
     } catch (error: any) {
       Alert.alert('Đăng nhập thất bại', error.message || 'Có lỗi xảy ra');
