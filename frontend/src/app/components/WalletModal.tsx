@@ -6,7 +6,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 
-type Step = 'select' | 'qr' | 'success';
+import { useApp } from '../context/AppContext';
+
+type Step = 'select' | 'loading' | 'waiting_payment' | 'qr' | 'success';
 
 const PRESETS = [
   { amount: 50000, label: '50K', full: '50,000₫', icon: '☕', desc: 'Việc nhỏ' },
@@ -52,10 +54,18 @@ function Particle({ delay, isWorker }: { delay: number; isWorker: boolean }) {
 }
 
 export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: WalletModalProps) {
+  const { fetchProfile } = useApp();
   const [step, setStep] = useState<Step>('select');
   const [selected, setSelected] = useState<number | null>(null);
+  const [customAmount, setCustomAmount] = useState('');
   const [countdown, setCountdown] = useState(4);
   const [progress, setProgress] = useState(0);
+
+  const [checkoutUrl, setCheckoutUrl] = useState('');
+  const [orderCode, setOrderCode] = useState<number | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [initialBalance, setInitialBalance] = useState(balance);
 
   // Stable QR value — generated once when entering QR step
   const qrValueRef = useRef('');
@@ -65,10 +75,130 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
     if (open) {
       setStep('select');
       setSelected(null);
+      setCustomAmount('');
       setCountdown(4);
       setProgress(0);
+      setCheckoutUrl('');
+      setErrorMsg('');
+      setInitialBalance(balance);
+      setOrderCode(null);
     }
-  }, [open]);
+  }, [open, balance]);
+
+  const handlePresetSelect = (amount: number) => {
+    setSelected(amount);
+    setCustomAmount(amount.toString());
+  };
+
+  const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    const cleanVal = rawVal.replace(/\D/g, '');
+    if (cleanVal) {
+      const num = Number(cleanVal);
+      setSelected(num);
+      setCustomAmount(cleanVal);
+    } else {
+      setSelected(null);
+      setCustomAmount('');
+    }
+  };
+
+  // Track balance changes to automatically transition to success step
+  useEffect(() => {
+    if (step === 'waiting_payment' && balance > initialBalance) {
+      setStep('success');
+    }
+  }, [balance, initialBalance, step]);
+
+  const handlePayOSTopUp = async () => {
+    if (!selected) return;
+    try {
+      setPaymentLoading(true);
+      setErrorMsg('');
+      setStep('loading');
+
+      const token = localStorage.getItem('firebaseToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const appUserStr = localStorage.getItem('appUser');
+      if (appUserStr) {
+        const appUser = JSON.parse(appUserStr);
+        if (appUser.id) {
+          headers['x-user-id'] = appUser.id;
+        }
+      }
+
+      const res = await fetch('http://localhost:3000/api/wallet/topup/payos/create', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ amount: selected }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Không thể tạo liên kết thanh toán.');
+      }
+
+      const data = await res.json();
+      if (data.success && data.data?.checkoutUrl) {
+        setCheckoutUrl(data.data.checkoutUrl);
+        setOrderCode(data.data.orderCode);
+        setInitialBalance(balance); // mark balance at entry
+        
+        // Open the payment page in a new window/tab
+        window.open(data.data.checkoutUrl, '_blank');
+        
+        // Transition to waiting payment step
+        setStep('waiting_payment');
+      } else {
+        throw new Error('Không nhận được liên kết thanh toán từ máy chủ.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Lỗi kết nối đến cổng thanh toán.');
+      setStep('select');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handleCheckBalance = async () => {
+    try {
+      if (orderCode) {
+        const token = localStorage.getItem('firebaseToken');
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const appUserStr = localStorage.getItem('appUser');
+        if (appUserStr) {
+          const appUser = JSON.parse(appUserStr);
+          if (appUser.id) {
+            headers['x-user-id'] = appUser.id;
+          }
+        }
+
+        const res = await fetch(`http://localhost:3000/api/wallet/topup/payos/status/${orderCode}`, {
+          headers,
+        });
+        if (res.ok) {
+          const statusData = await res.json();
+          if (statusData.success && statusData.data?.status === 'SUCCESS') {
+            setStep('success');
+          }
+        }
+      }
+      await fetchProfile();
+    } catch (err) {
+      console.error('Lỗi khi tải lại số dư:', err);
+    }
+  };
 
   // Generate stable QR value when entering QR step
   useEffect(() => {
@@ -103,12 +233,12 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
     return () => { clearInterval(timer); clearInterval(progressTimer); };
   }, [step]);
 
-  // Apply top-up when entering success step
+  // Apply top-up when entering success step (for mock QR flow)
   useEffect(() => {
-    if (step === 'success' && selected) {
+    if (step === 'success' && selected && checkoutUrl === '') {
       onTopUp(selected);
     }
-  }, [step]);
+  }, [step, selected, checkoutUrl]);
 
   const accentGradient = isWorker
     ? 'from-blue-600 via-indigo-600 to-violet-600'
@@ -257,7 +387,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                             key={p.amount}
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.96 }}
-                            onClick={() => setSelected(p.amount)}
+                            onClick={() => handlePresetSelect(p.amount)}
                             className={`relative py-3 px-2 rounded-2xl border-2 text-center transition-all ${
                               isActive
                                 ? `${accentBorder} ${accentBgLight} ring-4 ${accentRing}/30`
@@ -292,9 +422,30 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                       })}
                     </div>
 
+                    {/* Custom Amount Input */}
+                    <div className="mt-4 text-left">
+                      <label className="block text-xs text-gray-400 mb-1.5 font-medium">Hoặc nhập số tiền khác</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={customAmount}
+                          onChange={handleCustomAmountChange}
+                          placeholder="Nhập số tiền (ví dụ: 100000)..."
+                          className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
+                            isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
+                          }`}
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
+                      </div>
+                      {selected !== null && selected < 1000 && (
+                        <p className="text-red-500 text-[10px] mt-1 font-semibold">Số tiền nạp tối thiểu là 1.000₫</p>
+                      )}
+                    </div>
+
                     {/* Summary */}
                     <AnimatePresence>
-                      {selected && (
+                      {selected && selected >= 1000 && (
                         <motion.div
                           initial={{ opacity: 0, height: 0, marginTop: 0 }}
                           animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
@@ -320,29 +471,51 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                       )}
                     </AnimatePresence>
 
-                    {/* CTA Button */}
-                    <motion.button
-                      whileHover={selected ? { scale: 1.01 } : {}}
-                      whileTap={selected ? { scale: 0.98 } : {}}
-                      disabled={!selected}
-                      onClick={() => setStep('qr')}
-                      className={`w-full mt-5 py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 ${
-                        selected
-                          ? `bg-gradient-to-r ${accentGradient} text-white shadow-lg hover:shadow-xl`
-                          : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                      }`}
-                      style={{ fontWeight: 700 }}
-                    >
-                      {selected ? (
-                        <>
-                          <CreditCard className="w-4 h-4" />
-                          Thanh toán {fmtShort(selected)}
-                          <ChevronRight className="w-4 h-4" />
-                        </>
-                      ) : (
-                        'Chọn mệnh giá để tiếp tục'
+                    {errorMsg && (
+                      <div className="mt-3 text-xs text-red-500 bg-red-50 border border-red-100 px-3 py-2 rounded-xl text-center">
+                        {errorMsg}
+                      </div>
+                    )}
+
+                    {/* CTA Buttons */}
+                    <div className="flex flex-col gap-2 mt-5">
+                      <motion.button
+                        whileHover={selected && selected >= 1000 ? { scale: 1.01 } : {}}
+                        whileTap={selected && selected >= 1000 ? { scale: 0.98 } : {}}
+                        disabled={!selected || selected < 1000 || paymentLoading}
+                        onClick={handlePayOSTopUp}
+                        className={`w-full py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 ${
+                          selected && selected >= 1000
+                            ? `bg-gradient-to-r ${accentGradient} text-white shadow-lg hover:shadow-xl`
+                            : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                        }`}
+                        style={{ fontWeight: 700 }}
+                      >
+                        {selected ? (
+                          selected >= 1000 ? (
+                            <>
+                              <CreditCard className="w-4 h-4" />
+                              {paymentLoading ? 'Đang kết nối...' : `Nạp tiền qua PayOS ${fmtShort(selected)}`}
+                              <ChevronRight className="w-4 h-4" />
+                            </>
+                          ) : (
+                            'Số tiền tối thiểu 1.000₫'
+                          )
+                        ) : (
+                          'Chọn mệnh giá để tiếp tục'
+                        )}
+                      </motion.button>
+
+                      {selected && selected >= 1000 && (
+                        <button
+                          onClick={() => setStep('qr')}
+                          className="w-full py-2 rounded-xl text-[11px] text-gray-400 hover:text-gray-600 transition"
+                          style={{ fontWeight: 500 }}
+                        >
+                          🧪 Chế độ thử nghiệm (Nạp ảo)
+                        </button>
                       )}
-                    </motion.button>
+                    </div>
 
                     {/* Trust badges */}
                     <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-gray-300">
@@ -360,6 +533,87 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                         <BadgeCheck className="w-3 h-3" />
                         <span>An toàn</span>
                       </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── STEP: Loading ── */}
+                {step === 'loading' && (
+                  <motion.div
+                    key="loading"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="p-10 text-center flex flex-col items-center justify-center min-h-[260px]"
+                  >
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                      className={`w-12 h-12 border-4 border-gray-100 rounded-full mb-4 ${
+                        isWorker ? 'border-t-blue-500' : 'border-t-orange-500'
+                      }`}
+                    />
+                    <p className="text-gray-800 text-sm font-semibold">Đang kết nối cổng thanh toán PayOS...</p>
+                    <p className="text-gray-400 text-xs mt-1">Vui lòng chờ trong giây lát</p>
+                  </motion.div>
+                )}
+
+                {/* ── STEP: Waiting Payment ── */}
+                {step === 'waiting_payment' && selected && (
+                  <motion.div
+                    key="waiting_payment"
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    transition={{ duration: 0.25 }}
+                    className="p-5 text-center"
+                  >
+                    {/* Pulsing card icon */}
+                    <div className="relative inline-block mb-4">
+                      <div className={`absolute inset-0 bg-gradient-to-br ${accentGradient} opacity-20 rounded-full blur-lg scale-150 animate-pulse`} />
+                      <div className={`relative w-14 h-14 bg-gradient-to-br ${accentGradient} rounded-full flex items-center justify-center text-white shadow-md`}>
+                        <Clock className="w-6 h-6 animate-pulse" />
+                      </div>
+                    </div>
+
+                    <p className="text-gray-900 text-base" style={{ fontWeight: 800 }}>Đang chờ thanh toán</p>
+                    <p className="text-gray-500 text-xs mt-1 px-4">
+                      Hệ thống đã mở liên kết thanh toán PayOS ở tab mới. Hãy thực hiện chuyển khoản chính xác số tiền.
+                    </p>
+
+                    <div className={`my-4 p-4 rounded-2xl bg-gradient-to-br ${accentGradientSubtle} border border-gray-100`}>
+                      <span className="text-xs text-gray-400 block mb-1">Số tiền cần thanh toán</span>
+                      <span className={`${accentText} text-xl block`} style={{ fontWeight: 800 }}>{fmt(selected)}</span>
+                    </div>
+
+                    {/* Reopen button */}
+                    <a
+                      href={checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 underline mb-5"
+                    >
+                      Bấm vào đây nếu tab thanh toán chưa được mở
+                    </a>
+
+                    <div className="space-y-2">
+                      <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleCheckBalance}
+                        className={`w-full py-3.5 rounded-2xl text-white text-sm bg-gradient-to-r ${accentGradient} shadow-md flex items-center justify-center gap-2`}
+                        style={{ fontWeight: 700 }}
+                      >
+                        🔄 Kiểm tra lại số dư
+                      </motion.button>
+
+                      <button
+                        onClick={() => setStep('select')}
+                        className="w-full py-2.5 rounded-xl text-xs text-gray-500 hover:bg-gray-50 transition"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Quay lại chọn mệnh giá khác
+                      </button>
                     </div>
                   </motion.div>
                 )}

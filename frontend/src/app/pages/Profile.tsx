@@ -497,7 +497,7 @@ function WorkerProfile() {
 
         <div className="relative flex items-start gap-4">
           <div className="relative flex-shrink-0">
-            <img src={currentUser.avatar || DEMO_WORKER.avatar} alt={name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-blue-400 shadow-lg" />
+            <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'Worker')}`} alt={name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-blue-400 shadow-lg" />
             <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition">
               <Camera className="w-3.5 h-3.5 text-blue-600" />
             </button>
@@ -879,7 +879,7 @@ function HirerProfile() {
 
         <div className="relative flex items-start gap-4">
           <div className="relative flex-shrink-0">
-            <img src={currentUser.avatar} alt={currentUser.name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-orange-400 shadow-lg" />
+            <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'Hirer')}`} alt={currentUser.name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-orange-400 shadow-lg" />
             <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition">
               <Camera className="w-3.5 h-3.5 text-orange-600" />
             </button>

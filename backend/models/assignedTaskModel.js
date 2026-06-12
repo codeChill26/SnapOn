@@ -12,8 +12,8 @@ const assignedTaskModel = {
     const dbAssignedBy = toDbAssignedBy(assignedBy);
     const dbStatus = toDbAssignedTaskStatus('ASSIGNED');
     const result = await db.query(
-      `INSERT INTO assigned_tasks (task_id, tasker_id, application_id, assigned_by, status)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO assigned_tasks (id, task_id, tasker_id, application_id, assigned_by, status)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
        RETURNING *`,
       [taskId, taskerId, applicationId, dbAssignedBy, dbStatus]
     );

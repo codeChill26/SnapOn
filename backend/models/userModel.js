@@ -31,8 +31,8 @@ const userModel = {
    */
   async create({ firebaseUid, fullName, email, phone, avatarUrl, status = 'ACTIVE' }) {
     const result = await pool.query(
-      `INSERT INTO users (firebase_uid, full_name, email, phone, avatar_url, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (id, firebase_uid, full_name, email, phone, avatar_url, status)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
        RETURNING *`,
       [firebaseUid, fullName, email, phone, avatarUrl, status]
     );

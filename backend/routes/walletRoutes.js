@@ -32,4 +32,24 @@ router.post(
   walletController.topupMock
 );
 
+// PayOS integration routes
+router.post(
+  '/topup/payos/create',
+  authenticate,
+  [body('amount').notEmpty().isFloat({ min: 1000 })], // PayOS minimum is 1000 VND
+  validate,
+  walletController.createPayOSPayment
+);
+
+router.post(
+  '/topup/payos/webhook',
+  walletController.handlePayOSWebhook
+);
+
+router.get(
+  '/topup/payos/status/:orderCode',
+  authenticate,
+  walletController.checkPayOSPaymentStatus
+);
+
 module.exports = router;

@@ -47,6 +47,52 @@ const walletController = {
       return error(res, err.message || 'Failed to top up.', status);
     }
   },
+
+  /**
+   * POST /api/wallet/topup/payos/create
+   * Body: { amount }
+   */
+  async createPayOSPayment(req, res) {
+    try {
+      const userId = req.user.id;
+      const { amount } = req.body;
+      const session = await walletService.createPayOSPaymentSession(userId, amount);
+      return success(res, session, 'PayOS payment link created successfully.');
+    } catch (err) {
+      console.error('Create PayOS payment error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to create payment link.', status);
+    }
+  },
+
+  /**
+   * POST /api/wallet/topup/payos/webhook
+   * Body: PayOS webhook payload
+   */
+  async handlePayOSWebhook(req, res) {
+    try {
+      const result = await walletService.processPayOSWebhook(req.body);
+      return success(res, result, 'Webhook processed successfully.');
+    } catch (err) {
+      console.error('PayOS Webhook processing error:', err);
+      return error(res, err.message || 'Failed to process webhook.', 500);
+    }
+  },
+
+  /**
+   * GET /api/wallet/topup/payos/status/:orderCode
+   */
+  async checkPayOSPaymentStatus(req, res) {
+    try {
+      const { orderCode } = req.params;
+      const result = await walletService.checkPayOSPaymentStatus(orderCode);
+      return success(res, result, 'Payment status checked/updated successfully.');
+    } catch (err) {
+      console.error('Check PayOS payment status error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to check payment status.', status);
+    }
+  },
 };
 
 module.exports = walletController;
