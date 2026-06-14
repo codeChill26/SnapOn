@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, TextInput, TouchableOpacity } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -21,7 +22,7 @@ type JobDetailRouteProp = RouteProp<RootStackParamList, 'JobDetail'>;
 
 export const JobDetailScreen: React.FC = () => {
   const route = useRoute<JobDetailRouteProp>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const [task, setTask] = useState<Task | null>(null);
   const [applications, setApplications] = useState<TaskApplication[]>([]);
@@ -141,8 +142,21 @@ export const JobDetailScreen: React.FC = () => {
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Người đăng</Text>
             <View style={styles.posterRow}>
-              <UserAvatar name={task.posterName || 'N/A'} size={28} />
+              <UserAvatar name={task.posterName || 'N/A'} size={28} avatarUrl={task.poster?.avatarUrl} />
               <Text style={styles.infoValue}>{task.posterName || 'N/A'}</Text>
+              {!isPoster && (
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('ChatDetail', {
+                    otherUserId: task.posterId,
+                    otherUserName: task.posterName || 'N/A',
+                    otherUserAvatar: task.poster?.avatarUrl
+                  })}
+                  style={styles.chatIconBadge}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={15} color={Colors.primary} />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -232,8 +246,7 @@ export const JobDetailScreen: React.FC = () => {
     </ScrollView>
   );
 };
-
-import { TextInput } from 'react-native';
+// Cleaned up duplicate import
 
 const styles = StyleSheet.create({
   container: {
@@ -286,6 +299,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  chatIconBadge: {
+    padding: 3,
+    backgroundColor: Colors.primary + '15',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   locationSection: {
     marginTop: 16,

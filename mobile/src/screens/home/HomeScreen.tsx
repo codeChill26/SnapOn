@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
@@ -14,6 +14,8 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { Task } from '../../types';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import { UserAvatar } from '../../components/common/UserAvatar';
+import { Ionicons } from '@expo/vector-icons';
 
 type HomeNavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -65,28 +67,54 @@ export const HomeScreen: React.FC = () => {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
-            Xin chào, {user?.fullName || 'Người dùng'}
-          </Text>
-          <Text style={styles.subtitle}>Tìm việc phù hợp với bạn</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.headerGreeting}>
+            <UserAvatar
+              name={user?.fullName || 'Người dùng'}
+              avatarUrl={user?.avatarUrl}
+              size={48}
+            />
+            <View style={styles.greetingTextContainer}>
+              <Text style={styles.greetingLabel}>Xin chào 👋</Text>
+              <Text style={styles.greetingName}>
+                {user?.fullName || 'Người dùng'}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
+            <Ionicons name="notifications-outline" size={22} color={Colors.textWhite} />
+            <View style={styles.notificationBadge} />
+          </TouchableOpacity>
         </View>
+        <Text style={styles.headerSubtitle}>Tìm việc hoặc đăng việc dễ dàng cùng SnapOn</Text>
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm công việc..."
-          placeholderTextColor={Colors.textLight}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={fetchTasks}
-          returnKeyType="search"
-        />
+        <View style={styles.searchWrapper}>
+          <Ionicons name="search-outline" size={20} color={Colors.textLight} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm công việc..."
+            placeholderTextColor={Colors.textLight}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={fetchTasks}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 ? (
+            <TouchableOpacity onPress={() => { setSearchQuery(''); setSelectedCategory(undefined); }} style={styles.clearIcon}>
+              <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.filterIconButton} activeOpacity={0.7}>
+              <Ionicons name="options-outline" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Danh mục</Text>
+        <Text style={styles.sectionTitle}>Danh mục dịch vụ</Text>
         <CategoryGrid
           onSelect={handleCategorySelect}
           selectedId={selectedCategory}
@@ -97,7 +125,9 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Công việc mới nhất</Text>
           {selectedCategory && (
-            <Badge label="Bỏ lọc" variant="outline" size="sm" />
+            <TouchableOpacity onPress={() => setSelectedCategory(undefined)}>
+              <Badge label="Bỏ lọc" variant="primary" size="sm" />
+            </TouchableOpacity>
           )}
         </View>
 
@@ -124,42 +154,97 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
-    paddingBottom: 20,
+    paddingBottom: 30,
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingTop: 55,
+    paddingBottom: 35,
     backgroundColor: Colors.primary,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  greeting: {
-    fontSize: 24,
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerGreeting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  greetingTextContainer: {
+    justifyContent: 'center',
+  },
+  greetingLabel: {
+    fontSize: 13,
+    color: Colors.textWhite,
+    opacity: 0.8,
+  },
+  greetingName: {
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.textWhite,
   },
-  subtitle: {
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.error,
+  },
+  headerSubtitle: {
     fontSize: 14,
     color: Colors.textWhite,
-    opacity: 0.8,
-    marginTop: 4,
+    opacity: 0.9,
+    fontWeight: '500',
   },
   searchContainer: {
     paddingHorizontal: 20,
-    marginTop: -20,
-    marginBottom: 20,
+    marginTop: -22,
+    marginBottom: 24,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    flex: 1,
     paddingVertical: 12,
     fontSize: 15,
     color: Colors.text,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+  },
+  clearIcon: {
+    padding: 4,
+  },
+  filterIconButton: {
+    padding: 6,
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 8,
   },
   section: {
     paddingHorizontal: 20,
@@ -169,12 +254,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.text,
-    marginBottom: 12,
   },
 });

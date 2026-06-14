@@ -1,8 +1,9 @@
-export const formatCurrency = (amount: number): string => {
+export const formatCurrency = (amount: number | string | undefined | null): string => {
+  const numericAmount = Number(amount);
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: 'VND',
-  }).format(amount);
+  }).format(isNaN(numericAmount) ? 0 : numericAmount);
 };
 
 export const formatDate = (dateString: string): string => {

@@ -195,10 +195,21 @@ function HeroSlideshow() {
     startTimers();
   };
 
+  const handleDragEnd = (event: any, info: any) => {
+    const swipeThreshold = 50; // pixels
+    if (info.offset.x < -swipeThreshold) {
+      // Swiped left -> next slide
+      goTo((current + 1) % SLIDES.length);
+    } else if (info.offset.x > swipeThreshold) {
+      // Swiped right -> prev slide
+      goTo((current - 1 + SLIDES.length) % SLIDES.length);
+    }
+  };
+
   const slide = SLIDES[current];
 
   return (
-    <section className="relative overflow-hidden" style={{ minHeight: '580px' }}>
+    <section className="relative overflow-hidden w-full select-none" style={{ minHeight: '600px' }}>
 
       {/* ── Sliding background with Ken Burns ── */}
       <AnimatePresence mode="wait">
@@ -222,12 +233,19 @@ function HeroSlideshow() {
           />
           {/* Gradient overlay */}
           <div className={`absolute inset-0 bg-gradient-to-r ${slide.gradient}`} />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         </motion.div>
       </AnimatePresence>
 
-      {/* ── Slide content ── */}
-      <div className="relative max-w-6xl mx-auto px-4 py-16 md:py-24 flex flex-col justify-between" style={{ minHeight: '580px' }}>
+      {/* ── Slide content with Drag Support ── */}
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.25}
+        onDragEnd={handleDragEnd}
+        className="relative max-w-6xl mx-auto px-4 py-16 md:py-24 flex flex-col justify-between cursor-grab active:cursor-grabbing"
+        style={{ minHeight: '600px' }}
+      >
         <div className="flex flex-col md:flex-row items-start md:items-center gap-10">
 
           {/* Left: text */}
@@ -240,17 +258,18 @@ function HeroSlideshow() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 16 }}
                 transition={{ duration: 0.4 }}
-                className="inline-flex items-center gap-2 text-white text-sm px-3 py-1.5 rounded-full mb-5 backdrop-blur-sm border border-white/20"
-                style={{ fontWeight: 600, background: `${slide.accent}55` }}
+                className="inline-flex items-center gap-2 text-white text-xs md:text-sm px-4 py-2 rounded-full mb-6 backdrop-blur-md border border-white/30 shadow-lg"
+                style={{ fontWeight: 700, background: `linear-gradient(135deg, ${slide.accent}77, ${slide.accent}33)` }}
               >
                 <motion.span
-                  animate={{ rotate: [0, 15, -10, 0] }}
+                  animate={{ rotate: [0, 20, -15, 0] }}
                   transition={{ duration: 0.6, delay: 0.3 }}
+                  className="text-base"
                 >
                   {slide.label.split(' ')[0]}
                 </motion.span>
-                {slide.label.split(' ').slice(1).join(' ')}
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="tracking-wider uppercase">{slide.label.split(' ').slice(1).join(' ')}</span>
+                <span className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_#4ade80] animate-pulse" />
               </motion.div>
             </AnimatePresence>
 
@@ -262,8 +281,8 @@ function HeroSlideshow() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 30 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
-                className="text-white mb-4"
-                style={{ fontWeight: 900, fontSize: 'clamp(2rem, 5vw, 3rem)', lineHeight: 1.1, whiteSpace: 'pre-line' }}
+                className="text-white mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] font-extrabold tracking-tight"
+                style={{ fontSize: 'clamp(2.2rem, 6vw, 3.5rem)', lineHeight: 1.15, whiteSpace: 'pre-line' }}
               >
                 {slide.title}
               </motion.h1>
@@ -277,8 +296,8 @@ function HeroSlideshow() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="text-white/80 mb-7"
-                style={{ fontSize: '1rem', lineHeight: 1.7 }}
+                className="text-white/90 mb-8 max-w-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] font-medium"
+                style={{ fontSize: '1.05rem', lineHeight: 1.7 }}
               >
                 {slide.sub}
               </motion.p>
@@ -289,20 +308,20 @@ function HeroSlideshow() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.4 }}
-              className="flex flex-wrap gap-3"
+              className="flex flex-wrap gap-4"
             >
               <Link
                 to="/post"
-                className="flex items-center gap-2 bg-white text-gray-900 hover:bg-orange-50 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                style={{ fontWeight: 700 }}
+                className="flex items-center gap-2 bg-white text-gray-900 hover:bg-orange-50 px-6 py-3.5 rounded-2xl shadow-[0_10px_20px_rgba(0,0,0,0.15)] hover:shadow-[0_15px_30px_rgba(0,0,0,0.3)] hover:-translate-y-1 transition-all duration-300"
+                style={{ fontWeight: 800 }}
               >
                 <PlusCircle className="w-5 h-5 text-orange-500" />
                 Đăng việc ngay
               </Link>
               <Link
                 to="/worker"
-                className="flex items-center gap-2 bg-white/15 text-white border border-white/25 hover:bg-white/25 px-6 py-3 rounded-xl backdrop-blur-sm hover:-translate-y-0.5 transition-all"
-                style={{ fontWeight: 600 }}
+                className="flex items-center gap-2 bg-white/10 text-white border border-white/20 hover:bg-white/20 px-6 py-3.5 rounded-2xl backdrop-blur-md hover:border-white/40 hover:-translate-y-1 hover:shadow-[0_15px_30px_rgba(0,0,0,0.2)] transition-all duration-300"
+                style={{ fontWeight: 700 }}
               >
                 Tìm việc <ArrowRight className="w-4 h-4" />
               </Link>
@@ -314,20 +333,20 @@ function HeroSlideshow() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
-                className="mt-5 flex items-center gap-2 text-white/70 text-sm"
+                className="mt-6 flex items-center gap-2.5 text-white/85 text-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
               >
                 <motion.div
                   animate={{ scale: [1, 1.5, 1], opacity: [1, 0.4, 1] }}
                   transition={{ duration: 1.2, repeat: Infinity }}
-                  className="w-2 h-2 rounded-full bg-green-400"
+                  className="w-2.5 h-2.5 rounded-full bg-green-400 shadow-[0_0_8px_#4ade80]"
                 />
-                <span><strong className="text-white">{activeCount} việc</strong> đang tuyển ngay lúc này</span>
+                <span><strong className="text-white font-semibold">{activeCount} việc</strong> đang tuyển ngay lúc này</span>
               </motion.div>
             )}
           </div>
 
           {/* Right: animated worker card */}
-          <div className="hidden md:flex flex-col gap-3 flex-shrink-0 w-72 relative" style={{ minHeight: '320px' }}>
+          <div className="hidden md:flex flex-col gap-4 flex-shrink-0 w-80 relative" style={{ minHeight: '340px' }}>
             <AnimatePresence mode="wait">
               <motion.div
                 key={`cardgroup-${slide.id}`}
@@ -335,67 +354,71 @@ function HeroSlideshow() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -20, scale: 0.95 }}
                 transition={{ duration: 0.5, type: 'spring', bounce: 0.25 }}
-                className="flex flex-col gap-3"
+                className="flex flex-col gap-4"
               >
-                <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-white/50">
+                <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.25)] border border-white/40">
                   {/* AI Match header */}
-                  <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: slide.accent }}>
+                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100/60">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-md" style={{ background: slide.accent }}>
                       <Zap className="w-4 h-4 text-white" fill="currentColor" />
                     </div>
                     <div>
-                      <p className="text-gray-900 text-xs" style={{ fontWeight: 700 }}>AI Match</p>
-                      <p className="text-gray-400" style={{ fontSize: '0.6rem' }}>Tìm được trong {slide.matchTime}</p>
+                      <p className="text-gray-900 text-xs font-bold uppercase tracking-wider">AI Match</p>
+                      <p className="text-gray-500 text-[10px] font-medium">Tìm được trong {slide.matchTime}</p>
                     </div>
                     <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
+                      animate={{ scale: [1, 1.25, 1], opacity: [1, 0.7, 1] }}
                       transition={{ duration: 1, repeat: Infinity }}
-                      className="ml-auto w-2 h-2 rounded-full bg-green-500"
+                      className="ml-auto w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"
                     />
                   </div>
 
                   {/* Worker info */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <img src={slide.worker.avatar} alt={slide.worker.name}
-                      className="w-12 h-12 rounded-xl border-2 border-gray-100 bg-gray-50" />
+                  <div className="flex items-center gap-3.5 mb-4">
+                    <div className="relative">
+                      <img src={slide.worker.avatar} alt={slide.worker.name}
+                        className="w-14 h-14 rounded-2xl border-2 bg-gray-50 shadow-sm transition-transform duration-300 hover:scale-105"
+                        style={{ borderColor: slide.accent }} />
+                      <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 border-white flex items-center justify-center text-[9px] shadow-sm">⚡</span>
+                    </div>
                     <div>
-                      <p className="text-gray-900 text-sm" style={{ fontWeight: 700 }}>{slide.worker.name}</p>
-                      <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-gray-950 text-base font-extrabold">{slide.worker.name}</p>
+                      <div className="flex items-center gap-1 mt-1">
                         {[1, 2, 3, 4, 5].map(s => (
-                          <Star key={s} className={`w-3 h-3 ${s <= Math.floor(slide.worker.rating) ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" />
+                          <Star key={s} className={`w-3.5 h-3.5 ${s <= Math.floor(slide.worker.rating) ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" />
                         ))}
-                        <span className="text-gray-600 text-xs ml-0.5" style={{ fontWeight: 600 }}>{slide.worker.rating}</span>
+                        <span className="text-gray-700 text-xs ml-1 font-bold">{slide.worker.rating}</span>
                       </div>
-                      <p className="text-gray-400 text-xs mt-0.5">{slide.worker.jobs} việc đã làm</p>
+                      <p className="text-gray-500 text-xs mt-1 font-medium">{slide.worker.jobs} việc đã làm</p>
                     </div>
                   </div>
 
                   {/* Stats row */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-gray-50 rounded-xl p-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1 text-blue-500 mb-0.5">
-                        <MapPin className="w-3 h-3" />
-                        <span className="text-xs" style={{ fontWeight: 700 }}>{slide.worker.dist}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50/70 border border-gray-100 rounded-2xl p-3 text-center transition-all hover:bg-gray-50">
+                      <div className="flex items-center justify-center gap-1.5 text-blue-500 mb-1">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="text-xs font-bold">{slide.worker.dist}</span>
                       </div>
-                      <p className="text-gray-400 text-xs" style={{ fontSize: '0.65rem' }}>Khoảng cách</p>
+                      <p className="text-gray-400 text-[10px] font-semibold uppercase tracking-wider">Khoảng cách</p>
                     </div>
-                    <div className="bg-gray-50 rounded-xl p-2.5 text-center">
-                      <div className="text-xs mb-0.5" style={{ fontWeight: 700, color: slide.accent }}>
+                    <div className="bg-gray-50/70 border border-gray-100 rounded-2xl p-3 text-center transition-all hover:bg-gray-50">
+                      <div className="text-xs font-extrabold mb-1" style={{ color: slide.accent }}>
                         {slide.priceLabel} {slide.price}
                       </div>
-                      <p className="text-gray-400 text-xs" style={{ fontSize: '0.65rem' }}>Thù lao</p>
+                      <p className="text-gray-400 text-[10px] font-semibold uppercase tracking-wider">Thù lao</p>
                     </div>
                   </div>
 
                   {/* Accept button */}
                   <motion.button
                     onClick={handleSelectNow}
-                    whileHover={{ scale: 1.02 }}
+                    whileHover={{ scale: 1.03, boxShadow: `0 10px 20px ${slide.accent}50`, y: -2 }}
                     whileTap={{ scale: 0.97 }}
-                    className="w-full mt-3 py-2.5 rounded-xl text-white text-sm transition cursor-pointer"
-                    style={{ background: slide.accent, fontWeight: 600 }}
+                    className="w-full mt-4 py-3 rounded-2xl text-white text-sm transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                    style={{ background: `linear-gradient(135deg, ${slide.accent}, ${slide.accent}dd)`, fontWeight: 700 }}
                   >
-                    ✅ Chọn ngay
+                    <span>✅ Chọn ngay</span>
                   </motion.button>
                 </div>
 
@@ -404,23 +427,23 @@ function HeroSlideshow() {
                   initial={{ opacity: 0, x: 30 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.4, delay: 0.3 }}
-                  className="bg-white/90 backdrop-blur-md rounded-xl px-3.5 py-3 shadow-lg border border-white/50 flex items-center gap-3"
+                  className="bg-white/80 backdrop-blur-xl rounded-2xl px-4 py-3.5 shadow-xl border border-white/40 flex items-center gap-3.5"
                 >
                   <motion.div
-                    animate={{ scale: [1, 1.3, 1] }}
+                    animate={{ scale: [1, 1.25, 1] }}
                     transition={{ duration: 0.8, repeat: Infinity, delay: 1 }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-base"
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base shadow-sm"
                     style={{ background: `${slide.accent}22` }}
                   >
                     {slide.label.split(' ')[0]}
                   </motion.div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-gray-900 text-xs" style={{ fontWeight: 700 }}>Ứng viên mới!</p>
-                    <p className="text-gray-400 truncate" style={{ fontSize: '0.65rem' }}>
+                    <p className="text-gray-950 text-xs font-bold">Ứng viên mới!</p>
+                    <p className="text-gray-500 truncate text-[11px] font-medium mt-0.5">
                       {slide.worker.name} vừa apply · {slide.worker.dist}
                     </p>
                   </div>
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: slide.accent }} />
+                  <div className="w-2 h-2 rounded-full flex-shrink-0 animate-ping" style={{ background: slide.accent }} />
                 </motion.div>
               </motion.div>
             </AnimatePresence>
@@ -428,40 +451,42 @@ function HeroSlideshow() {
         </div>
 
         {/* ── Slide controls ── */}
-        <div className="flex items-end justify-between mt-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6 mt-8">
           {/* Dots + progress */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {SLIDES.map((s, i) => (
-              <button key={i} onClick={() => goTo(i)} className="relative flex items-center">
+              <button key={i} onClick={() => goTo(i)} className="relative flex items-center p-1 cursor-pointer">
                 {i === current ? (
-                  <div className="relative h-2 rounded-full overflow-hidden" style={{ width: 48, background: 'rgba(255,255,255,0.3)' }}>
+                  <div className="relative h-2 rounded-full overflow-hidden shadow-inner" style={{ width: 48, background: 'rgba(255,255,255,0.2)' }}>
                     <motion.div
                       className="absolute inset-y-0 left-0 rounded-full"
-                      style={{ background: 'white', width: `${progress}%` }}
+                      style={{ background: slide.accent, width: `${progress}%` }}
                     />
                   </div>
                 ) : (
                   <div
-                    className="w-2 h-2 rounded-full transition-all"
-                    style={{ background: i < current ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)' }}
+                    className="w-2.5 h-2.5 rounded-full transition-all duration-300 hover:scale-125"
+                    style={{ background: i < current ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)' }}
                   />
                 )}
               </button>
             ))}
           </div>
 
-          {/* Slide labels */}
-          <div className="hidden sm:flex gap-2">
+          {/* Slide labels - scrollable horizontal list */}
+          <div className="flex overflow-x-auto no-scrollbar gap-2 max-w-full sm:max-w-[70%] py-1.5 px-1 scroll-smooth -mr-4 pr-4 sm:mr-0 sm:pr-0">
             {SLIDES.map((s, i) => (
               <button
                 key={i}
                 onClick={() => goTo(i)}
-                className="text-xs px-3 py-1.5 rounded-full transition-all"
+                className="text-xs px-4 py-2 rounded-full transition-all shrink-0 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md cursor-pointer"
                 style={{
-                  background: i === current ? `${s.accent}cc` : 'rgba(255,255,255,0.15)',
+                  background: i === current ? `${s.accent}` : 'rgba(255,255,255,0.12)',
                   color: 'white',
-                  fontWeight: i === current ? 700 : 400,
-                  backdropFilter: 'blur(8px)',
+                  fontWeight: i === current ? 700 : 500,
+                  backdropFilter: 'blur(12px)',
+                  border: i === current ? `1px solid rgba(255,255,255,0.4)` : '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: i === current ? `0 0 15px ${s.accent}60` : 'none',
                 }}
               >
                 {s.label}
@@ -469,11 +494,11 @@ function HeroSlideshow() {
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Stats bar */}
-      <div className="relative bg-black/30 backdrop-blur-sm border-t border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="relative bg-black/45 backdrop-blur-md border-t border-white/10">
+        <div className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-2 md:grid-cols-4 gap-6">
           <CountStat target={12400} suffix="+" label="Việc đã hoàn thành" delay={0} />
           <CountStat target={3200} suffix="+" label="Người lao động" delay={0.1} />
           <CountStat target={98} suffix="%" label="Tỷ lệ hài lòng" delay={0.2} />

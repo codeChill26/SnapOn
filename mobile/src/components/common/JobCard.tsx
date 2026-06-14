@@ -5,6 +5,7 @@ import { Task } from '../../types';
 import { formatCurrency, formatTimeRemaining, truncateText, getStatusLabel } from '../../utils/format';
 import { Badge } from '../ui/Badge';
 import { getCategoryById } from '../../constants/categories';
+import { Ionicons } from '@expo/vector-icons';
 
 interface JobCardProps {
   task: Task;
@@ -45,6 +46,7 @@ export const JobCard: React.FC<JobCardProps> = ({ task, onPress, showDistance, d
 
       <View style={styles.footer}>
         <View style={styles.priceRow}>
+          <Ionicons name="cash-outline" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
           <Text style={styles.priceLabel}>Ngân sách:</Text>
           <Text style={styles.price}>
             {formatCurrency(task.budgetMin)} - {formatCurrency(task.budgetMax)}
@@ -53,14 +55,14 @@ export const JobCard: React.FC<JobCardProps> = ({ task, onPress, showDistance, d
 
         <View style={styles.metaRow}>
           <View style={styles.metaItem}>
-            <Text style={styles.metaIcon}>⏰</Text>
+            <Ionicons name="time-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 4 }} />
             <Text style={styles.metaText}>
               {formatTimeRemaining(task.deadlineEnd)}
             </Text>
           </View>
           {showDistance && distance !== undefined && (
             <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>📍</Text>
+              <Ionicons name="location-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 4 }} />
               <Text style={styles.metaText}>{distance.toFixed(1)} km</Text>
             </View>
           )}

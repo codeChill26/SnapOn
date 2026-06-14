@@ -51,9 +51,9 @@ export const Tabs: React.FC<TabsProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    backgroundColor: Colors.divider,
+    padding: 4,
+    borderRadius: 12,
   },
   tab: {
     flex: 1,
@@ -63,15 +63,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   activeTab: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: Colors.textSecondary,
   },
   activeTabText: {
-    color: Colors.textWhite,
-    fontWeight: '600',
+    color: Colors.primary,
+    fontWeight: '800',
   },
 });

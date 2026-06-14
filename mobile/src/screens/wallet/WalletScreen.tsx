@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -9,6 +9,7 @@ import { walletService } from '../../services/walletService';
 import { useApp } from '../../context/AppContext';
 import { Wallet, WalletTransaction } from '../../types';
 import { formatCurrency, formatDate, getStatusLabel } from '../../utils/format';
+import { Input } from '../../components/ui/Input';
 
 const TOPUP_PRESETS = [50000, 100000, 200000, 500000, 1000000];
 
@@ -17,6 +18,9 @@ export const WalletScreen: React.FC = () => {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [topupAmount, setTopupAmount] = useState<number>(100000);
+  const [customAmountText, setCustomAmountText] = useState<string>('100000');
+  const [pendingOrderCode, setPendingOrderCode] = useState<number | null>(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
 
   useEffect(() => {
     loadWalletData();
@@ -37,27 +41,76 @@ export const WalletScreen: React.FC = () => {
     }
   };
 
+  const handlePresetSelect = (amount: number) => {
+    setTopupAmount(amount);
+    setCustomAmountText(amount.toString());
+  };
+
+  const handleCustomAmountChange = (text: string) => {
+    const cleanText = text.replace(/[^0-9]/g, '');
+    setCustomAmountText(cleanText);
+    const num = parseInt(cleanText, 10);
+    if (!isNaN(num)) {
+      setTopupAmount(num);
+    } else {
+      setTopupAmount(0);
+    }
+  };
+
   const handleTopup = async () => {
-    Alert.alert(
-      'Nạp tiền',
-      `Xác nhận nạp ${formatCurrency(topupAmount)}?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xác nhận',
-          onPress: async () => {
-            try {
-              const newWallet = await walletService.topupMock(topupAmount);
-              setWallet(newWallet);
-              Alert.alert('Thành công', `Đã nạp ${formatCurrency(topupAmount)}`);
-              loadWalletData();
-            } catch (error: any) {
-              Alert.alert('Lỗi', error.message || 'Nạp tiền thất bại');
-            }
-          },
-        },
-      ]
-    );
+    if (topupAmount < 1000) {
+      Alert.alert('Lỗi', 'Số tiền nạp tối thiểu là 1.000 đ');
+      return;
+    }
+
+    try {
+      setCheckingPayment(true);
+      const result = await walletService.createPayOSPayment(topupAmount);
+      setPendingOrderCode(result.orderCode);
+      
+      const supported = await Linking.canOpenURL(result.checkoutUrl);
+      if (supported) {
+        await Linking.openURL(result.checkoutUrl);
+      } else {
+        Alert.alert('Lỗi', 'Không thể mở liên kết thanh toán.');
+      }
+    } catch (error: any) {
+      console.error('PayOS topup error:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tạo liên kết thanh toán PayOS');
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
+
+  const handleCheckPaymentStatus = async () => {
+    if (!pendingOrderCode) return;
+    try {
+      setCheckingPayment(true);
+      const res = await walletService.confirmPayOSPayment(pendingOrderCode);
+      
+      if (res.success === false) {
+        Alert.alert('Thông báo', res.message || 'Thanh toán chưa được hoàn tất. Vui lòng thanh toán trên trình duyệt trước.');
+        return;
+      }
+
+      setWallet(res.wallet);
+      if (res.alreadyProcessed) {
+        Alert.alert('Thông báo', 'Giao dịch này đã được xử lý trước đó.');
+      } else {
+        Alert.alert('Thành công', 'Thanh toán qua PayOS thành công! Số dư ví của bạn đã được cập nhật.');
+      }
+      setPendingOrderCode(null);
+      loadWalletData();
+    } catch (error: any) {
+      console.error('Confirm payment error:', error);
+      Alert.alert('Kiểm tra thất bại', error.message || 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
+
+  const handleCancelPendingPayment = () => {
+    setPendingOrderCode(null);
   };
 
   if (loading) return <LoadingSpinner fullScreen />;
@@ -86,6 +139,32 @@ export const WalletScreen: React.FC = () => {
         </View>
       </Card>
 
+      {pendingOrderCode && (
+        <Card style={styles.pendingCard}>
+          <Text style={styles.pendingTitle}>Đang xử lý nạp tiền (PayOS)</Text>
+          <Text style={styles.pendingDesc}>
+            Vui lòng hoàn tất thanh toán trên trình duyệt của bạn cho đơn hàng #{pendingOrderCode}.
+          </Text>
+          <View style={styles.pendingButtons}>
+            <Button
+              title="Kiểm tra kết quả"
+              onPress={handleCheckPaymentStatus}
+              size="md"
+              loading={checkingPayment}
+              style={styles.pendingBtn}
+            />
+            <Button
+              title="Hủy/Đóng"
+              onPress={handleCancelPendingPayment}
+              variant="outline"
+              size="md"
+              style={styles.pendingBtn}
+              disabled={checkingPayment}
+            />
+          </View>
+        </Card>
+      )}
+
       <Card style={styles.topupCard}>
         <Text style={styles.sectionTitle}>Nạp tiền</Text>
         <View style={styles.presetRow}>
@@ -96,7 +175,7 @@ export const WalletScreen: React.FC = () => {
                 styles.presetChip,
                 topupAmount === amount && styles.presetChipActive,
               ]}
-              onPress={() => setTopupAmount(amount)}
+              onPress={() => handlePresetSelect(amount)}
             >
               <Text
                 style={[
@@ -111,11 +190,24 @@ export const WalletScreen: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
+
+        <Input
+          label="Số tiền nạp tự chọn (đ)"
+          placeholder="Nhập số tiền bạn muốn nạp (tối thiểu 1.000đ)"
+          value={customAmountText}
+          onChangeText={handleCustomAmountChange}
+          keyboardType="numeric"
+        />
+
+
+
         <Button
-          title={`Nạp ${formatCurrency(topupAmount)}`}
+          title={topupAmount > 0 ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền'}
           onPress={handleTopup}
           size="lg"
           style={styles.topupButton}
+          disabled={topupAmount <= 0}
+          loading={checkingPayment && !pendingOrderCode}
         />
       </Card>
 
@@ -214,6 +306,32 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: Colors.textWhite + '30',
   },
+  pendingCard: {
+    marginBottom: 16,
+    borderColor: Colors.warning,
+    borderWidth: 1.5,
+    backgroundColor: Colors.warning + '10',
+    padding: 16,
+  },
+  pendingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.warning,
+    marginBottom: 6,
+  },
+  pendingDesc: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 14,
+    lineHeight: 18,
+  },
+  pendingButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pendingBtn: {
+    flex: 1,
+  },
   topupCard: {
     marginBottom: 16,
   },
@@ -247,6 +365,37 @@ const styles = StyleSheet.create({
   },
   presetTextActive: {
     color: Colors.textWhite,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  methodRow: {
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 16,
+  },
+  methodChip: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  methodChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '08',
+  },
+  methodText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  methodTextActive: {
+    color: Colors.primary,
   },
   topupButton: {
     marginTop: 8,

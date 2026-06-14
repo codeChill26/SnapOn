@@ -10,6 +10,7 @@ import { Colors } from '../constants/colors';
 import { JobDetailScreen } from '../screens/jobDetail/JobDetailScreen';
 import { ApplicantListScreen } from '../screens/jobDetail/ApplicantListScreen';
 import { WalletScreen } from '../screens/wallet/WalletScreen';
+import { ChatDetailScreen } from '../screens/chat/ChatDetailScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -18,6 +19,12 @@ export type RootStackParamList = {
   JobDetail: { taskId: string };
   ApplicantList: { taskId: string };
   Wallet: undefined;
+  ChatDetail: {
+    conversationId?: string;
+    otherUserId: string;
+    otherUserName: string;
+    otherUserAvatar?: string;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -64,6 +71,10 @@ export const AppNavigator: React.FC = () => {
               name="Wallet"
               component={WalletScreen}
               options={{ headerShown: true, headerTitle: 'Ví của tôi', headerTintColor: Colors.primary }}
+            />
+            <Stack.Screen
+              name="ChatDetail"
+              component={ChatDetailScreen}
             />
           </>
         )}

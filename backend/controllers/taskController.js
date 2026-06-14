@@ -86,9 +86,21 @@ const taskController = {
     try {
       const { status, category_id, task_type, search, page, limit } = req.query;
 
+      // Support slug-to-UUID lookup if category_id is a slug
+      let finalCategoryId = category_id;
+      if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
+        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
+        if (catRes.rows[0]) {
+          finalCategoryId = catRes.rows[0].id;
+        } else {
+          // Slug not found in database -> return empty list of tasks instead of throw 500 UUID query error
+          return paginated(res, [], { page: parseInt(page) || 1, limit: parseInt(limit) || 10, total: 0, totalPages: 0 }, 'Tasks retrieved successfully.');
+        }
+      }
+
       const result = await taskModel.findAll({
         status,
-        categoryId: category_id,
+        categoryId: finalCategoryId,
         taskType: task_type,
         search,
         page: parseInt(page) || undefined,
