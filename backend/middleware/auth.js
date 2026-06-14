@@ -71,7 +71,7 @@ const authenticate = async (req, res, next) => {
       }
 
       const result = await pool.query(
-        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE id = $1',
+        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE id = $1',
         [userId]
       );
 
@@ -95,6 +95,7 @@ const authenticate = async (req, res, next) => {
         role: user.role,
         status: user.status,
         isVerified: user.is_verified,
+        createdAt: user.created_at,
       };
 
       // For compatibility with routes expecting firebase payload
@@ -145,7 +146,7 @@ const authenticate = async (req, res, next) => {
     }
 
     const result = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE firebase_uid = $1',
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE firebase_uid = $1',
       [decodedToken.uid]
     );
 
@@ -170,6 +171,7 @@ const authenticate = async (req, res, next) => {
       role: user.role,
       status: user.status,
       isVerified: user.is_verified,
+      createdAt: user.created_at,
     };
 
     next();

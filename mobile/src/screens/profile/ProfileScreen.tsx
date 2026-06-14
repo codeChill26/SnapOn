@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
@@ -9,10 +9,16 @@ import { Badge } from '../../components/ui/Badge';
 import { UserAvatar } from '../../components/common/UserAvatar';
 import { Tabs } from '../../components/ui/Tabs';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
+import { walletService } from '../../services/walletService';
 import { UserRole } from '../../types';
 import { formatCurrency } from '../../utils/format';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { Ionicons } from '@expo/vector-icons';
+import { Modal } from '../../components/ui/Modal';
+import { Input } from '../../components/ui/Input';
+import { authService } from '../../services/authService';
+import * as ImagePicker from 'expo-image-picker';
 
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -24,8 +30,102 @@ const PROFILE_TABS = [
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileNavProp>();
-  const { user, logout, switchRole } = useAuth();
+  const { user, logout, switchRole, updateUser } = useAuth();
+  const { wallet, setWallet } = useApp();
   const [activeTab, setActiveTab] = useState('overview');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+      const loadWallet = async () => {
+        try {
+          const walletData = await walletService.getMyWallet();
+          if (isMounted) {
+            setWallet(walletData);
+          }
+        } catch (error) {
+          console.error('Failed to load wallet in ProfileScreen:', error);
+        }
+      };
+      loadWallet();
+      return () => {
+        isMounted = false;
+      };
+    }, [setWallet])
+  );
+
+  // State for editing profile
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState(user?.fullName || '');
+  const [editPhone, setEditPhone] = useState(user?.phone || '');
+  const [editAvatarUrl, setEditAvatarUrl] = useState(user?.avatarUrl || '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleOpenEditModal = () => {
+    setEditName(user?.fullName || '');
+    setEditPhone(user?.phone || '');
+    setEditAvatarUrl(user?.avatarUrl || '');
+    setIsEditModalOpen(true);
+  };
+
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Quyền truy cập', 'Ứng dụng cần quyền truy cập thư viện ảnh để thay đổi avatar.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          setIsUploading(true);
+          const uploadedUrl = await authService.uploadAvatar(asset.base64);
+          setEditAvatarUrl(uploadedUrl);
+          Alert.alert('Thành công', 'Đã tải ảnh lên thành công!');
+        } else {
+          Alert.alert('Lỗi', 'Không thể đọc dữ liệu ảnh.');
+        }
+      }
+    } catch (error: any) {
+      console.error('Pick image error:', error);
+      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi chọn hoặc tải ảnh lên.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Lỗi', 'Họ và tên không được để trống');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const updatedUser = await authService.updateProfile({
+        fullName: editName.trim(),
+        phone: editPhone.trim() || undefined,
+        avatarUrl: editAvatarUrl.trim() || undefined,
+      });
+      updateUser(updatedUser);
+      setIsEditModalOpen(false);
+      Alert.alert('Thành công', 'Cập nhật thông tin cá nhân thành công!');
+    } catch (error: any) {
+      console.error('Update profile error:', error);
+      Alert.alert('Thất bại', error.message || 'Không thể cập nhật thông tin');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
@@ -75,6 +175,11 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.userName}>{user?.fullName || 'Người dùng'}</Text>
           <Badge label={roleLabel} variant="primary" size="md" />
           <Text style={styles.userEmail}>{user?.email}</Text>
+
+          <TouchableOpacity style={styles.editProfileButton} onPress={handleOpenEditModal} activeOpacity={0.7}>
+            <Ionicons name="create-outline" size={14} color={Colors.textWhite} />
+            <Text style={styles.editProfileText}>Chỉnh sửa trang cá nhân</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -160,7 +265,7 @@ export const ProfileScreen: React.FC = () => {
               <Ionicons name="card-outline" size={18} color={Colors.primary} />
               <Text style={styles.statRowLabel}>Số dư ví khả dụng</Text>
             </View>
-            <Text style={styles.statRowValue}>500,000 VND</Text>
+            <Text style={styles.statRowValue}>{formatCurrency(wallet?.availableBalance || 0)}</Text>
           </View>
         </Card>
       )}
@@ -198,9 +303,15 @@ export const ProfileScreen: React.FC = () => {
             <Text style={styles.settingsSectionTitle}>Dịch vụ & Hệ thống</Text>
             <Card style={styles.settingsCard} padded={false}>
               <SettingsRow
+                icon="person-outline"
+                label="Chỉnh sửa thông tin cá nhân"
+                onPress={handleOpenEditModal}
+              />
+              <View style={styles.rowDivider} />
+              <SettingsRow
                 icon="wallet-outline"
                 label="Ví của tôi"
-                value="500,000đ"
+                value={wallet ? formatCurrency(wallet.availableBalance) : '0đ'}
                 onPress={() => navigation.navigate('Wallet')}
               />
               <View style={styles.rowDivider} />
@@ -221,6 +332,60 @@ export const ProfileScreen: React.FC = () => {
           </View>
         </View>
       )}
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Chỉnh sửa thông tin"
+      >
+        <ScrollView contentContainerStyle={styles.modalForm} keyboardShouldPersistTaps="handled">
+          <View style={styles.avatarPickerContainer}>
+            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.avatarPickerTouch} disabled={isUploading}>
+              <UserAvatar
+                name={editName || 'User'}
+                avatarUrl={editAvatarUrl}
+                size={84}
+              />
+              <View style={styles.cameraIconContainer}>
+                <Ionicons name="camera" size={16} color={Colors.textWhite} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.avatarPickerHelpText}>
+              {isUploading ? 'Đang tải ảnh lên...' : 'Chạm để đổi ảnh đại diện'}
+            </Text>
+          </View>
+
+          <Input
+            label="Họ và tên"
+            placeholder="Nhập họ và tên"
+            value={editName}
+            onChangeText={setEditName}
+          />
+          <Input
+            label="Số điện thoại"
+            placeholder="Nhập số điện thoại"
+            value={editPhone}
+            onChangeText={setEditPhone}
+            keyboardType="phone-pad"
+          />
+
+          <View style={styles.modalButtons}>
+            <Button
+              title="Hủy"
+              variant="outline"
+              onPress={() => setIsEditModalOpen(false)}
+              style={styles.modalButton}
+            />
+            <Button
+              title="Lưu"
+              onPress={handleSaveProfile}
+              loading={isSaving}
+              style={styles.modalButton}
+            />
+          </View>
+        </ScrollView>
+      </Modal>
     </ScrollView>
   );
 };
@@ -485,5 +650,60 @@ const styles = StyleSheet.create({
   roleSwitchTextActive: {
     color: Colors.primary,
     fontWeight: '800',
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  editProfileText: {
+    color: Colors.textWhite,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalForm: {
+    gap: 16,
+    paddingTop: 8,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  avatarPickerContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  avatarPickerTouch: {
+    position: 'relative',
+  },
+  cameraIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.primary,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.surface,
+  },
+  avatarPickerHelpText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+    marginTop: 6,
   },
 });

@@ -19,33 +19,47 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
 
     await client.query('BEGIN');
 
-    const upsertUserQuery = `
-      INSERT INTO users (
-        id,
-        firebase_uid,
+    // First check if user exists by email to prevent duplicate key violations
+    const checkEmailResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+    let user;
+    if (checkEmailResult.rows.length > 0) {
+      const updateUserQuery = `
+        UPDATE users 
+        SET firebase_uid = $1,
+            full_name = COALESCE($2, full_name),
+            avatar_url = COALESCE($3, avatar_url)
+        WHERE email = $4
+        RETURNING *;
+      `;
+      const updateResult = await client.query(updateUserQuery, [
+        uid,
+        name || null,
+        picture || null,
+        email
+      ]);
+      user = updateResult.rows[0];
+    } else {
+      const insertUserQuery = `
+        INSERT INTO users (
+          id,
+          firebase_uid,
+          email,
+          full_name,
+          avatar_url,
+          status,
+          is_verified
+        )
+        VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
+        RETURNING *;
+      `;
+      const userResult = await client.query(insertUserQuery, [
+        uid,
         email,
-        full_name,
-        avatar_url,
-        status,
-        is_verified
-      )
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
-      ON CONFLICT (firebase_uid)
-      DO UPDATE SET
-        email = EXCLUDED.email,
-        full_name = COALESCE(EXCLUDED.full_name, users.full_name),
-        avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
-      RETURNING *;
-    `;
-
-    const userResult = await client.query(upsertUserQuery, [
-      uid,
-      email,
-      name || null,
-      picture || null,
-    ]);
-
-    const user = userResult.rows[0];
+        name || null,
+        picture || null,
+      ]);
+      user = userResult.rows[0];
+    }
 
     const createWalletQuery = `
       INSERT INTO wallets (
@@ -72,7 +86,18 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'User synced successfully',
-      user,
+      user: {
+        id: user.id,
+        firebaseUid: user.firebase_uid,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        avatarUrl: user.avatar_url,
+        role: user.role,
+        status: user.status,
+        isVerified: user.is_verified,
+        createdAt: user.created_at,
+      },
       wallet: walletResult.rows[0],
     });
   } catch (error) {

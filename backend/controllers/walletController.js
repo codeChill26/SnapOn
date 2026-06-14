@@ -47,6 +47,96 @@ const walletController = {
       return error(res, err.message || 'Failed to top up.', status);
     }
   },
+
+  /**
+   * POST /api/wallet/topup/payos
+   * Body: { amount }
+   */
+  async createPayOSPayment(req, res) {
+    try {
+      const userId = req.user.id;
+      const { amount } = req.body;
+      const result = await walletService.createPayOSPayment(userId, amount);
+      return success(res, result, 'PayOS payment link created successfully.');
+    } catch (err) {
+      console.error('Create PayOS payment error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to create payment link.', status);
+    }
+  },
+
+  /**
+   * POST /api/wallet/topup/payos/confirm
+   * Body: { orderCode }
+   */
+  async confirmPayOSPayment(req, res) {
+    try {
+      const userId = req.user.id;
+      const { orderCode } = req.body;
+      const result = await walletService.confirmPayOSPayment(userId, Number(orderCode));
+      return success(res, result, 'PayOS payment confirmed successfully.');
+    } catch (err) {
+      console.error('Confirm PayOS payment error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to confirm payment.', status);
+    }
+  },
+
+  /**
+   * GET /api/wallet/topup/payos/success
+   */
+  async payosSuccess(req, res) {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Thanh toán thành công</title>
+        <style>
+          body { font-family: -apple-system, sans-serif; text-align: center; padding: 50px 20px; background: #f5f5f5; }
+          .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+          h1 { color: #10B981; margin-top: 0; }
+          p { color: #6B7280; font-size: 16px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>✓ Giao dịch thành công</h1>
+          <p>Cảm ơn bạn! Giao dịch của bạn đã được thực hiện. Xin hãy quay lại ứng dụng SnapOn để kiểm tra số dư ví.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  },
+
+  /**
+   * GET /api/wallet/topup/payos/cancel
+   */
+  async payosCancel(req, res) {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Giao dịch đã hủy</title>
+        <style>
+          body { font-family: -apple-system, sans-serif; text-align: center; padding: 50px 20px; background: #f5f5f5; }
+          .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+          h1 { color: #EF4444; margin-top: 0; }
+          p { color: #6B7280; font-size: 16px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>✕ Đã hủy giao dịch</h1>
+          <p>Giao dịch nạp tiền của bạn đã bị hủy. Bạn có thể đóng trình duyệt này và thử lại trong ứng dụng.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  },
 };
 
 module.exports = walletController;

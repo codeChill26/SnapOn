@@ -48,9 +48,18 @@ app.use(cors());
 
 // Request parsing
 app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: false }));
 app.use(cookieParser());
+
+// Static uploads folder
+var path = require('path');
+var fs = require('fs');
+var uploadDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadDir));
 
 // ==========================================
 // SWAGGER UI

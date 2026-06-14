@@ -1,5 +1,5 @@
 const Config = {
-  API_BASE_URL: 'http://192.168.1.57:3000/api',
+  API_BASE_URL: 'http://192.168.100.206:3000/api',
   FIREBASE: {
     apiKey: 'AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ',
     authDomain: 'hcm202-2d75e.firebaseapp.com',

@@ -83,9 +83,9 @@ const escrowService = {
     await walletTransactionModel.create(
       {
         walletId: posterWallet.id,
-        type: 'payment',
+        type: 'ESCROW_HOLD',
         amount: amt,
-        status: 'pending',
+        status: 'PENDING',
         referenceId: escrow.id,
       },
       db
@@ -152,11 +152,11 @@ const escrowService = {
     const posterPaymentTx = await walletTransactionModel.findByReference(
       posterWallet.id,
       escrow.id,
-      'payment',
+      'ESCROW_HOLD',
       db
     );
-    if (posterPaymentTx && posterPaymentTx.status === 'pending') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'success', db);
+    if (posterPaymentTx && posterPaymentTx.status === 'PENDING') {
+      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'SUCCESS', db);
     }
 
     // Tasker ledger
@@ -164,9 +164,9 @@ const escrowService = {
       await walletTransactionModel.create(
         {
           walletId: taskerWallet.id,
-          type: 'earning',
+          type: 'ESCROW_RELEASE',
           amount: net,
-          status: 'success',
+          status: 'SUCCESS',
           referenceId: escrow.id,
         },
         db
@@ -177,9 +177,9 @@ const escrowService = {
       await walletTransactionModel.create(
         {
           walletId: taskerWallet.id,
-          type: 'fee',
+          type: 'PLATFORM_FEE',
           amount: fee,
-          status: 'success',
+          status: 'SUCCESS',
           referenceId: escrow.id,
         },
         db
@@ -230,19 +230,19 @@ const escrowService = {
     const posterPaymentTx = await walletTransactionModel.findByReference(
       posterWallet.id,
       escrow.id,
-      'payment',
+      'ESCROW_HOLD',
       db
     );
-    if (posterPaymentTx && posterPaymentTx.status === 'pending') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'cancelled', db);
+    if (posterPaymentTx && posterPaymentTx.status === 'PENDING') {
+      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'CANCELLED', db);
     }
 
     await walletTransactionModel.create(
       {
         walletId: posterWallet.id,
-        type: 'refund',
+        type: 'REFUND',
         amount,
-        status: 'success',
+        status: 'SUCCESS',
         referenceId: escrow.id,
       },
       db
