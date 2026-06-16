@@ -26,6 +26,15 @@ router.get(
   applicationController.getApplicationsByTask
 );
 
+// GET /api/applications/my-applications — Worker: get all own applications
+// ⚠️  Must be declared BEFORE  /applications/:id  so Express does not
+//     mistake the literal "my-applications" for an :id param value.
+router.get(
+  '/applications/my-applications',
+  authenticate,
+  applicationController.getMyApplications
+);
+
 // PATCH /api/applications/:id/withdraw — Tasker withdraws bid
 router.patch(
   '/applications/:id/withdraw',
@@ -34,6 +43,7 @@ router.patch(
   validate,
   applicationController.withdrawApplication
 );
+
 
 // PATCH /api/applications/:id — Update application details
 router.patch(

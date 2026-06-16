@@ -26,7 +26,11 @@
         "googleMaps": {
           "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
         }
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
       [
@@ -35,7 +39,14 @@
           "locationAlwaysAndWhenInUsePermission": "SnapOn needs your location to find nearby tasks.",
           "locationWhenInUsePermission": "SnapOn needs your location to find nearby tasks."
         }
-      ]
-    ]
+      ],
+      "expo-asset",
+      "@react-native-google-signin/google-signin"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ebcc55c8-278c-4ee0-aa61-7ade2a54e646"
+      }
+    }
   }
 }

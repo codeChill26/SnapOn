@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, StatusBar } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+import { AppColors } from '../../theme';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../../services/firebase';
+import { useAuth } from '../../context/AuthContext';
 
 type RegisterNavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<RegisterNavProp>();
+  const { login } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -29,10 +33,33 @@ export const RegisterScreen: React.FC = () => {
     }
     setLoading(true);
     try {
+      // 1. Register user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+      // 2. Set profile displayName in Firebase Auth
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name,
+        });
+      }
+
+      // 3. Get Firebase ID Token
+      const idToken = await userCredential.user.getIdToken();
+
+      // 4. Sync with Backend Postgres Database and log in
+      await login(idToken);
+      
       Alert.alert('Thành công', 'Đăng ký tài khoản thành công!');
-      navigation.navigate('Login');
     } catch (error: any) {
-      Alert.alert('Đăng ký thất bại', error.message || 'Có lỗi xảy ra');
+      let errorMsg = error.message;
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = 'Email này đã được đăng ký tài khoản.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Địa chỉ email không hợp lệ.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMsg = 'Mật khẩu quá yếu (phải chứa ít nhất 6 ký tự).';
+      }
+      Alert.alert('Đăng ký thất bại', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -43,6 +70,7 @@ export const RegisterScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <StatusBar barStyle="light-content" backgroundColor={AppColors.background.primary} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -116,7 +144,7 @@ export const RegisterScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.background.primary,
   },
   scrollContent: {
     flexGrow: 1,
@@ -130,12 +158,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
   },
   form: {
     flex: 1,
@@ -151,11 +179,12 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
   },
   loginLink: {
-    color: Colors.primary,
+    color: AppColors.brand.primary,
     fontWeight: '700',
     fontSize: 14,
   },
 });
+

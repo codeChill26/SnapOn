@@ -27,6 +27,16 @@ router.get(
   taskController.getMyTasks
 );
 
+// POST /api/tasks/upload-images — Upload images to Cloudinary (Base64)
+// Note: This must be defined BEFORE /:id to avoid conflict
+router.post(
+  '/upload-images',
+  authenticate,
+  taskValidator.uploadImages,
+  validate,
+  taskController.uploadTaskImages
+);
+
 // GET /api/tasks/:id — Get task details
 router.get(
   '/:id',

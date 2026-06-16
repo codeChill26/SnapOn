@@ -1,4 +1,5 @@
 const taskModel = require('../models/taskModel');
+const cloudinary = require('../utils/cloudinary');
 const escrowService = require('../services/escrowService');
 const pool = require('../config/db');
 const { success, error, paginated } = require('../utils/responseHandler');
@@ -20,7 +21,7 @@ const taskController = {
         title,
         description,
         category_id,
-        task_type,
+        task_type = 'ONLINE',
         budget_min,
         budget_max,
         deadline_start,
@@ -28,6 +29,7 @@ const taskController = {
         allow_insurance,
         skill_ids,
         location,
+        images,
       } = req.body;
 
       // Support slug-to-UUID lookup if category_id is a slug
@@ -51,6 +53,7 @@ const taskController = {
         deadlineStart: deadline_start || null,
         deadlineEnd: deadline_end || null,
         allowInsurance: allow_insurance || false,
+        images: images || [],
       });
 
       // 2. Add required skills (if provided)
@@ -86,9 +89,21 @@ const taskController = {
     try {
       const { status, category_id, task_type, search, page, limit } = req.query;
 
+      // Support slug-to-UUID lookup if category_id is a slug
+      let finalCategoryId = category_id;
+      if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
+        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
+        if (catRes.rows[0]) {
+          finalCategoryId = catRes.rows[0].id;
+        } else {
+          // Slug not found in database -> return empty list of tasks instead of throw 500 UUID query error
+          return paginated(res, [], { page: parseInt(page) || 1, limit: parseInt(limit) || 10, total: 0, totalPages: 0 }, 'Tasks retrieved successfully.');
+        }
+      }
+
       const result = await taskModel.findAll({
         status,
-        categoryId: category_id,
+        categoryId: finalCategoryId,
         taskType: task_type,
         search,
         page: parseInt(page) || undefined,
@@ -238,6 +253,7 @@ const taskController = {
         deadline_start,
         deadline_end,
         allow_insurance,
+        images,
       } = req.body;
 
       // 1. Check task exists
@@ -276,6 +292,7 @@ const taskController = {
         deadlineStart: deadline_start,
         deadlineEnd: deadline_end,
         allowInsurance: allow_insurance,
+        images: images,
       });
 
       return success(res, updatedTask, 'Task updated successfully.');
@@ -317,6 +334,28 @@ const taskController = {
     } catch (err) {
       console.error('Delete task error:', err);
       return error(res, 'Failed to delete task.', 500);
+    }
+  },
+
+  /**
+   * POST /api/tasks/upload-images
+   * Upload multiple base64 image strings to Cloudinary and return their URLs
+   */
+  async uploadTaskImages(req, res) {
+    try {
+      const { images } = req.body; // Expects { images: [ "base64...", "base64..." ] }
+      if (!images || !Array.isArray(images) || images.length === 0) {
+        return error(res, 'No images provided.', 400);
+      }
+
+      console.log(`Uploading ${images.length} images to Cloudinary...`);
+      const uploadPromises = images.map((base64) => cloudinary.uploadImage(base64));
+      const urls = await Promise.all(uploadPromises);
+
+      return success(res, { urls }, 'Images uploaded successfully.');
+    } catch (err) {
+      console.error('Upload task images controller error:', err);
+      return error(res, err.message || 'Failed to upload images.', 500);
     }
   },
 };

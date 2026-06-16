@@ -86,13 +86,19 @@ const matchingService = {
       MATCHING_WEIGHTS.RESPONSE_TIME * responseTimeScore;
 
     return {
+      id: application.id,
       applicationId: application.id,
+      taskId: application.task_id,
       taskerId: application.tasker_id,
       taskerName: application.tasker_name,
       taskerAvatar: application.tasker_avatar,
       bidPrice: application.bid_price,
       estimatedTime: application.estimated_time,
       message: application.message,
+      status: application.status,
+      average_rating: averageRating,
+      created_at: application.created_at,
+      score: Math.round(totalScore * 100) / 100,
       scores: {
         price: Math.round(priceScore * 100) / 100,
         rating: Math.round(ratingScore * 100) / 100,

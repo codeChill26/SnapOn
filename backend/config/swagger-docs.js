@@ -873,226 +873,25 @@
  *         description: Chưa xác thực
  */
 
-/**
- * @swagger
- * /api/wallet/topup/payos/create:
- *   post:
- *     tags: [Wallet]
- *     summary: Tạo link thanh toán PayOS
- *     description: |
- *       Tạo yêu cầu nạp tiền qua cổng thanh toán PayOS.
- *       Trả về checkoutUrl để redirect user đến trang thanh toán.
- *       Minimum amount: 1,000 VND.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [amount]
- *             properties:
- *               amount:
- *                 type: number
- *                 minimum: 1000
- *                 example: 100000
- *     responses:
- *       200:
- *         description: Tạo link thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     checkoutUrl:
- *                       type: string
- *                       example: https://payos.vn/checkout/...
- *                     orderCode:
- *                       type: integer
- *                       example: 123456
- *       400:
- *         description: Amount không hợp lệ
- *       401:
- *         description: Chưa xác thực
- */
+// ==========================================
+// BANNERS (PUBLIC)
+// ==========================================
 
 /**
  * @swagger
- * /api/wallet/topup/payos/webhook:
- *   post:
- *     tags: [Wallet]
- *     summary: (Webhook) PayOS xác nhận thanh toán
- *     description: |
- *       PayOS gọi webhook này khi có thay đổi trạng thái thanh toán.
- *       Không yêu cầu auth — PayOS ký request bằng checksum key.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               orderCode:
- *                 type: integer
- *                 example: 123456
- *               status:
- *                 type: string
- *                 example: PAID
- *     responses:
- *       200:
- *         description: Webhook processed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- */
-
-/**
- * @swagger
- * /api/wallet/topup/payos/status/{orderCode}:
+ * /api/banners/home:
  *   get:
- *     tags: [Wallet]
- *     summary: Kiểm tra trạng thái thanh toán PayOS
- *     description: Kiểm tra trạng thái của một giao dịch PayOS theo orderCode.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: orderCode
- *         required: true
- *         schema:
- *           type: integer
- *         description: Mã đơn hàng từ PayOS
+ *     tags: [Banners]
+ *     summary: Danh sách banner đang hoạt động cho màn hình Home (Public)
+ *     description: Lấy danh sách banner có vị trí HOME_FEATURED, đang kích hoạt và trong khoảng thời gian hiệu lực. Sắp xếp theo displayOrder tăng dần.
  *     responses:
  *       200:
- *         description: Trạng thái giao dịch
- *         content:
- *           application/json:
+ *         description: Lấy danh sách banner thành công
+ *         headers:
+ *           Cache-Control:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     status:
- *                       type: string
- *                       enum: [PENDING, SUCCESS, FAILED]
- *       401:
- *         description: Chưa xác thực
- *       404:
- *         description: Không tìm thấy giao dịch
- */
-
-/**
- * @swagger
- * /api/wallet/withdraw:
- *   post:
- *     tags: [Wallet]
- *     summary: Rút tiền từ ví về tài khoản ngân hàng
- *     description: |
- *       Tạo yêu cầu rút tiền. Số tiền sẽ bị trừ khỏi available_balance
- *       và chuyển sang pending. Admin sẽ xử lý yêu cầu sau.
- *       Minimum amount: 10,000 VND.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [amount, bankName, bankAccountNumber]
- *             properties:
- *               amount:
- *                 type: number
- *                 minimum: 10000
- *                 example: 50000
- *               bankName:
- *                 type: string
- *                 example: Vietcombank
- *               bankAccountNumber:
- *                 type: string
- *                 example: 0123456789
- *     responses:
- *       200:
- *         description: Tạo yêu cầu rút tiền thành công
- *       400:
- *         description: Số dư không đủ hoặc dữ liệu không hợp lệ
- *       401:
- *         description: Chưa xác thực
- */
-
-/**
- * @swagger
- * /api/users/profile:
- *   put:
- *     tags: [Users]
- *     summary: Cập nhật profile user
- *     description: Cập nhật thông tin cá nhân (fullName, phone, avatarUrl).
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               fullName:
- *                 type: string
- *                 example: Nguyễn Văn A
- *               phone:
- *                 type: string
- *                 example: 0900000000
- *               avatarUrl:
- *                 type: string
- *                 example: https://example.com/avatar.jpg
- *     responses:
- *       200:
- *         description: Cập nhật thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 user:
- *                   $ref: '#/components/schemas/UserProfile'
- *       401:
- *         description: Chưa xác thực
- *       404:
- *         description: User không tồn tại
- *
- *   delete:
- *     tags: [Users]
- *     summary: Xoá tài khoản (soft-delete)
- *     description: |
- *       Soft-delete user bằng cách set status = BANNED.
- *       User bị xoá không thể đăng nhập lại.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: Xoá tài khoản thành công
+ *               type: string
+ *               example: public, max-age=300
  *         content:
  *           application/json:
  *             schema:
@@ -1103,29 +902,101 @@
  *                   example: true
  *                 message:
  *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     status:
- *                       type: string
- *                       example: BANNED
+ *                   example: Lấy danh sách banner thành công
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Banner'
+ */
+
+// ==========================================
+// BANNERS (ADMIN)
+// ==========================================
+
+/**
+ * @swagger
+ * /api/admin/banners:
+ *   get:
+ *     tags: [Admin Banners]
+ *     summary: Danh sách tất cả banner (Admin)
+ *     description: Lấy danh sách banner phục vụ cho trang quản trị. Yêu cầu quyền Admin.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: placement
+ *         schema:
+ *           type: string
+ *         description: Lọc theo vị trí hiển thị
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *         description: Lọc theo trạng thái hoạt động
+ *     responses:
+ *       200:
+ *         description: Danh sách banner
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Banner'
  *       401:
  *         description: Chưa xác thực
- *       404:
- *         description: User không tìm thấy hoặc đã bị xoá
+ *       403:
+ *         description: Không có quyền Admin
  */
 
 /**
  * @swagger
- * /api/users/role:
- *   put:
- *     tags: [Users]
- *     summary: Đổi vai trò (hirer / tasker)
- *     description: Chuyển đổi role giữa hirer và tasker.
+ * /api/admin/banners/{id}:
+ *   get:
+ *     tags: [Admin Banners]
+ *     summary: Chi tiết banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Chi tiết banner
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Banner'
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners:
+ *   post:
+ *     tags: [Admin Banners]
+ *     summary: Tạo banner mới (Admin)
  *     security:
  *       - DevAuth: []
  *       - BearerAuth: []
@@ -1134,99 +1005,10 @@
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [role]
- *             properties:
- *               role:
- *                 type: string
- *                 enum: [hirer, tasker]
- *                 example: tasker
- *     responses:
- *       200:
- *         description: Đổi role thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 user:
- *                   $ref: '#/components/schemas/UserProfile'
- *       400:
- *         description: Role không hợp lệ
- *       401:
- *         description: Chưa xác thực
- */
-
-/**
- * @swagger
- * /api/auth/dev/login:
- *   post:
- *     tags: [Auth]
- *     summary: (DEV) Đăng nhập không cần Firebase
- *     description: |
- *       DEV-only endpoint. Tìm user theo email và trả về token (user UUID).
- *       Dùng token này làm Bearer token hoặc x-user-id header.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [email]
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: dev@snapon.vn
- *     responses:
- *       200:
- *         description: Đăng nhập thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 token:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/UserDb'
- *       400:
- *         description: Email không hợp lệ
- *       404:
- *         description: User không tồn tại
- */
-
-/**
- * @swagger
- * /api/auth/dev/register:
- *   post:
- *     tags: [Auth]
- *     summary: (DEV) Đăng ký không cần Firebase
- *     description: |
- *       DEV-only endpoint. Tạo user mới + wallet mà không cần Firebase.
- *       Trả về token (user UUID) để xác thực.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [email]
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: dev@snapon.vn
- *               fullName:
- *                 type: string
- *                 example: Dev User
+ *             $ref: '#/components/schemas/CreateBannerInput'
  *     responses:
  *       201:
- *         description: Đăng ký thành công
+ *         description: Tạo thành công
  *         content:
  *           application/json:
  *             schema:
@@ -1234,179 +1016,122 @@
  *               properties:
  *                 success:
  *                   type: boolean
- *                 token:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/UserDb'
+ *                 data:
+ *                   $ref: '#/components/schemas/Banner'
  *       400:
- *         description: Email không hợp lệ
- *       409:
- *         description: Email đã tồn tại
- */
-
-/**
- * @swagger
- * /api/tasks/{id}:
- *   patch:
- *     tags: [Tasks]
- *     summary: Cập nhật thông tin task
- *     description: |
- *       Chỉ owner mới được cập nhật task.
- *       Không thể cập nhật task đã COMPLETED hoặc CANCELLED.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *               description:
- *                 type: string
- *               budget_min:
- *                 type: number
- *               budget_max:
- *                 type: number
- *               deadline_end:
- *                 type: string
- *                 format: date-time
- *     responses:
- *       200:
- *         description: Cập nhật thành công
- *       403:
- *         description: Không phải owner
- *       404:
- *         description: Task không tồn tại
- *
- *   delete:
- *     tags: [Tasks]
- *     summary: Xoá task
- *     description: |
- *       Chỉ owner mới được xoá task.
- *       Chỉ xoá được task ở trạng thái OPEN.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     responses:
- *       200:
- *         description: Xoá task thành công
- *       403:
- *         description: Không phải owner
- *       404:
- *         description: Task không tồn tại
- */
-
-/**
- * @swagger
- * /api/applications/{id}:
- *   patch:
- *     tags: [Applications (Bidding)]
- *     summary: Cập nhật application (bid)
- *     description: |
- *       Tasker cập nhật bid đã gửi (giá, tin nhắn, thời gian).
- *       Chỉ cập nhật được khi status = PENDING.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               bid_price:
- *                 type: number
- *                 example: 150000
- *               estimated_time:
- *                 type: string
- *                 example: 3 giờ
- *               message:
- *                 type: string
- *                 example: Tôi đã sẵn sàng nhận việc
- *     responses:
- *       200:
- *         description: Cập nhật thành công
- *       403:
- *         description: Không phải owner
- *       404:
- *         description: Application không tồn tại
- *
- *   delete:
- *     tags: [Applications (Bidding)]
- *     summary: Xoá application (bid)
- *     description: |
- *       Tasker xoá bid đã gửi.
- *       Chỉ xoá được khi status = PENDING.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     responses:
- *       200:
- *         description: Xoá thành công
- *       403:
- *         description: Không phải owner
- *       404:
- *         description: Application không tồn tại
- */
-
-/**
- * @swagger
- * /api/escrows/{taskId}:
- *   delete:
- *     tags: [Escrow]
- *     summary: Xoá escrow theo taskId
- *     description: |
- *       Xoá escrow gắn với task. Chỉ poster hoặc tasker mới xoá được.
- *     security:
- *       - DevAuth: []
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: taskId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     responses:
- *       200:
- *         description: Xoá escrow thành công
- *       403:
- *         description: Không có quyền xoá
- *       404:
- *         description: Escrow không tồn tại
+ *         description: Lỗi validation
  *       401:
  *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       409:
+ *         description: Mã code bị trùng
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}:
+ *   put:
+ *     tags: [Admin Banners]
+ *     summary: Cập nhật thông tin banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateBannerInput'
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Banner'
+ *       400:
+ *         description: Lỗi validation
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}/status:
+ *   patch:
+ *     tags: [Admin Banners]
+ *     summary: Cập nhật trạng thái bật/tắt banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Cập nhật trạng thái thành công
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}:
+ *   delete:
+ *     tags: [Admin Banners]
+ *     summary: Xóa banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
  */

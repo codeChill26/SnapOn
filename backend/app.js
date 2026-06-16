@@ -7,6 +7,8 @@ var cors = require('cors');
 var helmet = require('helmet');
 var swaggerUi = require('swagger-ui-express');
 var swaggerSpec = require('./config/swagger');
+var path = require('path');
+var fs = require('fs');
 
 // Import routes
 var taskRoutes = require('./routes/taskRoutes');
@@ -16,8 +18,33 @@ var usersRouter = require("./routes/users");
 var authRouter = require('./routes/auth');
 var walletRoutes = require('./routes/walletRoutes');
 var escrowRoutes = require('./routes/escrowRoutes');
+var chatRoutes = require('./routes/chatRoutes');
+var bannerRoutes = require('./routes/bannerRoutes');
+
+
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Save io to express app instance
+app.set('io', io);
+
+// Socket.io Middleware and Handlers
+const socketAuth = require('./middleware/socketAuth');
+const socketHandler = require('./services/socketHandler');
+
+io.use(socketAuth);
+io.on('connection', (socket) => {
+  socketHandler(io, socket);
+});
 
 // Security & CORS
 app.use(helmet());
@@ -28,9 +55,16 @@ app.use(cors({
 
 // Request parsing
 app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: false }));
 app.use(cookieParser());
+
+// Static uploads folder
+var uploadDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadDir));
 
 // ==========================================
 // SWAGGER UI
@@ -72,9 +106,16 @@ app.use('/api/wallet', walletRoutes);
 // Escrow routes
 app.use('/api/escrows', escrowRoutes);
 
+// Chat routes
+app.use('/api/chat', chatRoutes);
+
+// Banner routes
+app.use('/api', bannerRoutes);
+
 // User & Auth routes
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
+
 
 // ==========================================
 // ERROR HANDLING
@@ -104,7 +145,7 @@ module.exports = app;
 if (require.main === module) {
   const port = process.env.PORT || 3000;
 
-  app.listen(port, () => {
+  server.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Server is running at http://localhost:${port}`);
     console.log(`📚 Swagger docs at http://localhost:${port}/api-docs`);
   });

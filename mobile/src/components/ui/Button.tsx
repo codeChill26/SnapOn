@@ -7,7 +7,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { AppColors, Spacing, Radius, Typography, Shadows } from '../../theme';
 
 interface ButtonProps {
   title: string;
@@ -45,12 +45,12 @@ export const Button: React.FC<ButtonProps> = ({
       ]}
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.7}
+      activeOpacity={0.75}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'outline' || variant === 'ghost' ? Colors.primary : Colors.textWhite}
+          color={variant === 'outline' || variant === 'ghost' ? AppColors.brand.primary : '#FFFFFF'}
         />
       ) : (
         <>
@@ -60,7 +60,7 @@ export const Button: React.FC<ButtonProps> = ({
               styles.text,
               styles[`text_${variant}`],
               styles[`textSize_${size}`],
-              icon ? { marginLeft: 8 } : {},
+              icon ? { marginLeft: Spacing.sm } : {},
               textStyle,
             ]}
           >
@@ -77,66 +77,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    gap: 8,
+    borderRadius: Radius.md,
+    ...Shadows.sm,
   },
   primary: {
-    backgroundColor: Colors.primary,
+    backgroundColor: AppColors.brand.primary,
   },
   secondary: {
-    backgroundColor: Colors.secondary,
+    backgroundColor: AppColors.surface.glass,
+    borderWidth: 1,
+    borderColor: AppColors.border.normal,
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: AppColors.brand.primary,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
   danger: {
-    backgroundColor: Colors.error,
+    backgroundColor: AppColors.status.error,
   },
   size_sm: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
   },
   size_md: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
   },
   size_lg: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.xxl,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   text: {
-    fontWeight: '600',
+    fontWeight: '700',
   },
   text_primary: {
-    color: Colors.textWhite,
+    color: '#FFFFFF',
   },
   text_secondary: {
-    color: Colors.textWhite,
+    color: AppColors.text.primary,
   },
   text_outline: {
-    color: Colors.primary,
+    color: AppColors.brand.primary,
   },
   text_ghost: {
-    color: Colors.primary,
+    color: AppColors.brand.primary,
   },
   text_danger: {
-    color: Colors.textWhite,
+    color: '#FFFFFF',
   },
   textSize_sm: {
-    fontSize: 13,
+    fontSize: Typography.caption.fontSize,
   },
   textSize_md: {
-    fontSize: 15,
+    fontSize: Typography.body.fontSize,
   },
   textSize_lg: {
-    fontSize: 17,
+    fontSize: Typography.cardTitle.fontSize,
   },
 });

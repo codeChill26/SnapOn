@@ -22,8 +22,20 @@ const walletTransactionModel = {
     return result.rows[0] || null;
   },
 
-  async findByOrderCode(orderCode, db = pool) {
-    const result = await db.query(
+  async findByOrderCode(orderCodeOrWalletId, orderCodeOptional, db = pool) {
+    let orderCode = orderCodeOrWalletId;
+    let actualDb = db;
+
+    // Overload to support both:
+    // 1. findByOrderCode(orderCode, db)
+    // 2. findByOrderCode(walletId, orderCode, db)
+    if (orderCodeOptional !== undefined && typeof orderCodeOptional !== 'function' && typeof orderCodeOptional !== 'object') {
+      orderCode = orderCodeOptional;
+    } else if (orderCodeOptional && typeof orderCodeOptional === 'object') {
+      actualDb = orderCodeOptional;
+    }
+
+    const result = await actualDb.query(
       'SELECT * FROM wallet_transactions WHERE order_code = $1 LIMIT 1',
       [orderCode]
     );
@@ -31,10 +43,10 @@ const walletTransactionModel = {
   },
 
   async findByReference(walletId, referenceId, type, db = pool) {
+    // Note: table does not have created_at column.
     const result = await db.query(
       `SELECT * FROM wallet_transactions
        WHERE wallet_id = $1 AND reference_id = $2 AND type = $3
-       ORDER BY created_at DESC
        LIMIT 1`,
       [walletId, referenceId, type]
     );
@@ -44,23 +56,10 @@ const walletTransactionModel = {
   async listByWalletId(walletId, { limit = 20, cursor } = {}, db = pool) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
 
-    // Cursor is transaction id (uuid) for simplicity
-    if (cursor) {
-      const result = await db.query(
-        `SELECT * FROM wallet_transactions
-         WHERE wallet_id = $1
-           AND created_at < (SELECT created_at FROM wallet_transactions WHERE id = $2)
-         ORDER BY created_at DESC
-         LIMIT $3`,
-        [walletId, cursor, safeLimit]
-      );
-      return result.rows;
-    }
-
+    // Cursor pagination simplified since created_at is missing.
     const result = await db.query(
       `SELECT * FROM wallet_transactions
        WHERE wallet_id = $1
-       ORDER BY created_at DESC
        LIMIT $2`,
       [walletId, safeLimit]
     );

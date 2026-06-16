@@ -19,33 +19,52 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
 
     await client.query('BEGIN');
 
-    const upsertUserQuery = `
-      INSERT INTO users (
-        id,
-        firebase_uid,
+    const host = req.get('host');
+    const protocol = req.protocol;
+    const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
+    const finalAvatar = picture || defaultAvatar;
+
+    // First check if user exists by email to prevent duplicate key violations
+    const checkEmailResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+    let user;
+    if (checkEmailResult.rows.length > 0) {
+      const updateUserQuery = `
+        UPDATE users 
+        SET firebase_uid = $1,
+            full_name = COALESCE($2, full_name),
+            avatar_url = COALESCE(avatar_url, $3)
+        WHERE email = $4
+        RETURNING *;
+      `;
+      const updateResult = await client.query(updateUserQuery, [
+        uid,
+        name || null,
+        finalAvatar,
+        email
+      ]);
+      user = updateResult.rows[0];
+    } else {
+      const insertUserQuery = `
+        INSERT INTO users (
+          id,
+          firebase_uid,
+          email,
+          full_name,
+          avatar_url,
+          status,
+          is_verified
+        )
+        VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
+        RETURNING *;
+      `;
+      const userResult = await client.query(insertUserQuery, [
+        uid,
         email,
-        full_name,
-        avatar_url,
-        status,
-        is_verified
-      )
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
-      ON CONFLICT (firebase_uid)
-      DO UPDATE SET
-        email = EXCLUDED.email,
-        full_name = COALESCE(EXCLUDED.full_name, users.full_name),
-        avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
-      RETURNING *;
-    `;
-
-    const userResult = await client.query(upsertUserQuery, [
-      uid,
-      email,
-      name || null,
-      picture || null,
-    ]);
-
-    const user = userResult.rows[0];
+        name || null,
+        finalAvatar,
+      ]);
+      user = userResult.rows[0];
+    }
 
     const createWalletQuery = `
       INSERT INTO wallets (
@@ -72,7 +91,18 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'User synced successfully',
-      user,
+      user: {
+        id: user.id,
+        firebaseUid: user.firebase_uid,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        avatarUrl: user.avatar_url,
+        role: user.role,
+        status: user.status,
+        isVerified: user.is_verified,
+        createdAt: user.created_at,
+      },
       wallet: walletResult.rows[0],
     });
   } catch (error) {
@@ -144,11 +174,15 @@ router.post('/dev/register', async (req, res) => {
 
     await client.query('BEGIN');
 
+    const host = req.get('host');
+    const protocol = req.protocol;
+    const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
+
     const userResult = await client.query(
-      `INSERT INTO users (id, firebase_uid, email, full_name, status, is_verified)
-       VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, 'ACTIVE', true)
+      `INSERT INTO users (id, firebase_uid, email, full_name, avatar_url, status, is_verified)
+       VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, 'ACTIVE', true)
        RETURNING *`,
-      [email, fullName || email.split('@')[0]]
+      [email, fullName || email.split('@')[0], defaultAvatar]
     );
 
     const user = userResult.rows[0];

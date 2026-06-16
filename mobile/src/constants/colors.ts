@@ -1,27 +1,32 @@
 export const Colors = {
   primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primaryDark: '#D9480F',
   primaryLight: '#FF8F5E',
+  primarySoft: '#FFF1EB',
   secondary: '#004E89',
   secondaryDark: '#003A66',
   secondaryLight: '#1A6BA8',
 
-  background: '#F5F5F5',
+  background: '#F7F8FC', // Premium light background
   surface: '#FFFFFF',
   card: '#FFFFFF',
 
-  text: '#1A1A2E',
-  textSecondary: '#6B7280',
-  textLight: '#9CA3AF',
+  text: '#0F172A', // Premium main text
+  textSecondary: '#64748B', // Premium secondary text
+  textLight: '#94A3B8', // Premium muted text
   textWhite: '#FFFFFF',
 
-  border: '#E5E7EB',
+  border: '#E8ECF2', // Premium border color
   divider: '#F0F0F0',
 
   success: '#10B981',
+  successSoft: '#ECFDF3',
   warning: '#F59E0B',
+  warningSoft: '#FFF8E7',
   error: '#EF4444',
   info: '#3B82F6',
+  infoSoft: '#EEF4FF',
+  purpleSoft: '#F4F1FF',
 
   statusOpen: '#3B82F6',
   statusInProgress: '#F59E0B',
@@ -41,7 +46,7 @@ export const Colors = {
   categoryOther: '#6B7280',
 
   tabActive: '#FF6B35',
-  tabInactive: '#9CA3AF',
+  tabInactive: '#94A3B8',
 
   overlay: 'rgba(0, 0, 0, 0.5)',
 };

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TextInput, TouchableOpacity } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { View, Text, StyleSheet, ScrollView, Alert, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { CategoryGrid } from '../../components/common/CategoryGrid';
 import { taskService } from '../../services/taskService';
 import { useApp } from '../../context/AppContext';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { AppColors } from '../../theme';
 
 interface PostJobForm {
   title: string;
@@ -32,9 +34,44 @@ export const PostJobScreen: React.FC = () => {
     budgetMin: '',
     budgetMax: '',
     deadlineDays: '3',
-    taskType: 'OFFLINE',
+    taskType: 'ONLINE',
     address: '',
   });
+
+  const [selectedImages, setSelectedImages] = useState<{ uri: string; base64?: string }[]>([]);
+
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Quyền truy cập', 'Chúng tôi cần quyền truy cập thư viện ảnh của bạn để chọn ảnh!');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions ? ImagePicker.MediaTypeOptions.Images : ['images'] as any,
+        allowsMultipleSelection: true,
+        quality: 0.6,
+        base64: true,
+        selectionLimit: 5 - selectedImages.length,
+      });
+
+      if (!result.canceled) {
+        const newImages = result.assets.map(asset => ({
+          uri: asset.uri,
+          base64: asset.base64 || undefined,
+        }));
+        setSelectedImages(prev => [...prev, ...newImages].slice(0, 5));
+      }
+    } catch (err) {
+      console.error('Lỗi khi chọn ảnh:', err);
+      Alert.alert('Lỗi', 'Không thể chọn ảnh, vui lòng thử lại');
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
 
   const updateForm = (key: keyof PostJobForm, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -56,6 +93,18 @@ export const PostJobScreen: React.FC = () => {
 
     setLoading(true);
     try {
+      // 1. Upload images to Cloudinary if selected
+      let imageUrls: string[] = [];
+      if (selectedImages.length > 0) {
+        const base64s = selectedImages
+          .map(img => img.base64)
+          .filter((b): b is string => !!b);
+        
+        if (base64s.length > 0) {
+          imageUrls = await taskService.uploadTaskImages(base64s);
+        }
+      }
+
       const deadlineStart = new Date().toISOString();
       const deadlineEnd = new Date(
         Date.now() + parseInt(form.deadlineDays) * 86400000
@@ -73,17 +122,19 @@ export const PostJobScreen: React.FC = () => {
         allow_insurance: false,
         location: form.address
           ? {
-              location_type: form.taskType === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
+              location_type: 'TASK_LOCATION',
               address: form.address,
-              lat: 10.7769,
-              lng: 106.7009,
+              latitude: 10.7769,
+              longitude: 106.7009,
             }
           : undefined,
+        images: imageUrls,
       };
 
       const newTask = await taskService.createTask(payload);
       addTask(newTask);
       Alert.alert('Thành công', 'Đăng việc thành công!');
+      setSelectedImages([]); // Reset images
       setForm({
         title: '',
         description: '',
@@ -91,28 +142,68 @@ export const PostJobScreen: React.FC = () => {
         budgetMin: '',
         budgetMax: '',
         deadlineDays: '3',
-        taskType: 'OFFLINE',
+        taskType: 'ONLINE',
         address: '',
       });
       setStep(1);
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Đăng việc thất bại');
+      const serverError = error.response?.data;
+      if (serverError && serverError.errors) {
+        const errorMessages = serverError.errors.map((err: any) => `${err.message}`).join('\n');
+        Alert.alert('Lỗi điền thông tin', errorMessages);
+      } else {
+        Alert.alert('Lỗi', error.message || 'Đăng việc thất bại');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Đăng việc mới</Text>
-        <Text style={styles.stepIndicator}>Bước {step}/3</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>Đăng việc mới</Text>
+        <View style={styles.progressBarWrapper}>
+          <View style={styles.progressStep}>
+            <View style={[styles.stepCircle, step >= 1 && styles.stepCircleActive]}>
+              {step > 1 ? (
+                <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.stepNumber, step >= 1 && styles.stepNumberActive]}>1</Text>
+              )}
+            </View>
+            <Text style={[styles.stepText, step >= 1 && styles.stepTextActive]}>Thông tin</Text>
+          </View>
+          <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
+          <View style={styles.progressStep}>
+            <View style={[styles.stepCircle, step >= 2 && styles.stepCircleActive]}>
+              {step > 2 ? (
+                <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.stepNumber, step >= 2 && styles.stepNumberActive]}>2</Text>
+              )}
+            </View>
+            <Text style={[styles.stepText, step >= 2 && styles.stepTextActive]}>Ngân sách</Text>
+          </View>
+          <View style={[styles.progressLine, step >= 3 && styles.progressLineActive]} />
+          <View style={styles.progressStep}>
+            <View style={[styles.stepCircle, step >= 3 && styles.stepCircleActive]}>
+              <Text style={[styles.stepNumber, step >= 3 && styles.stepNumberActive]}>3</Text>
+            </View>
+            <Text style={[styles.stepText, step >= 3 && styles.stepTextActive]}>Xác nhận</Text>
+          </View>
+        </View>
       </View>
 
       {/* Step 1: Basic Info */}
       {step === 1 && (
         <View>
-          <Card style={styles.formCard}>
+          <Card style={styles.formCard} variant="glass">
             <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
 
             <Input
@@ -123,10 +214,11 @@ export const PostJobScreen: React.FC = () => {
             />
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Danh mục</Text>
+              <Text style={styles.fieldLabel}>Danh mục công việc</Text>
               <CategoryGrid
                 onSelect={(id) => updateForm('categoryId', id)}
                 selectedId={form.categoryId}
+                isDark={true}
               />
             </View>
 
@@ -135,7 +227,7 @@ export const PostJobScreen: React.FC = () => {
               <TextInput
                 style={styles.textArea}
                 placeholder="Mô tả công việc chi tiết..."
-                placeholderTextColor={Colors.textLight}
+                placeholderTextColor="#64748B"
                 value={form.description}
                 onChangeText={v => updateForm('description', v)}
                 multiline
@@ -143,11 +235,37 @@ export const PostJobScreen: React.FC = () => {
                 maxLength={1000}
               />
             </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Hình ảnh minh họa (Tối đa 5 ảnh)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
+                {selectedImages.map((img, index) => (
+                  <View key={index} style={styles.imageContainer}>
+                    <Image source={{ uri: img.uri }} style={styles.imagePreview} />
+                    <TouchableOpacity style={styles.removeImageButton} onPress={() => removeImage(index)}>
+                      <Ionicons name="close-circle" size={20} color={AppColors.status.error} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {selectedImages.length < 5 && (
+                  <TouchableOpacity style={styles.uploadPlaceholder} onPress={pickImages}>
+                    <Ionicons name="camera-outline" size={28} color={AppColors.text.muted} />
+                    <Text style={styles.uploadPlaceholderText}>Thêm ảnh</Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            </View>
           </Card>
 
           <Button
             title="Tiếp theo"
-            onPress={() => setStep(2)}
+            onPress={() => {
+              if (!form.title || !form.categoryId) {
+                Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và chọn danh mục');
+                return;
+              }
+              setStep(2);
+            }}
             size="lg"
             style={styles.nextButton}
           />
@@ -157,11 +275,11 @@ export const PostJobScreen: React.FC = () => {
       {/* Step 2: Budget & Deadline */}
       {step === 2 && (
         <View>
-          <Card style={styles.formCard}>
+          <Card style={styles.formCard} variant="glass">
             <Text style={styles.sectionTitle}>Ngân sách & Thời hạn</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Ngân sách dự kiến</Text>
+              <Text style={styles.fieldLabel}>Ngân sách gợi ý</Text>
               <View style={styles.presetRow}>
                 {PRESET_PRICES.map(amount => (
                   <TouchableOpacity
@@ -189,7 +307,7 @@ export const PostJobScreen: React.FC = () => {
 
             <View style={styles.priceRow}>
               <Input
-                label="Tối thiểu"
+                label="Tối thiểu (VND)"
                 placeholder="50,000"
                 value={form.budgetMin}
                 onChangeText={v => updateForm('budgetMin', v)}
@@ -197,7 +315,7 @@ export const PostJobScreen: React.FC = () => {
                 style={styles.halfInput}
               />
               <Input
-                label="Tối đa"
+                label="Tối đa (VND)"
                 placeholder="100,000"
                 value={form.budgetMax}
                 onChangeText={v => updateForm('budgetMax', v)}
@@ -207,7 +325,7 @@ export const PostJobScreen: React.FC = () => {
             </View>
 
             <Input
-              label="Thời hạn (ngày)"
+              label="Thời hạn thực hiện (ngày)"
               placeholder="3"
               value={form.deadlineDays}
               onChangeText={v => updateForm('deadlineDays', v)}
@@ -215,34 +333,56 @@ export const PostJobScreen: React.FC = () => {
             />
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Loại hình</Text>
+              <Text style={styles.fieldLabel}>Loại hình làm việc</Text>
               <View style={styles.typeRow}>
-                {(['ONLINE', 'OFFLINE', 'HYBRID'] as const).map(type => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeChip,
-                      form.taskType === type && styles.typeChipActive,
-                    ]}
-                    onPress={() => updateForm('taskType', type)}
-                  >
-                    <Text
+                {(['ONLINE', 'OFFLINE', 'HYBRID'] as const).map(type => {
+                  const isSelected = form.taskType === type;
+                  const isAvailable = type === 'ONLINE';
+                  let iconName: any = 'map-marker-outline';
+                  if (type === 'ONLINE') iconName = 'laptop';
+                  if (type === 'HYBRID') iconName = 'transit-connection-variant';
+                  return (
+                    <TouchableOpacity
+                      key={type}
                       style={[
-                        styles.typeText,
-                        form.taskType === type && styles.typeTextActive,
+                        styles.typeChip,
+                        isSelected && styles.typeChipActive,
+                        !isAvailable && { backgroundColor: '#1E293B', borderColor: '#334155', opacity: 0.6 }
                       ]}
+                      onPress={() => {
+                        if (isAvailable) {
+                          updateForm('taskType', type);
+                        } else {
+                          Alert.alert('Thông báo', 'Loại hình này sẽ được hỗ trợ trong phiên bản sau.');
+                        }
+                      }}
+                      activeOpacity={isAvailable ? 0.7 : 1}
                     >
-                      {type === 'ONLINE' ? 'Online' : type === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <MaterialCommunityIcons
+                        name={iconName}
+                        size={18}
+                        color={isSelected ? '#FFFFFF' : '#94A3B8'}
+                        style={{ marginBottom: 4 }}
+                      />
+                      <Text
+                        style={[
+                          styles.typeText,
+                          isSelected && styles.typeTextActive,
+                          !isAvailable && { color: '#64748B' }
+                        ]}
+                      >
+                        {type === 'ONLINE' ? 'Online' : type === 'OFFLINE' ? 'Trực tiếp\n(Sắp có)' : 'Kết hợp\n(Sắp có)'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
             {form.taskType !== 'ONLINE' && (
               <Input
-                label="Địa chỉ"
-                placeholder="Nhập địa chỉ làm việc"
+                label="Địa điểm làm việc"
+                placeholder="Nhập địa chỉ làm việc chi tiết"
                 value={form.address}
                 onChangeText={v => updateForm('address', v)}
               />
@@ -259,7 +399,13 @@ export const PostJobScreen: React.FC = () => {
             />
             <Button
               title="Tiếp theo"
-              onPress={() => setStep(3)}
+              onPress={() => {
+                if (!form.budgetMin || !form.budgetMax) {
+                  Alert.alert('Thiếu thông tin', 'Vui lòng điền đầy đủ ngân sách');
+                  return;
+                }
+                setStep(3);
+              }}
               size="lg"
               style={styles.halfButton}
             />
@@ -270,35 +416,62 @@ export const PostJobScreen: React.FC = () => {
       {/* Step 3: Review & Submit */}
       {step === 3 && (
         <View>
-          <Card style={styles.formCard}>
-            <Text style={styles.sectionTitle}>Xem lại thông tin</Text>
+          <Card style={styles.receiptCard} variant="glassStrong">
+            <View style={styles.receiptHeader}>
+              <Ionicons name="document-text" size={32} color={AppColors.brand.primary} />
+              <Text style={styles.receiptTitle}>Xem lại thông tin</Text>
+              <Text style={styles.receiptSubtitle}>Vui lòng kiểm tra lại trước khi đăng việc</Text>
+            </View>
 
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Tiêu đề:</Text>
-              <Text style={styles.reviewValue}>{form.title}</Text>
-            </View>
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Ngân sách:</Text>
-              <Text style={styles.reviewValue}>
-                {parseInt(form.budgetMin).toLocaleString()} - {parseInt(form.budgetMax).toLocaleString()} VND
-              </Text>
-            </View>
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Thời hạn:</Text>
-              <Text style={styles.reviewValue}>{form.deadlineDays} ngày</Text>
-            </View>
-            <View style={styles.reviewItem}>
-              <Text style={styles.reviewLabel}>Loại hình:</Text>
-              <Text style={styles.reviewValue}>
-                {form.taskType === 'ONLINE' ? 'Online' : form.taskType === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
-              </Text>
-            </View>
-            {form.address ? (
-              <View style={styles.reviewItem}>
-                <Text style={styles.reviewLabel}>Địa chỉ:</Text>
-                <Text style={styles.reviewValue}>{form.address}</Text>
+            <View style={styles.receiptDivider} />
+
+            <View style={styles.receiptBody}>
+              <View style={styles.receiptRow}>
+                <Ionicons name="bookmark-outline" size={18} color={AppColors.text.muted} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Tiêu đề</Text>
+                  <Text style={styles.reviewValue}>{form.title}</Text>
+                </View>
               </View>
-            ) : null}
+
+              <View style={styles.receiptRow}>
+                <Ionicons name="cash-outline" size={18} color={AppColors.text.muted} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Ngân sách dự kiến</Text>
+                  <Text style={styles.reviewValue}>
+                    {(parseInt(form.budgetMin) || 0).toLocaleString('vi-VN')} - {(parseInt(form.budgetMax) || 0).toLocaleString('vi-VN')} VND
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptRow}>
+                <Ionicons name="calendar-outline" size={18} color={AppColors.text.muted} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Thời hạn thực hiện</Text>
+                  <Text style={styles.reviewValue}>{form.deadlineDays} ngày</Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptRow}>
+                <Ionicons name="earth-outline" size={18} color={AppColors.text.muted} style={styles.receiptRowIcon} />
+                <View style={styles.receiptContent}>
+                  <Text style={styles.reviewLabel}>Loại hình công việc</Text>
+                  <Text style={styles.reviewValue}>
+                    {form.taskType === 'ONLINE' ? 'Online' : form.taskType === 'OFFLINE' ? 'Trực tiếp' : 'Kết hợp'}
+                  </Text>
+                </View>
+              </View>
+
+              {form.address ? (
+                <View style={styles.receiptRow}>
+                  <Ionicons name="location-outline" size={18} color={AppColors.text.muted} style={styles.receiptRowIcon} />
+                  <View style={styles.receiptContent}>
+                    <Text style={styles.reviewLabel}>Địa chỉ làm việc</Text>
+                    <Text style={styles.reviewValue}>{form.address}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
           </Card>
 
           <View style={styles.buttonRow}>
@@ -319,43 +492,92 @@ export const PostJobScreen: React.FC = () => {
           </View>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.background.primary,
   },
   content: {
     padding: 20,
     paddingBottom: 40,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingTop: 20,
+  headerContainer: {
+    paddingTop: 24,
+    paddingBottom: 24,
+    marginBottom: 20,
   },
-  title: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: Colors.text,
+    color: AppColors.text.primary,
+    marginBottom: 20,
   },
-  stepIndicator: {
+  progressBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  progressStep: {
+    alignItems: 'center',
+    width: 60,
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: AppColors.border.subtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  stepCircleActive: {
+    backgroundColor: AppColors.brand.primary,
+  },
+  stepNumber: {
     fontSize: 14,
-    color: Colors.primary,
+    fontWeight: '700',
+    color: AppColors.text.muted,
+  },
+  stepNumberActive: {
+    color: '#FFFFFF',
+  },
+  stepText: {
+    fontSize: 11,
     fontWeight: '600',
+    color: AppColors.text.disabled,
+  },
+  stepTextActive: {
+    color: AppColors.text.primary,
+  },
+  progressLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: AppColors.border.subtle,
+    marginTop: -18,
+    marginHorizontal: -10,
+    zIndex: -1,
+  },
+  progressLineActive: {
+    backgroundColor: AppColors.brand.primary,
   },
   formCard: {
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 16,
   },
   fieldGroup: {
@@ -364,17 +586,17 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 8,
   },
   textArea: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.surface.glass,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
-    color: Colors.text,
+    color: AppColors.text.primary,
     textAlignVertical: 'top',
     minHeight: 100,
   },
@@ -388,19 +610,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
   },
   presetChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: AppColors.brand.primarySoft,
+    borderColor: AppColors.brand.primary,
   },
   presetText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   presetTextActive: {
-    color: Colors.textWhite,
+    color: AppColors.brand.primary,
   },
   priceRow: {
     flexDirection: 'row',
@@ -411,27 +633,29 @@ const styles = StyleSheet.create({
   },
   typeRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   typeChip: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.surface.glass,
   },
   typeChipActive: {
-    backgroundColor: Colors.secondary,
-    borderColor: Colors.secondary,
+    backgroundColor: AppColors.brand.primary,
+    borderColor: AppColors.brand.primary,
   },
   typeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.muted,
   },
   typeTextActive: {
-    color: Colors.textWhite,
+    color: '#FFFFFF',
   },
   nextButton: {
     marginTop: 8,
@@ -443,22 +667,105 @@ const styles = StyleSheet.create({
   halfButton: {
     flex: 1,
   },
-  reviewItem: {
+  receiptCard: {
+    backgroundColor: AppColors.surface.glassStrong,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: AppColors.border.subtle,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+    padding: 20,
+    marginBottom: 20,
+  },
+  receiptHeader: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  receiptTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: AppColors.text.primary,
+    marginTop: 8,
+  },
+  receiptSubtitle: {
+    fontSize: 12,
+    color: AppColors.text.muted,
+    marginTop: 2,
+  },
+  receiptDivider: {
+    height: 1,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: AppColors.border.subtle,
+    marginVertical: 16,
+    borderRadius: 1,
+  },
+  receiptBody: {
+    gap: 16,
+  },
+  receiptRow: {
     flexDirection: 'row',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  receiptRowIcon: {
+    marginTop: 2,
+  },
+  receiptContent: {
+    flex: 1,
   },
   reviewLabel: {
-    width: 100,
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '500',
+    fontSize: 12,
+    color: AppColors.text.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
   reviewValue: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.text,
+    fontSize: 15,
+    color: AppColors.text.primary,
+    fontWeight: '700',
+  },
+  imageScroll: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  imageContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  imagePreview: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#1E293B',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: AppColors.background.elevated,
+    borderRadius: 10,
+    zIndex: 10,
+  },
+  uploadPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: AppColors.border.subtle,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: AppColors.background.secondary,
+  },
+  uploadPlaceholderText: {
+    fontSize: 10,
+    color: AppColors.text.muted,
     fontWeight: '600',
+    marginTop: 4,
   },
 });

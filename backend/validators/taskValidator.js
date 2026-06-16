@@ -22,7 +22,9 @@ const taskValidator = {
       .notEmpty().withMessage('Category is required.')
       .custom(value => {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
-        const isSlug = ['errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others'].includes(value);
+        const isSlug = [
+          'content', 'design', 'tech', 'research', 'study', 'others'
+        ].includes(value);
         if (!isUUID && !isSlug) {
           throw new Error('Category must be a valid UUID or category slug.');
         }
@@ -30,8 +32,8 @@ const taskValidator = {
       }),
 
     body('task_type')
-      .notEmpty().withMessage('Task type is required.')
-      .isIn(['ONLINE', 'OFFLINE']).withMessage('Task type must be ONLINE or OFFLINE.'),
+      .optional()
+      .isIn(['ONLINE']).withMessage('Currently, only ONLINE tasks are supported.'),
 
     body('budget_min')
       .notEmpty().withMessage('Minimum budget is required.')
@@ -93,6 +95,14 @@ const taskValidator = {
     body('location.longitude')
       .optional()
       .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180.'),
+
+    body('images')
+      .optional()
+      .isArray().withMessage('Images must be an array.'),
+
+    body('images.*')
+      .optional()
+      .isString().withMessage('Each image must be a valid URL.'),
   ],
 
   /**
@@ -135,11 +145,20 @@ const taskValidator = {
 
     query('category_id')
       .optional()
-      .isUUID().withMessage('Category ID must be a valid UUID.'),
+      .custom(value => {
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+        const isSlug = [
+          'content', 'design', 'tech', 'research', 'study', 'others'
+        ].includes(value);
+        if (!isUUID && !isSlug) {
+          throw new Error('Category ID must be a valid UUID or category slug.');
+        }
+        return true;
+      }),
 
     query('task_type')
       .optional()
-      .isIn(['ONLINE', 'OFFLINE']).withMessage('Task type must be ONLINE or OFFLINE.'),
+      .isIn(['ONLINE']).withMessage('Task type filter must be ONLINE.'),
 
     query('search')
       .optional()
@@ -168,7 +187,9 @@ const taskValidator = {
       .optional()
       .custom(value => {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
-        const isSlug = ['errands', 'content', 'design', 'tech', 'carrying', 'photography', 'research', 'manager', 'entertainment', 'study', 'others'].includes(value);
+        const isSlug = [
+          'content', 'design', 'tech', 'research', 'study', 'others'
+        ].includes(value);
         if (!isUUID && !isSlug) {
           throw new Error('Category must be a valid UUID or category slug.');
         }
@@ -177,7 +198,7 @@ const taskValidator = {
 
     body('task_type')
       .optional()
-      .isIn(['ONLINE', 'OFFLINE']).withMessage('Task type must be ONLINE or OFFLINE.'),
+      .isIn(['ONLINE']).withMessage('Currently, only ONLINE tasks are supported.'),
 
     body('budget_min')
       .optional()
@@ -210,6 +231,24 @@ const taskValidator = {
     body('allow_insurance')
       .optional()
       .isBoolean().withMessage('Allow insurance must be true or false.'),
+
+    body('images')
+      .optional()
+      .isArray().withMessage('Images must be an array.'),
+
+    body('images.*')
+      .optional()
+      .isString().withMessage('Each image must be a valid URL.'),
+  ],
+  /**
+   * Validation rules for uploading images
+   */
+  uploadImages: [
+    body('images')
+      .isArray().withMessage('Images must be an array of base64 strings.')
+      .notEmpty().withMessage('At least one image is required.'),
+    body('images.*')
+      .isString().withMessage('Each image must be a base64 encoded string.'),
   ],
 };
 

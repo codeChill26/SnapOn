@@ -100,6 +100,9 @@ const walletService = {
     };
   },
 
+  /**
+   * Web Flow: Create PayOS payment link
+   */
   async createPayOSPaymentSession(userId, amount) {
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
@@ -143,6 +146,59 @@ const walletService = {
     };
   },
 
+  /**
+   * Mobile Flow: Create PayOS payment link with direct backend redirect URLs
+   */
+  async createPayOSPayment(userId, amount) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt < 1000) {
+      const err = new Error('Amount must be at least 1,000 VND');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const wallet = await walletModel.createIfNotExists(userId);
+
+    // Generate unique orderCode
+    const orderCode = Math.floor(Date.now() % 1000000000) + Math.floor(Math.random() * 1000);
+
+    const cancelUrl = `http://192.168.100.206:3000/api/wallet/topup/payos/cancel`;
+    const returnUrl = `http://192.168.100.206:3000/api/wallet/topup/payos/success`;
+
+    const paymentData = {
+      orderCode,
+      amount: amt,
+      description: `Topup vi SnapOn`,
+      cancelUrl,
+      returnUrl,
+    };
+
+    try {
+      const paymentLinkRes = await payos.paymentRequests.create(paymentData);
+
+      await walletTransactionModel.create({
+        walletId: wallet.id,
+        type: 'DEPOSIT',
+        amount: amt,
+        status: 'PENDING',
+        orderCode,
+      });
+
+      return {
+        checkoutUrl: paymentLinkRes.checkoutUrl,
+        orderCode,
+      };
+    } catch (err) {
+      console.error('PayOS Create Payment Link error:', err);
+      const error = new Error('Failed to create payment link: ' + err.message);
+      error.statusCode = 500;
+      throw error;
+    }
+  },
+
+  /**
+   * Web Flow: Webhook processor
+   */
   async processPayOSWebhook(webhookBody) {
     const webhookData = payos.webhooks.verify(webhookBody);
     const { orderCode, amount, code } = webhookData;
@@ -181,6 +237,9 @@ const walletService = {
     });
   },
 
+  /**
+   * Web Flow: Active check status polling
+   */
   async checkPayOSPaymentStatus(orderCode) {
     const orderCodeNum = Number(orderCode);
     if (!Number.isFinite(orderCodeNum)) {
@@ -234,57 +293,91 @@ const walletService = {
     });
   },
 
-  async withdraw(userId, amount, bankName, bankAccountNumber) {
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
-      const err = new Error('Amount must be a positive number');
-      err.statusCode = 400;
-      throw err;
-    }
-
+  /**
+   * Mobile Flow: Verify and confirm PayOS payment status on mobile app redirect
+   */
+  async confirmPayOSPayment(userId, orderCode) {
     return withDbTx(async (db) => {
       const wallet = await walletModel.lockByUserId(userId, db);
 
-      const availBalance = parseFloat(wallet.available_balance);
-      if (availBalance < amt) {
-        const err = new Error('Insufficient balance');
-        err.statusCode = 400;
+      // Fixed bug: pass orderCode directly instead of wallet.id as first argument
+      const tx = await walletTransactionModel.findByOrderCode(orderCode, db);
+      if (!tx) {
+        const err = new Error('Transaction not found');
+        err.statusCode = 404;
         throw err;
       }
 
-      const updated = await db.query(
+      if (tx.status !== 'PENDING') {
+        return {
+          wallet: {
+            id: wallet.id,
+            user_id: wallet.user_id,
+            balance: parseFloat(wallet.balance),
+            available_balance: parseFloat(wallet.available_balance),
+            pending_balance: parseFloat(wallet.locked_balance),
+          },
+          tx,
+          alreadyProcessed: true,
+          success: true,
+        };
+      }
+
+      let paymentInfo;
+      try {
+        paymentInfo = await payos.paymentRequests.get(orderCode);
+      } catch (err) {
+        console.error('PayOS verify link error:', err);
+        const error = new Error('Failed to verify payment with PayOS');
+        error.statusCode = 500;
+        throw error;
+      }
+
+      if (paymentInfo.status !== 'PAID') {
+        return {
+          success: false,
+          status: paymentInfo.status,
+          message: 'Thanh toán chưa hoàn tất. Vui lòng hoàn tất thanh toán trên trình duyệt trước khi kiểm tra.',
+          wallet: {
+            id: wallet.id,
+            user_id: wallet.user_id,
+            balance: parseFloat(wallet.balance),
+            available_balance: parseFloat(wallet.available_balance),
+            pending_balance: parseFloat(wallet.locked_balance),
+          },
+        };
+      }
+
+      const amount = parseFloat(tx.amount);
+      const updatedWallet = await db.query(
         `UPDATE wallets
-         SET available_balance = available_balance - $2,
-             balance = balance - $2
+         SET available_balance = available_balance + $2,
+             balance = balance + $2
          WHERE id = $1
          RETURNING *`,
-        [wallet.id, amt]
+        [wallet.id, amount]
       );
 
-      await walletTransactionModel.create(
-        {
-          walletId: wallet.id,
-          type: 'WITHDRAW',
-          amount: amt,
-          status: 'PENDING',
-          referenceId: null,
-        },
-        db
+      const updatedTx = await db.query(
+        `UPDATE wallet_transactions
+         SET status = 'SUCCESS'
+         WHERE id = $1
+         RETURNING *`,
+        [tx.id]
       );
 
-      await db.query(
-        `INSERT INTO withdraw_requests (id, user_id, amount, bank_name, bank_account_number, status)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, 'pending')`,
-        [userId, amt, bankName, bankAccountNumber]
-      );
-
-      const w = updated.rows[0];
+      const w = updatedWallet.rows[0];
       return {
-        id: w.id,
-        user_id: w.user_id,
-        balance: parseFloat(w.balance),
-        available_balance: parseFloat(w.available_balance),
-        pending_balance: parseFloat(w.locked_balance),
+        wallet: {
+          id: w.id,
+          user_id: w.user_id,
+          balance: parseFloat(w.balance),
+          available_balance: parseFloat(w.available_balance),
+          pending_balance: parseFloat(w.locked_balance),
+        },
+        tx: updatedTx.rows[0],
+        alreadyProcessed: false,
+        success: true,
       };
     });
   },

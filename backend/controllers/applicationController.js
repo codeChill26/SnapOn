@@ -57,11 +57,10 @@ const applicationController = {
         );
       }
 
-      // 6. Check tasker has a profile (basic eligibility)
-      const taskerProfile = await taskerProfileModel.findByUserId(taskerId);
-      if (!taskerProfile) {
-        return error(res, 'You need to create a tasker profile before bidding.', 400);
-      }
+      // 6. Auto-create a minimal tasker profile if the worker doesn't have one yet.
+      //    This lets users apply immediately without a separate profile-setup step.
+      //    They can enrich their profile later from the Profile screen.
+      await taskerProfileModel.createIfNotExists(taskerId);
 
       // 7. Check wallet balance (optional business rule)
       // Uncomment if you want to require minimum balance to bid
@@ -116,10 +115,44 @@ const applicationController = {
   },
 
   /**
+   * GET /api/applications/my-applications
+   * Tasker (worker) retrieves all their own applications across all tasks.
+   * Also exposes `is_busy` flag: true when worker has an ACCEPTED application
+   * on a task that is currently IN_PROGRESS — meaning they cannot take new jobs.
+   */
+  async getMyApplications(req, res) {
+    try {
+      const taskerId = req.user.id;
+
+      const applications = await taskApplicationModel.findByTaskerId(taskerId);
+
+      // Derive busy flag: worker is busy if they have ≥1 application that is
+      // ACCEPTED and the related task is currently IN_PROGRESS
+      const isBusy = applications.some(
+        (app) =>
+          app.status === APPLICATION_STATUS.ACCEPTED &&
+          app.task_status === TASK_STATUS.IN_PROGRESS
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'My applications retrieved successfully.',
+        data: applications,
+        is_busy: isBusy,
+      });
+    } catch (err) {
+      console.error('Get my applications error:', err);
+      return error(res, 'Failed to retrieve your applications.', 500);
+    }
+  },
+
+
+  /**
    * PATCH /api/applications/:id/withdraw
    * Tasker withdraws their application
    */
   async withdrawApplication(req, res) {
+
     try {
       const { id } = req.params;
       const taskerId = req.user.id;
