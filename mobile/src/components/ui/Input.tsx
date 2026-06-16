@@ -7,7 +7,7 @@ import {
   TextInputProps,
   TouchableOpacity,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { AppColors, Spacing, Radius, Typography } from '../../theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -42,11 +42,11 @@ export const Input: React.FC<InputProps> = ({
         <RNInput
           style={[
             styles.input,
-            leftIcon ? { paddingLeft: 8 } : {},
-            rightIcon ? { paddingRight: 8 } : {},
+            leftIcon ? { paddingLeft: Spacing.sm } : {},
+            rightIcon ? { paddingRight: Spacing.sm } : {},
             style,
           ]}
-          placeholderTextColor={Colors.textLight}
+          placeholderTextColor={AppColors.text.muted}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           {...props}
@@ -68,45 +68,45 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-    marginBottom: 6,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '600',
+    color: AppColors.text.secondary,
+    marginBottom: Spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.surface.input,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderColor: AppColors.border.subtle,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
   },
   inputFocused: {
-    borderColor: Colors.primary,
+    borderColor: AppColors.brand.primary,
   },
   inputError: {
-    borderColor: Colors.error,
+    borderColor: AppColors.status.error,
   },
   input: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.text,
+    paddingVertical: Spacing.md,
+    fontSize: Typography.body.fontSize + 1,
+    color: AppColors.text.primary,
   },
   iconLeft: {
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   iconRight: {
-    marginLeft: 8,
-    padding: 4,
+    marginLeft: Spacing.sm,
+    padding: Spacing.xs,
   },
   errorText: {
-    fontSize: 12,
-    color: Colors.error,
-    marginTop: 4,
+    fontSize: Typography.caption.fontSize,
+    color: AppColors.status.error,
+    marginTop: Spacing.xs,
   },
 });

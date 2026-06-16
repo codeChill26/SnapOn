@@ -1,12 +1,13 @@
 import api from './api';
 import { TaskApplication, ApiResponse } from '../types';
+import { mapApplicationFromApi } from './applicationService';
 
 export const matchingService = {
   async getRankedApplications(taskId: string): Promise<TaskApplication[]> {
-    const response = await api.get<ApiResponse<TaskApplication[]>>(
+    const response = await api.get<ApiResponse<any[]>>(
       `/tasks/${taskId}/ranked-applications`
     );
-    return response.data.data;
+    return (response.data.data || []).map(mapApplicationFromApi);
   },
 
   async autoMatch(taskId: string): Promise<{ task: any; assignedTask: any }> {

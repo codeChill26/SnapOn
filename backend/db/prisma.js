@@ -2,7 +2,12 @@
 
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// Force pg to parse TIMESTAMP WITHOUT TIME ZONE (OID 1114) as UTC
+types.setTypeParser(1114, function(stringValue) {
+  return new Date(stringValue + 'Z');
+});
 
 const normalizedDatabaseUrl = (value) => {
 	if (!value) return undefined;

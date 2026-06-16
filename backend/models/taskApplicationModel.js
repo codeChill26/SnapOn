@@ -11,7 +11,7 @@ const taskApplicationModel = {
   async create({ taskId, taskerId, bidPrice, estimatedTime, message }, db = pool) {
     const result = await db.query(
       `INSERT INTO task_applications (id, task_id, tasker_id, bid_price, estimated_time, message, status)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'pending')
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'PENDING')
        RETURNING *`,
       [taskId, taskerId, bidPrice, estimatedTime, message]
     );
@@ -47,7 +47,7 @@ const taskApplicationModel = {
   async findByTaskerAndTask(taskerId, taskId, db = pool) {
     const result = await db.query(
       `SELECT * FROM task_applications
-       WHERE tasker_id = $1 AND task_id = $2 AND status != 'cancelled'`,
+       WHERE tasker_id = $1 AND task_id = $2 AND status != 'CANCELLED'`,
       [taskerId, taskId]
     );
     const row = result.rows[0] || null;
@@ -92,8 +92,8 @@ const taskApplicationModel = {
   async rejectAllExcept(taskId, acceptedApplicationId, db = pool) {
     const result = await db.query(
       `UPDATE task_applications
-       SET status = 'rejected'
-       WHERE task_id = $1 AND id != $2 AND status = 'pending'
+       SET status = 'REJECTED'
+       WHERE task_id = $1 AND id != $2 AND status = 'PENDING'
        RETURNING *`,
       [taskId, acceptedApplicationId]
     );
@@ -109,7 +109,7 @@ const taskApplicationModel = {
   async countPendingByTaskId(taskId, db = pool) {
     const result = await db.query(
       `SELECT COUNT(*) as count FROM task_applications
-       WHERE task_id = $1 AND status = 'pending'`,
+       WHERE task_id = $1 AND status = 'PENDING'`,
       [taskId]
     );
     return parseInt(result.rows[0].count);
@@ -146,6 +146,35 @@ const taskApplicationModel = {
     if (row) row.status = fromDbApplicationStatus(row.status);
     return row;
   },
+
+  /**
+   * Find all applications submitted by a specific tasker (worker)
+   * Joins with tasks table to expose task status so we can check
+   * if the worker is currently busy (task IN_PROGRESS + app ACCEPTED)
+   */
+  async findByTaskerId(taskerId, db = pool) {
+    const result = await db.query(
+      `SELECT ta.*,
+              t.title        AS task_title,
+              t.status       AS task_status,
+              t.budget_min,
+              t.budget_max,
+              t.deadline_end,
+              u.full_name    AS tasker_name,
+              u.avatar_url   AS tasker_avatar
+       FROM task_applications ta
+       JOIN tasks             t  ON ta.task_id  = t.id
+       JOIN users             u  ON ta.tasker_id = u.id
+       WHERE ta.tasker_id = $1
+       ORDER BY ta.created_at DESC`,
+      [taskerId]
+    );
+    for (const r of result.rows) {
+      r.status = fromDbApplicationStatus(r.status);
+    }
+    return result.rows;
+  },
 };
 
 module.exports = taskApplicationModel;
+

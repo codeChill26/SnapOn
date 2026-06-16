@@ -166,13 +166,20 @@ const authenticate = async (req, res, next) => {
     // =====================
     // FIREBASE MODE
     // =====================
+    let token;
     const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return error(res, 'Access denied. No token provided.', 401);
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split('Bearer ')[1];
+    } else {
+      const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
+      if (isSyncUser) {
+        token = req.body?.firebaseToken;
+      }
     }
 
-    const token = authHeader.split('Bearer ')[1];
+    if (!token) {
+      return error(res, 'Access denied. No token provided.', 401);
+    }
 
     // Verify Firebase ID token
     let decodedToken;

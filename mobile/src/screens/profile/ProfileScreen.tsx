@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { walletService } from '../../services/walletService';
 import { UserRole } from '../../types';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatShortDate } from '../../utils/format';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '../../components/ui/Modal';
@@ -292,8 +292,14 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handleSwitchRole = (role: UserRole) => {
-    setPendingRole(role);
-    setIsRoleModalOpen(true);
+
+    Alert.alert('Chuyển vai trò', `Chuyển sang vai trò ${role === 'hirer' ? 'Người thuê' : 'Người làm'}?`, [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xác nhận', 
+        onPress: () => switchRole(role),
+      },
+    ]);
   };
 
   const isWorker = user?.role === 'worker';
@@ -502,6 +508,7 @@ export const ProfileScreen: React.FC = () => {
               Gợi ý: {user?.isVerified 
                 ? "Cập nhật đầy đủ họ tên, số điện thoại & ảnh đại diện để đạt 100% độ tin cậy." 
                 : "Hoàn thành xác thực danh tính để đạt 100% và tăng uy tín với đối tác."}
+
             </Text>
           </View>
         ) : (

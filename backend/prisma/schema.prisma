@@ -18,8 +18,11 @@ model User {
   createdAt             DateTime           @default(now()) @map("created_at")
   role                  String?            @default("hirer") @db.VarChar(20)
   assignedTasks         AssignedTask[]     @relation("AssignedTasker")
+  conversationsAsUser1  Conversation[]     @relation("User1Conversations")
+  conversationsAsUser2  Conversation[]     @relation("User2Conversations")
   escrowsAsPoster       Escrow[]           @relation("EscrowPoster")
   escrowsAsTasker       Escrow[]           @relation("EscrowTasker")
+  sentMessages          Message[]          @relation("SentMessages")
   payments              Payment[]
   reportsMade           Report[]           @relation("Reporter")
   reportsReceived       Report[]           @relation("TargetUser")
@@ -32,10 +35,6 @@ model User {
   verifications         UserVerification[] @relation("UserVerifications")
   wallet                Wallet?
   withdrawRequests      WithdrawRequest[]
-
-  conversationsAsUser1 Conversation[]     @relation("User1Conversations")
-  conversationsAsUser2 Conversation[]     @relation("User2Conversations")
-  sentMessages         Message[]          @relation("SentMessages")
 
   @@map("users")
 }
@@ -84,11 +83,12 @@ model TaskerProfile {
 }
 
 model Category {
-  id     String  @id @default(uuid()) @db.Uuid
-  name   String
-  slug   String  @unique
-  skills Skill[]
-  tasks  Task[]
+  id      String    @id @default(uuid()) @db.Uuid
+  name    String
+  slug    String    @unique
+  banners banners[]
+  skills  Skill[]
+  tasks   Task[]
 
   @@map("categories")
 }
@@ -118,6 +118,9 @@ model Task {
   deadlineStart  DateTime?           @map("deadline_start")
   deadlineEnd    DateTime?           @map("deadline_end")
   allowInsurance Boolean             @default(false) @map("allow_insurance")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  images         String[]            @default([])
   assignedTask   AssignedTask?
   escrow         Escrow?
   reports        Report[]
@@ -204,6 +207,7 @@ model WalletTransaction {
   status      TransactionStatus     @default(PENDING)
   referenceId String?               @map("reference_id") @db.Uuid
   order_code  BigInt?               @unique
+  created_at  DateTime              @default(now()) @db.Timestamp(6)
   wallet      Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@map("wallet_transactions")
@@ -295,6 +299,58 @@ model Report {
   task         Task?        @relation(fields: [taskId], references: [id])
 
   @@map("reports")
+}
+
+model Conversation {
+  id        String    @id @default(uuid()) @db.Uuid
+  user1Id   String    @map("user1_id") @db.Uuid
+  user2Id   String    @map("user2_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  user1     User      @relation("User1Conversations", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User      @relation("User2Conversations", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([user1Id, user2Id])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  senderId       String       @map("sender_id") @db.Uuid
+  text           String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model banners {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code          String    @unique @db.VarChar(255)
+  title         String    @db.VarChar(255)
+  subtitle      String?
+  image_url     String
+  category_id   String    @db.Uuid
+  placement     String    @db.VarChar(255)
+  action_type   String    @db.VarChar(255)
+  action_value  String?
+  display_order Int
+  is_active     Boolean   @default(true)
+  start_at      DateTime? @db.Timestamp(6)
+  end_at        DateTime? @db.Timestamp(6)
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime  @default(now()) @db.Timestamp(6)
+  categories    Category  @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+
+  @@index([display_order], map: "idx_banners_display_order")
+  @@index([end_at], map: "idx_banners_end_at")
+  @@index([is_active], map: "idx_banners_is_active")
+  @@index([placement], map: "idx_banners_placement")
+  @@index([placement, is_active, display_order], map: "idx_banners_placement_active_order")
+  @@index([start_at], map: "idx_banners_start_at")
 }
 
 enum UserStatus {
@@ -400,32 +456,4 @@ enum ReportStatus {
   REVIEWED
   RESOLVED
   REJECTED
-}
-
-model Conversation {
-  id        String    @id @default(uuid()) @db.Uuid
-  user1Id   String    @map("user1_id") @db.Uuid
-  user2Id   String    @map("user2_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  messages  Message[]
-
-  user1 User @relation("User1Conversations", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2 User @relation("User2Conversations", fields: [user2Id], references: [id], onDelete: Cascade)
-
-  @@unique([user1Id, user2Id])
-  @@map("conversations")
-}
-
-model Message {
-  id             String   @id @default(uuid()) @db.Uuid
-  conversationId String   @map("conversation_id") @db.Uuid
-  senderId       String   @map("sender_id") @db.Uuid
-  text           String
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@map("messages")
 }

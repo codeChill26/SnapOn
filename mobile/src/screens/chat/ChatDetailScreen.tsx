@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
 import { UserAvatar } from '../../components/common/UserAvatar';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { chatService, ChatMessage } from '../../services/chatService';
@@ -9,6 +8,7 @@ import { socketService } from '../../services/socketService';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import { AppColors } from '../../theme';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList & {
   ChatDetail: {
@@ -18,6 +18,57 @@ type ChatDetailRouteProp = RouteProp<RootStackParamList & {
     otherUserAvatar?: string;
   };
 }, 'ChatDetail'>;
+
+const formatMessageTime = (dateString: string) => {
+  try {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+};
+
+interface MessageItemProps {
+  item: ChatMessage;
+  isMe: boolean;
+  otherUserName: string;
+  otherUserAvatar: string | undefined;
+}
+
+const MessageItem = React.memo<MessageItemProps>(({ item, isMe, otherUserName, otherUserAvatar }) => {
+  return (
+    <View style={[styles.messageRow, isMe ? styles.myMessageRow : styles.otherMessageRow]}>
+      {!isMe && (
+        <View style={styles.avatarSpacing}>
+          <UserAvatar
+            name={otherUserName}
+            avatarUrl={otherUserAvatar}
+            size={28}
+          />
+        </View>
+      )}
+      <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+        <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
+          {item.text}
+        </Text>
+        <Text style={[styles.timeText, isMe ? styles.myTimeText : styles.otherTimeText]}>
+          {formatMessageTime(item.createdAt)}
+        </Text>
+      </View>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.text === nextProps.item.text &&
+    prevProps.item.createdAt === nextProps.item.createdAt &&
+    prevProps.isMe === nextProps.isMe &&
+    prevProps.otherUserName === nextProps.otherUserName &&
+    prevProps.otherUserAvatar === nextProps.otherUserAvatar
+  );
+});
 
 export const ChatDetailScreen: React.FC = () => {
   const route = useRoute<ChatDetailRouteProp>();
@@ -103,46 +154,24 @@ export const ChatDetailScreen: React.FC = () => {
     }
   };
 
-  const formatMessageTime = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return '';
-    }
-  };
-
-  const renderMessageItem = ({ item }: { item: ChatMessage }) => {
+  const renderMessageItem = useCallback(({ item }: { item: ChatMessage }) => {
     const isMe = item.senderId === user?.id;
     return (
-      <View style={[styles.messageRow, isMe ? styles.myMessageRow : styles.otherMessageRow]}>
-        {!isMe && (
-          <View style={styles.avatarSpacing}>
-            <UserAvatar
-              name={otherUserName}
-              avatarUrl={otherUserAvatar}
-              size={28}
-            />
-          </View>
-        )}
-        <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-          <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
-            {item.text}
-          </Text>
-          <Text style={[styles.timeText, isMe ? styles.myTimeText : styles.otherTimeText]}>
-            {formatMessageTime(item.createdAt)}
-          </Text>
-        </View>
-      </View>
+      <MessageItem
+        item={item}
+        isMe={isMe}
+        otherUserName={otherUserName}
+        otherUserAvatar={otherUserAvatar}
+      />
     );
-  };
+  }, [user?.id, otherUserName, otherUserAvatar]);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.customHeader}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <UserAvatar name={otherUserName} avatarUrl={otherUserAvatar} size={36} />
@@ -164,7 +193,7 @@ export const ChatDetailScreen: React.FC = () => {
         {/* Custom Header */}
         <View style={styles.customHeader}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <UserAvatar name={otherUserName} avatarUrl={otherUserAvatar} size={36} />
@@ -181,6 +210,10 @@ export const ChatDetailScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          initialNumToRender={15}
+          maxToRenderPerBatch={20}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
 
         {/* Input area */}
@@ -188,7 +221,7 @@ export const ChatDetailScreen: React.FC = () => {
           <TextInput
             style={styles.textInput}
             placeholder="Nhập tin nhắn..."
-            placeholderTextColor={Colors.textLight}
+            placeholderTextColor={AppColors.text.disabled}
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -200,7 +233,7 @@ export const ChatDetailScreen: React.FC = () => {
             disabled={inputText.trim() === '' || sending}
             activeOpacity={0.7}
           >
-            <Ionicons name="send" size={18} color={Colors.textWhite} />
+            <Ionicons name="send" size={18} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -211,7 +244,7 @@ export const ChatDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.background.primary,
   },
   flexContainer: {
     flex: 1,
@@ -221,9 +254,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.background.secondary,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: AppColors.border.subtle,
   },
   backButton: {
     padding: 8,
@@ -238,7 +271,7 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text,
+    color: AppColors.text.primary,
     flex: 1,
   },
   listContent: {
@@ -272,24 +305,24 @@ const styles = StyleSheet.create({
     shadowRadius: 1,
   },
   myBubble: {
-    backgroundColor: Colors.primary,
+    backgroundColor: AppColors.brand.primary,
     borderBottomRightRadius: 2,
   },
   otherBubble: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.background.elevated,
     borderBottomLeftRadius: 2,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
   },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
   },
   myMessageText: {
-    color: Colors.textWhite,
+    color: '#FFFFFF',
   },
   otherMessageText: {
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   timeText: {
     fontSize: 10,
@@ -300,36 +333,38 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   otherTimeText: {
-    color: Colors.textLight,
+    color: AppColors.text.muted,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.background.secondary,
     borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+    borderTopColor: AppColors.border.subtle,
     gap: 10,
   },
   textInput: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.surface.glass,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
     fontSize: 15,
-    color: Colors.text,
+    color: AppColors.text.primary,
     maxHeight: 100,
+    borderWidth: 1,
+    borderColor: AppColors.border.subtle,
   },
   sendButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primary,
+    backgroundColor: AppColors.brand.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
 });

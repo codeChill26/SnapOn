@@ -353,6 +353,74 @@ const options = {
             },
           },
         },
+        Banner: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            code: { type: 'string', example: 'HOME_CONTENT' },
+            title: { type: 'string', example: 'Biến ý tưởng thành nội dung thu hút' },
+            subtitle: { type: 'string', example: 'Tìm người viết bài, sáng tạo nội dung và hỗ trợ truyền thông.' },
+            imageUrl: { type: 'string', example: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800' },
+            category: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                code: { type: 'string', example: 'CONTENT' },
+                name: { type: 'string', example: 'Content' }
+              }
+            },
+            action: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', enum: ['CATEGORY', 'EXTERNAL_URL', 'NONE'], example: 'CATEGORY' },
+                value: { type: 'string', example: 'category-uuid' }
+              }
+            },
+            displayOrder: { type: 'integer', example: 1 },
+            isActive: { type: 'boolean', example: true },
+            placement: { type: 'string', enum: ['HOME_FEATURED', 'HOME_TOP'], example: 'HOME_FEATURED' },
+            startAt: { type: 'string', format: 'date-time', nullable: true },
+            endAt: { type: 'string', format: 'date-time', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        CreateBannerInput: {
+          type: 'object',
+          required: ['code', 'title', 'imageUrl', 'categoryId', 'placement', 'actionType', 'displayOrder'],
+          properties: {
+            code: { type: 'string', example: 'HOME_CONTENT' },
+            title: { type: 'string', example: 'Biến ý tưởng thành nội dung thu hút' },
+            subtitle: { type: 'string', example: 'Tìm người viết bài...' },
+            imageUrl: { type: 'string', format: 'url', example: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800' },
+            categoryId: { type: 'string', format: 'uuid', example: '550e8400-e29b-41d4-a716-446655440000' },
+            placement: { type: 'string', enum: ['HOME_FEATURED', 'HOME_TOP'], example: 'HOME_FEATURED' },
+            actionType: { type: 'string', enum: ['CATEGORY', 'EXTERNAL_URL', 'NONE'], example: 'CATEGORY' },
+            actionValue: { type: 'string', example: 'category-uuid' },
+            displayOrder: { type: 'integer', minimum: 1, example: 1 },
+            isActive: { type: 'boolean', default: true, example: true },
+            startAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-15T00:00:00Z' },
+            endAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-20T00:00:00Z' }
+          }
+        },
+        UpdateBannerInput: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', example: 'HOME_CONTENT' },
+            title: { type: 'string', example: 'Biến ý tưởng thành nội dung thu hút' },
+            subtitle: { type: 'string', example: 'Tìm người viết bài...' },
+            imageUrl: { type: 'string', format: 'url', example: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800' },
+            categoryId: { type: 'string', format: 'uuid', example: '550e8400-e29b-41d4-a716-446655440000' },
+            placement: { type: 'string', enum: ['HOME_FEATURED', 'HOME_TOP'], example: 'HOME_FEATURED' },
+            actionType: { type: 'string', enum: ['CATEGORY', 'EXTERNAL_URL', 'NONE'], example: 'CATEGORY' },
+            actionValue: { type: 'string', example: 'category-uuid' },
+            displayOrder: { type: 'integer', minimum: 1, example: 1 },
+            isActive: { type: 'boolean', example: true },
+            startAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-15T00:00:00Z' },
+            endAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-20T00:00:00Z' }
+          }
+        }
       },
     },
     security: [

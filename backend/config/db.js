@@ -1,5 +1,10 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 require('dotenv').config();
+
+// Force pg to parse TIMESTAMP WITHOUT TIME ZONE (OID 1114) as UTC
+types.setTypeParser(1114, function(stringValue) {
+  return new Date(stringValue + 'Z');
+});
 
 let poolConfig = {};
 

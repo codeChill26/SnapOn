@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { CATEGORIES } from '../../constants/categories';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,26 +7,43 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 interface CategoryGridProps {
   onSelect: (categoryId: string, categoryName: string) => void;
   selectedId?: string;
+  isDark?: boolean;
 }
 
-export const CategoryGrid: React.FC<CategoryGridProps> = ({ onSelect, selectedId }) => {
+export const CategoryGrid: React.FC<CategoryGridProps> = ({ onSelect, selectedId, isDark }) => {
   return (
-    <View style={styles.grid}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContainer}
+    >
       {CATEGORIES.map((category) => {
         const isSelected = category.slug === selectedId;
+        const softBg = category.color + '0C'; // Soft background tint (~5% opacity)
+
         return (
           <TouchableOpacity
             key={category.slug}
             style={[
               styles.item,
-              isSelected && { backgroundColor: category.color + '10', borderColor: category.color },
+              { 
+                backgroundColor: isSelected 
+                  ? Colors.primarySoft 
+                  : (isDark ? 'rgba(30, 41, 59, 0.5)' : Colors.surface), 
+                borderColor: isSelected 
+                  ? Colors.primary 
+                  : (isDark ? 'rgba(255, 255, 255, 0.08)' : Colors.border) 
+              }
             ]}
             onPress={() => onSelect(category.slug, category.name)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
+            accessibilityLabel={`Danh mục: ${category.name}`}
           >
             <View style={[
               styles.iconContainer,
-              { backgroundColor: isSelected ? category.color : category.color + '15' }
+              { backgroundColor: isSelected ? Colors.primary : softBg }
             ]}>
               <MaterialCommunityIcons
                 name={category.icon as any}
@@ -34,53 +51,74 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({ onSelect, selectedId
                 color={isSelected ? Colors.textWhite : category.color}
               />
             </View>
-            <Text
-              style={[styles.name, isSelected && { color: category.color, fontWeight: '700' }]}
-              numberOfLines={1}
-            >
-              {category.name}
-            </Text>
+            <View style={styles.textContainer}>
+              <Text
+                style={[
+                  styles.name, 
+                  { 
+                    color: isSelected 
+                      ? Colors.primary 
+                      : (isDark ? '#F1F5F9' : Colors.text),
+                    fontWeight: isSelected ? '700' : '600'
+                  }
+                ]}
+                numberOfLines={2}
+              >
+                {category.name}
+              </Text>
+            </View>
+            {isSelected && (
+              <View style={styles.checkIndicator}>
+                <MaterialCommunityIcons name="check-circle" size={14} color={Colors.primary} />
+              </View>
+            )}
           </TouchableOpacity>
         );
       })}
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  scrollContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     gap: 12,
-    justifyContent: 'flex-start',
   },
   item: {
-    width: '30%',
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    width: 150,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+    position: 'relative',
   },
   iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginRight: 10,
   },
-  iconText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
   },
   name: {
     fontSize: 12,
-    fontWeight: '500',
-    color: Colors.text,
-    textAlign: 'center',
+    lineHeight: 15,
+  },
+  checkIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
   },
 });
