@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -15,12 +16,24 @@ const TOPUP_PRESETS = [50000, 100000, 200000, 500000, 1000000];
 
 export const WalletScreen: React.FC = () => {
   const { wallet, setWallet } = useApp();
+  const route = useRoute<any>();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [historyY, setHistoryY] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [topupAmount, setTopupAmount] = useState<number>(100000);
   const [customAmountText, setCustomAmountText] = useState<string>('100000');
   const [pendingOrderCode, setPendingOrderCode] = useState<number | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
+
+  useEffect(() => {
+    if (route.params?.scrollToHistory && historyY > 0) {
+      const timer = setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: historyY, animated: true });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [route.params?.scrollToHistory, historyY]);
 
   useEffect(() => {
     loadWalletData();
@@ -116,7 +129,11 @@ export const WalletScreen: React.FC = () => {
   if (loading) return <LoadingSpinner fullScreen />;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      ref={scrollViewRef} 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+    >
       <Card style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>Số dư khả dụng</Text>
         <Text style={styles.balanceAmount}>
@@ -165,93 +182,104 @@ export const WalletScreen: React.FC = () => {
         </Card>
       )}
 
-      <Card style={styles.topupCard}>
-        <Text style={styles.sectionTitle}>Nạp tiền</Text>
-        <View style={styles.presetRow}>
-          {TOPUP_PRESETS.map(amount => (
-            <TouchableOpacity
-              key={amount}
-              style={[
-                styles.presetChip,
-                topupAmount === amount && styles.presetChipActive,
-              ]}
-              onPress={() => handlePresetSelect(amount)}
-            >
-              <Text
+      {!route.params?.scrollToHistory && (
+        <Card style={styles.topupCard}>
+          <Text style={styles.sectionTitle}>Nạp tiền</Text>
+          <View style={styles.presetRow}>
+            {TOPUP_PRESETS.map(amount => (
+              <TouchableOpacity
+                key={amount}
                 style={[
-                  styles.presetText,
-                  topupAmount === amount && styles.presetTextActive,
+                  styles.presetChip,
+                  topupAmount === amount && styles.presetChipActive,
                 ]}
+                onPress={() => handlePresetSelect(amount)}
               >
-                {amount >= 1000000
-                  ? `${(amount / 1000000).toFixed(1)}M`
-                  : `${amount / 1000}K`}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.presetText,
+                    topupAmount === amount && styles.presetTextActive,
+                  ]}
+                >
+                  {amount >= 1000000
+                    ? `${(amount / 1000000).toFixed(1)}M`
+                    : `${amount / 1000}K`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Input
+            label="Số tiền nạp tự chọn (đ)"
+            placeholder="Nhập số tiền bạn muốn nạp (tối thiểu 1.000đ)"
+            value={customAmountText}
+            onChangeText={handleCustomAmountChange}
+            keyboardType="numeric"
+          />
+
+
+
+          <Button
+            title={topupAmount > 0 ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền'}
+            onPress={handleTopup}
+            size="lg"
+            style={styles.topupButton}
+            disabled={topupAmount <= 0}
+            loading={checkingPayment && !pendingOrderCode}
+          />
+        </Card>
+      )}
+
+      {!route.params?.hideHistory && (
+        <View 
+          style={styles.section}
+          onLayout={(e) => {
+            setHistoryY(e.nativeEvent.layout.y);
+          }}
+        >
+          <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
+          {transactions.length === 0 ? (
+            <Card style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Chưa có giao dịch nào</Text>
+            </Card>
+          ) : (
+            transactions.map(tx => (
+              <Card key={tx.id} style={styles.txCard}>
+                <View style={styles.txRow}>
+                  <View style={styles.txLeft}>
+                    <Text style={styles.txType}>
+                      {tx.type === 'DEPOSIT' ? 'Nạp tiền' :
+                       tx.type === 'WITHDRAW' ? 'Rút tiền' :
+                       tx.type === 'ESCROW_HOLD' ? 'Giữ tiền' :
+                       tx.type === 'ESCROW_RELEASE' ? 'Giải ngân' :
+                       tx.type === 'REFUND' ? 'Hoàn tiền' : 'Phí'}
+                    </Text>
+                    <Text style={styles.txDate}>{formatDate(tx.createdAt)}</Text>
+                  </View>
+                  <View style={styles.txRight}>
+                    <Text style={[
+                      styles.txAmount,
+                      tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
+                        ? styles.txPositive
+                        : styles.txNegative,
+                    ]}>
+                      {tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
+                        ? '+'
+                        : '-'}
+                      {formatCurrency(tx.amount)}
+                    </Text>
+                    <Badge
+                      label={getStatusLabel(tx.status)}
+                      variant={tx.status === 'SUCCESS' ? 'success' : tx.status === 'PENDING' ? 'warning' : 'error'}
+                      size="sm"
+                    />
+                  </View>
+                </View>
+              </Card>
+            ))
+          )}
         </View>
-
-        <Input
-          label="Số tiền nạp tự chọn (đ)"
-          placeholder="Nhập số tiền bạn muốn nạp (tối thiểu 1.000đ)"
-          value={customAmountText}
-          onChangeText={handleCustomAmountChange}
-          keyboardType="numeric"
-        />
-
-
-
-        <Button
-          title={topupAmount > 0 ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền'}
-          onPress={handleTopup}
-          size="lg"
-          style={styles.topupButton}
-          disabled={topupAmount <= 0}
-          loading={checkingPayment && !pendingOrderCode}
-        />
-      </Card>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
-        {transactions.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Chưa có giao dịch nào</Text>
-          </Card>
-        ) : (
-          transactions.map(tx => (
-            <View key={tx.id} style={styles.txItem}>
-              <View style={styles.txLeft}>
-                <Text style={styles.txType}>
-                  {tx.type === 'DEPOSIT' ? 'Nạp tiền' :
-                   tx.type === 'WITHDRAW' ? 'Rút tiền' :
-                   tx.type === 'ESCROW_HOLD' ? 'Giữ tiền' :
-                   tx.type === 'ESCROW_RELEASE' ? 'Giải ngân' :
-                   tx.type === 'REFUND' ? 'Hoàn tiền' : 'Phí'}
-                </Text>
-                <Text style={styles.txDate}>{formatDate(tx.createdAt)}</Text>
-              </View>
-              <View style={styles.txRight}>
-                <Text style={[
-                  styles.txAmount,
-                  tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
-                    ? styles.txPositive
-                    : styles.txNegative,
-                ]}>
-                  {tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
-                    ? '+'
-                    : '-'}
-                  {formatCurrency(tx.amount)}
-                </Text>
-                <Badge
-                  label={getStatusLabel(tx.status)}
-                  variant={tx.status === 'SUCCESS' ? 'success' : tx.status === 'PENDING' ? 'warning' : 'error'}
-                  size="sm"
-                />
-              </View>
-            </View>
-          ))
-        )}
-      </View>
+      )}
     </ScrollView>
   );
 };
@@ -401,6 +429,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   section: {
+    marginTop: 24,
     marginBottom: 20,
   },
   emptyCard: {
@@ -411,13 +440,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textLight,
   },
-  txItem: {
+  txCard: {
+    marginBottom: 12,
+  },
+  txRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
   },
   txLeft: {
     gap: 2,

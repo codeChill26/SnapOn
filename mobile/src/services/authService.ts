@@ -25,4 +25,13 @@ export const authService = {
     });
     return response.data.avatarUrl;
   },
+
+  async verifyAccount(frontImage: string, backImage: string, selfieImage: string): Promise<User> {
+    const response = await api.post<any>('/users/verify', {
+      frontImage,
+      backImage,
+      selfieImage,
+    });
+    return response.data.user;
+  },
 };

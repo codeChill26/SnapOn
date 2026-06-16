@@ -12,6 +12,7 @@ interface TabsProps {
   activeTab: string;
   onTabChange: (key: string) => void;
   scrollable?: boolean;
+  activeColor?: string;
 }
 
 export const Tabs: React.FC<TabsProps> = ({
@@ -19,6 +20,7 @@ export const Tabs: React.FC<TabsProps> = ({
   activeTab,
   onTabChange,
   scrollable = false,
+  activeColor,
 }) => {
   const Container = scrollable ? ScrollView : View;
   const containerProps = scrollable
@@ -38,6 +40,7 @@ export const Tabs: React.FC<TabsProps> = ({
             style={[
               styles.tabText,
               activeTab === tab.key && styles.activeTabText,
+              activeTab === tab.key && activeColor ? { color: activeColor } : null,
             ]}
           >
             {tab.label}

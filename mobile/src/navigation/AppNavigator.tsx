@@ -18,7 +18,7 @@ export type RootStackParamList = {
   AdminTabs: undefined;
   JobDetail: { taskId: string };
   ApplicantList: { taskId: string };
-  Wallet: undefined;
+  Wallet: { scrollToHistory?: boolean; hideHistory?: boolean } | undefined;
   ChatDetail: {
     conversationId?: string;
     otherUserId: string;

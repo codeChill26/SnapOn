@@ -145,4 +145,102 @@ router.post("/upload-avatar", verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// POST /api/users/verify
+router.post("/verify", verifyFirebaseToken, async (req, res) => {
+  const { frontImage, backImage, selfieImage } = req.body;
+ 
+  if (!frontImage || !backImage || !selfieImage) {
+    return res.status(400).json({
+      success: false,
+      message: "All 3 verification images (front, back, selfie) are required."
+    });
+  }
+ 
+  try {
+    // Ensure uploads directory exists
+    const uploadDir = path.join(__dirname, "../public/uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+ 
+    const host = req.get('host');
+    const protocol = req.protocol;
+ 
+    const saveImage = (base64Str, typeName) => {
+      const base64Data = base64Str.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, 'base64');
+      const filename = `${crypto.randomUUID()}_${typeName}.jpg`;
+      const uploadPath = path.join(uploadDir, filename);
+      fs.writeFileSync(uploadPath, buffer);
+      return `${protocol}://${host}/uploads/${filename}`;
+    };
+ 
+    const frontImageUrl = saveImage(frontImage, "front");
+    const backImageUrl = saveImage(backImage, "back");
+    const selfieImageUrl = saveImage(selfieImage, "selfie");
+ 
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+ 
+      // 1. Create a verification log
+      const verificationResult = await client.query(
+        `INSERT INTO user_verifications (user_id, type, status)
+         VALUES ($1, 'cccd', 'pending')
+         RETURNING id`,
+        [req.user.id]
+      );
+      const verificationId = verificationResult.rows[0].id;
+ 
+      // 2. Create document records
+      await client.query(
+        `INSERT INTO verification_documents (verification_id, front_image_url, back_image_url, selfie_image_url)
+         VALUES ($1, $2, $3, $4)`,
+        [verificationId, frontImageUrl, backImageUrl, selfieImageUrl]
+      );
+ 
+      // 3. Auto-approve the user's verification for convenience in testing
+      const userResult = await client.query(
+        `UPDATE users
+         SET is_verified = true
+         WHERE id = $1
+         RETURNING id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at`,
+        [req.user.id]
+      );
+ 
+      await client.query('COMMIT');
+ 
+      const updatedUser = userResult.rows[0];
+      res.json({
+        success: true,
+        message: "Account verified successfully",
+        user: {
+          id: updatedUser.id,
+          firebaseUid: updatedUser.firebase_uid,
+          fullName: updatedUser.full_name,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          avatarUrl: updatedUser.avatar_url,
+          role: updatedUser.role,
+          status: updatedUser.status,
+          isVerified: updatedUser.is_verified,
+          createdAt: updatedUser.created_at,
+        }
+      });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("Verification error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during account verification",
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
