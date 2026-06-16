@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node app.js",
+    "build": "prisma generate",
     "dev": "nodemon app.js",  
     "db:ping": "node scripts/db-ping.js",
     "db:tables": "node scripts/db-list-tables.js",

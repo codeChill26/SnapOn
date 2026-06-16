@@ -55,7 +55,6 @@ router.get(
   walletController.checkPayOSPaymentStatus
 );
 
-<<<<<<< HEAD
 // Withdrawal
 router.post(
   '/withdraw',
@@ -69,7 +68,6 @@ router.post(
   walletController.withdraw
 );
 
-=======
 // ==========================================
 // PayOS Integration Routes (Mobile Flow)
 // ==========================================
@@ -92,6 +90,4 @@ router.post(
 
 router.get('/topup/payos/success', walletController.payosSuccess);
 router.get('/topup/payos/cancel', walletController.payosCancel);
-
->>>>>>> f2876fac1db205b6992422836e775e41d54f9303
 module.exports = router;

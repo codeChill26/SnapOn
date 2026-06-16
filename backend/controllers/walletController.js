@@ -129,7 +129,6 @@ const walletController = {
   },
 
   /**
-<<<<<<< HEAD
    * POST /api/wallet/withdraw
    */
   async withdraw(req, res) {
@@ -143,7 +142,9 @@ const walletController = {
       const status = err.statusCode || 500;
       return error(res, err.message || 'Failed to process withdrawal.', status);
     }
-=======
+  },
+
+  /**
    * GET /api/wallet/topup/payos/success (Mobile Webview redirect page)
    */
   async payosSuccess(req, res) {
@@ -197,7 +198,6 @@ const walletController = {
       </body>
       </html>
     `);
->>>>>>> f2876fac1db205b6992422836e775e41d54f9303
   },
 };
 
