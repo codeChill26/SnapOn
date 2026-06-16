@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { AppColors, Spacing, Radius, Typography } from '../../theme';
 
 type BadgeVariant = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'outline';
 
@@ -11,13 +11,21 @@ interface BadgeProps {
   style?: ViewStyle;
 }
 
-const variantStyles: Record<BadgeVariant, { bg: string; text: string }> = {
-  primary: { bg: Colors.primary + '20', text: Colors.primary },
-  success: { bg: Colors.success + '20', text: Colors.success },
-  warning: { bg: Colors.warning + '20', text: Colors.warning },
-  error: { bg: Colors.error + '20', text: Colors.error },
-  info: { bg: Colors.info + '20', text: Colors.info },
-  outline: { bg: 'transparent', text: Colors.textSecondary },
+const getVariantColors = (variant: BadgeVariant) => {
+  switch (variant) {
+    case 'primary':
+      return { bg: AppColors.brand.primarySoft, text: AppColors.brand.primary };
+    case 'success':
+      return { bg: `${AppColors.status.success}1A`, text: AppColors.status.success };
+    case 'warning':
+      return { bg: `${AppColors.status.warning}1A`, text: AppColors.status.warning };
+    case 'error':
+      return { bg: `${AppColors.status.error}1A`, text: AppColors.status.error };
+    case 'info':
+      return { bg: `${AppColors.status.info}1A`, text: AppColors.status.info };
+    default:
+      return { bg: 'transparent', text: AppColors.text.secondary };
+  }
 };
 
 export const Badge: React.FC<BadgeProps> = ({
@@ -26,7 +34,7 @@ export const Badge: React.FC<BadgeProps> = ({
   size = 'sm',
   style,
 }) => {
-  const vStyle = variantStyles[variant];
+  const vStyle = getVariantColors(variant);
 
   return (
     <View
@@ -54,27 +62,27 @@ export const Badge: React.FC<BadgeProps> = ({
 const styles = StyleSheet.create({
   base: {
     alignSelf: 'flex-start',
-    borderRadius: 8,
+    borderRadius: Radius.sm,
   },
   outline: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
   },
   size_sm: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
   },
   size_md: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   text: {
-    fontWeight: '600',
+    fontWeight: '700',
   },
   textSize_sm: {
-    fontSize: 11,
+    fontSize: Typography.caption.fontSize - 1,
   },
   textSize_md: {
-    fontSize: 13,
+    fontSize: Typography.caption.fontSize,
   },
 });

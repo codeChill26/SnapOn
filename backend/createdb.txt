@@ -317,3 +317,33 @@ CREATE INDEX idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id)
 
 CREATE INDEX idx_reviews_task_id ON reviews(task_id);
 CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
+
+
+-- =========================
+-- BANNERS
+-- =========================
+
+CREATE TABLE banners (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(255) NOT NULL UNIQUE,
+  title VARCHAR(255) NOT NULL,
+  subtitle TEXT,
+  image_url TEXT NOT NULL,
+  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+  placement VARCHAR(255) NOT NULL,
+  action_type VARCHAR(255) NOT NULL,
+  action_value TEXT,
+  display_order INT NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  start_at TIMESTAMP,
+  end_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_banners_placement ON banners(placement);
+CREATE INDEX idx_banners_is_active ON banners(is_active);
+CREATE INDEX idx_banners_display_order ON banners(display_order);
+CREATE INDEX idx_banners_start_at ON banners(start_at);
+CREATE INDEX idx_banners_end_at ON banners(end_at);
+CREATE INDEX idx_banners_placement_active_order ON banners(placement, is_active, display_order);

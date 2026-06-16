@@ -4,44 +4,81 @@ import { Colors } from '../../constants/colors';
 
 interface CountdownTimerProps {
   deadlineEnd: string;
+  status?: string;
   size?: 'sm' | 'md' | 'lg';
 }
 
 export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   deadlineEnd,
+  status = 'OPEN',
   size = 'md',
 }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
     const updateTimer = () => {
+      if (status === 'IN_PROGRESS') {
+        setTimeLeft('Đã chốt người làm');
+        return;
+      }
+      if (status === 'CANCELLED') {
+        setTimeLeft('Đã hủy');
+        return;
+      }
+      if (status === 'COMPLETED') {
+        setTimeLeft('Đã hoàn thành');
+        return;
+      }
+
+      if (!deadlineEnd) {
+        setTimeLeft(status === 'OPEN' ? 'Đang tuyển' : 'Hết hạn');
+        return;
+      }
       const now = new Date();
       const end = new Date(deadlineEnd);
+      if (isNaN(end.getTime())) {
+        setTimeLeft(status === 'OPEN' ? 'Đang tuyển' : 'Hết hạn');
+        return;
+      }
       const diff = end.getTime() - now.getTime();
 
       if (diff <= 0) {
-        setTimeLeft('Hết hạn');
+        setTimeLeft(status === 'OPEN' ? 'Đang nhận hồ sơ' : 'Hết hạn');
         return;
       }
 
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
 
-      if (days > 0) setTimeLeft(`${days} ngày ${hours} giờ`);
-      else if (hours > 0) setTimeLeft(`${hours} giờ ${mins} phút`);
-      else setTimeLeft(`${mins} phút`);
+      const formattedHours = hours.toString().padStart(2, '0');
+      const formattedMins = mins.toString().padStart(2, '0');
+      const formattedSecs = secs.toString().padStart(2, '0');
+
+      if (days > 0) {
+        setTimeLeft(`Còn ${days} ngày ${formattedHours}:${formattedMins}:${formattedSecs}`);
+      } else {
+        setTimeLeft(`Còn ${formattedHours}:${formattedMins}:${formattedSecs}`);
+      }
     };
 
     updateTimer();
-    const interval = setInterval(updateTimer, 60000);
+    const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [deadlineEnd]);
+  }, [deadlineEnd, status]);
 
   const getUrgencyColor = () => {
+    if (status === 'IN_PROGRESS') return Colors.textSecondary;
+    if (status === 'CANCELLED') return Colors.error;
+    if (status === 'COMPLETED') return Colors.success;
+
+    if (!deadlineEnd) return Colors.success;
     const end = new Date(deadlineEnd);
+    if (isNaN(end.getTime())) return Colors.success;
     const diff = end.getTime() - Date.now();
     const days = diff / (1000 * 60 * 60 * 24);
+    if (days <= 0) return Colors.primary;
     if (days < 1) return Colors.error;
     if (days < 2) return Colors.warning;
     return Colors.success;

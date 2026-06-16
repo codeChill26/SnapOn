@@ -872,3 +872,266 @@
  *       401:
  *         description: Chưa xác thực
  */
+
+// ==========================================
+// BANNERS (PUBLIC)
+// ==========================================
+
+/**
+ * @swagger
+ * /api/banners/home:
+ *   get:
+ *     tags: [Banners]
+ *     summary: Danh sách banner đang hoạt động cho màn hình Home (Public)
+ *     description: Lấy danh sách banner có vị trí HOME_FEATURED, đang kích hoạt và trong khoảng thời gian hiệu lực. Sắp xếp theo displayOrder tăng dần.
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách banner thành công
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               example: public, max-age=300
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Lấy danh sách banner thành công
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Banner'
+ */
+
+// ==========================================
+// BANNERS (ADMIN)
+// ==========================================
+
+/**
+ * @swagger
+ * /api/admin/banners:
+ *   get:
+ *     tags: [Admin Banners]
+ *     summary: Danh sách tất cả banner (Admin)
+ *     description: Lấy danh sách banner phục vụ cho trang quản trị. Yêu cầu quyền Admin.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: placement
+ *         schema:
+ *           type: string
+ *         description: Lọc theo vị trí hiển thị
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *         description: Lọc theo trạng thái hoạt động
+ *     responses:
+ *       200:
+ *         description: Danh sách banner
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Banner'
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}:
+ *   get:
+ *     tags: [Admin Banners]
+ *     summary: Chi tiết banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Chi tiết banner
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Banner'
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners:
+ *   post:
+ *     tags: [Admin Banners]
+ *     summary: Tạo banner mới (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateBannerInput'
+ *     responses:
+ *       201:
+ *         description: Tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Banner'
+ *       400:
+ *         description: Lỗi validation
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       409:
+ *         description: Mã code bị trùng
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}:
+ *   put:
+ *     tags: [Admin Banners]
+ *     summary: Cập nhật thông tin banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateBannerInput'
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Banner'
+ *       400:
+ *         description: Lỗi validation
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}/status:
+ *   patch:
+ *     tags: [Admin Banners]
+ *     summary: Cập nhật trạng thái bật/tắt banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Cập nhật trạng thái thành công
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */
+
+/**
+ * @swagger
+ * /api/admin/banners/{id}:
+ *   delete:
+ *     tags: [Admin Banners]
+ *     summary: Xóa banner (Admin)
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền Admin
+ *       404:
+ *         description: Banner không tồn tại
+ */

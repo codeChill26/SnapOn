@@ -16,6 +16,8 @@ const validate = (req, res, next) => {
       value: err.value,
     }));
 
+    console.error('❌ Validation failed:', JSON.stringify(formattedErrors, null, 2));
+
     return error(res, 'Validation failed.', 400, formattedErrors);
   }
 

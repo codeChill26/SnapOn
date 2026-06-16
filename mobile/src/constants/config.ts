@@ -1,5 +1,5 @@
 const Config = {
-  API_BASE_URL: 'http://192.168.100.206:3000/api',
+  API_BASE_URL: 'http://192.168.1.74:3000/api',
   // Set this to your deployed backend URL to use remote API instead of local
   DEPLOYED_API_URL: 'https://snapon-1.onrender.com/api',
   FIREBASE: {
@@ -9,6 +9,7 @@ const Config = {
     storageBucket: 'hcm202-2d75e.firebasestorage.app',
     messagingSenderId: '837187985882',
     appId: '1:837187985882:web:a2012ea4bbf3b3003660e3',
+    webClientId: 'webClientId477307811776-7f6ptpobvega67l3cd6ghin732dntka2.apps.googleusercontent.com', // Thay thế bằng Web Client ID thật từ Google Console của bạn
   },
   PAGINATION: {
     DEFAULT_PAGE: 1,

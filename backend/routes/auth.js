@@ -19,6 +19,11 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
 
     await client.query('BEGIN');
 
+    const host = req.get('host');
+    const protocol = req.protocol;
+    const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
+    const finalAvatar = picture || defaultAvatar;
+
     // First check if user exists by email to prevent duplicate key violations
     const checkEmailResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
     let user;
@@ -27,14 +32,14 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         UPDATE users 
         SET firebase_uid = $1,
             full_name = COALESCE($2, full_name),
-            avatar_url = COALESCE($3, avatar_url)
+            avatar_url = COALESCE(avatar_url, $3)
         WHERE email = $4
         RETURNING *;
       `;
       const updateResult = await client.query(updateUserQuery, [
         uid,
         name || null,
-        picture || null,
+        finalAvatar,
         email
       ]);
       user = updateResult.rows[0];
@@ -56,7 +61,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         uid,
         email,
         name || null,
-        picture || null,
+        finalAvatar,
       ]);
       user = userResult.rows[0];
     }
@@ -169,11 +174,15 @@ router.post('/dev/register', async (req, res) => {
 
     await client.query('BEGIN');
 
+    const host = req.get('host');
+    const protocol = req.protocol;
+    const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
+
     const userResult = await client.query(
-      `INSERT INTO users (id, firebase_uid, email, full_name, status, is_verified)
-       VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, 'ACTIVE', true)
+      `INSERT INTO users (id, firebase_uid, email, full_name, avatar_url, status, is_verified)
+       VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, 'ACTIVE', true)
        RETURNING *`,
-      [email, fullName || email.split('@')[0]]
+      [email, fullName || email.split('@')[0], defaultAvatar]
     );
 
     const user = userResult.rows[0];

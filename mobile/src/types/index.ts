@@ -39,6 +39,19 @@ export interface Task {
   skills?: Skill[];
   locations?: TaskLocation[];
   poster?: User;
+  images?: string[];
+  assignedWorker?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    phone?: string;
+    assignmentId: string;
+    status: string;
+    assignedAt?: string;
+    bidPrice?: number | null;
+    estimatedTime?: string;
+    message?: string;
+  } | null;
 }
 
 export interface Skill {
@@ -153,4 +166,28 @@ export interface ApiResponse<T> {
   success: boolean;
   message?: string;
   data: T;
+}
+
+export type BannerActionType = 'CATEGORY' | 'EXTERNAL_URL' | 'NONE';
+
+export interface HomeBannerCategory {
+  id: string;
+  code?: string;
+  name: string;
+}
+
+export interface HomeBannerAction {
+  type: BannerActionType;
+  value: string | null;
+}
+
+export interface HomeBanner {
+  id: string;
+  code: string;
+  title: string;
+  subtitle?: string | null;
+  imageUrl: string;
+  category: HomeBannerCategory | null;
+  action: HomeBannerAction;
+  displayOrder: number;
 }

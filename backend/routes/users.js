@@ -64,8 +64,12 @@ router.put("/role", verifyFirebaseToken, async (req, res) => {
   if (!['hirer', 'tasker'].includes(role)) {
     return res.status(400).json({ success: false, message: "Invalid role (must be 'hirer' or 'tasker')" });
   }
+
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `UPDATE users
        SET role = $1
        WHERE id = $2
@@ -74,10 +78,24 @@ router.put("/role", verifyFirebaseToken, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
     const updatedUser = result.rows[0];
+
+    // Automatically create a tasker profile if role is 'tasker'
+    if (role === 'tasker') {
+      await client.query(
+        `INSERT INTO tasker_profiles (id, user_id, bio, experience, portfolio_url, location_text, latitude, longitude, average_rating)
+         VALUES (gen_random_uuid(), $1, 'Thành viên mới', '', '', '', 10.7769, 106.7009, 5.0)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [req.user.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
     res.json({
       success: true,
       message: "Role updated successfully",
@@ -95,8 +113,11 @@ router.put("/role", verifyFirebaseToken, async (req, res) => {
       },
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error("Update role error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
+  } finally {
+    client.release();
   }
 });
 

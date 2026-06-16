@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { AppColors, Spacing, Radius, Typography, Shadows } from '../../theme';
 
 interface Tab {
   key: string;
@@ -32,7 +32,7 @@ export const Tabs: React.FC<TabsProps> = ({
           key={tab.key}
           style={[styles.tab, activeTab === tab.key && styles.activeTab]}
           onPress={() => onTabChange(tab.key)}
-          activeOpacity={0.7}
+          activeOpacity={0.75}
         >
           <Text
             style={[
@@ -51,32 +51,29 @@ export const Tabs: React.FC<TabsProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.divider,
-    padding: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: Spacing.xs,
+    borderRadius: Radius.md,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: Radius.sm,
   },
   activeTab: {
-    backgroundColor: Colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: AppColors.background.elevated,
+    borderColor: AppColors.border.subtle,
+    borderWidth: 1,
+    ...Shadows.sm,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '700',
+    color: AppColors.text.muted,
   },
   activeTabText: {
-    color: Colors.primary,
-    fontWeight: '800',
+    color: AppColors.brand.primary,
   },
 });

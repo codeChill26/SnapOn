@@ -9,21 +9,16 @@ export interface CategoryInfo {
 }
 
 export const CATEGORIES: CategoryInfo[] = [
-  { id: '1', name: 'Sửa chữa', slug: 'repair', icon: 'wrench', color: Colors.categoryRepair },
-  { id: '2', name: 'Dọn dẹp', slug: 'cleaning', icon: 'broom', color: Colors.categoryCleaning },
-  { id: '3', name: 'Vận chuyển', slug: 'moving', icon: 'truck-delivery', color: Colors.categoryMoving },
-  { id: '4', name: 'Điện', slug: 'electrical', icon: 'flash', color: Colors.categoryElectrical },
-  { id: '5', name: 'Sửa ống nước', slug: 'plumbing', icon: 'water', color: Colors.categoryPlumbing },
-  { id: '6', name: 'Sơn sửa', slug: 'painting', icon: 'brush', color: Colors.categoryPainting },
-  { id: '7', name: 'Làm vườn', slug: 'gardening', icon: 'flower', color: Colors.categoryGardening },
-  { id: '8', name: 'Công nghệ', slug: 'it', icon: 'laptop', color: Colors.categoryIT },
-  { id: '9', name: 'Gia sư', slug: 'tutoring', icon: 'school', color: Colors.categoryTutoring },
-  { id: '10', name: 'Chăm sóc sức khỏe', slug: 'healthcare', icon: 'heart', color: Colors.categoryHealthcare },
-  { id: '11', name: 'Khác', slug: 'other', icon: 'dots-horizontal', color: Colors.categoryOther },
+  { id: '1', name: 'Content / Dịch thuật', slug: 'content', icon: 'file-document-edit-outline', color: '#004E89' },
+  { id: '2', name: 'Design / Thiết kế', slug: 'design', icon: 'palette-outline', color: '#EC4899' },
+  { id: '3', name: 'Tech / Lập trình', slug: 'tech', icon: 'code-json', color: '#6366F1' },
+  { id: '4', name: 'Research / Khảo sát', slug: 'research', icon: 'file-search-outline', color: '#14B8A6' },
+  { id: '5', name: 'Hỗ trợ học tập', slug: 'study', icon: 'book-open-page-variant-outline', color: '#F59E0B' },
+  { id: '6', name: 'Khác', slug: 'others', icon: 'dots-horizontal', color: '#6B7280' },
 ];
 
-export const getCategoryById = (id: string): CategoryInfo | undefined =>
-  CATEGORIES.find(c => c.id === id);
+export const getCategoryById = (id: string | number | undefined): CategoryInfo | undefined =>
+  CATEGORIES.find(c => String(c.id) === String(id));
 
 export const getCategoryBySlug = (slug: string): CategoryInfo | undefined =>
   CATEGORIES.find(c => c.slug === slug);

@@ -25,17 +25,18 @@ const taskModel = {
     deadlineStart,
     deadlineEnd,
     allowInsurance = false,
+    images = [],
   }) {
     const dbTaskType = toDbTaskType(taskType);
     const result = await pool.query(
       `INSERT INTO tasks (
         id, poster_id, category_id, title, description, task_type,
-        status, budget_min, budget_max, deadline_start, deadline_end, allow_insurance
-      ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'open', $6, $7, $8, $9, $10)
+        status, budget_min, budget_max, deadline_start, deadline_end, allow_insurance, images
+      ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'OPEN', $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
         posterId, categoryId, title, description, dbTaskType,
-        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance,
+        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance, images,
       ]
     );
     const task = result.rows[0];
@@ -93,6 +94,34 @@ const taskModel = {
       [id]
     );
     task.application_count = parseInt(appCount.rows[0].count);
+
+    // Get assigned worker info if exists
+    const assignment = await pool.query(
+      `SELECT at.id AS assignment_id, at.status AS assignment_status,
+              u.id AS worker_id, u.full_name AS worker_name, u.avatar_url AS worker_avatar, u.phone AS worker_phone,
+              ta.bid_price AS final_bid_price, ta.estimated_time AS final_estimated_time, ta.message AS final_message
+       FROM assigned_tasks at
+       JOIN users u ON at.tasker_id = u.id
+       LEFT JOIN task_applications ta ON at.application_id = ta.id
+       WHERE at.task_id = $1`,
+      [id]
+    );
+
+    if (assignment.rows.length > 0) {
+      task.assigned_worker = {
+        id: assignment.rows[0].worker_id,
+        name: assignment.rows[0].worker_name,
+        avatar_url: assignment.rows[0].worker_avatar,
+        phone: assignment.rows[0].worker_phone,
+        assignment_id: assignment.rows[0].assignment_id,
+        status: assignment.rows[0].assignment_status,
+        bid_price: assignment.rows[0].final_bid_price ? parseFloat(assignment.rows[0].final_bid_price) : null,
+        estimated_time: assignment.rows[0].final_estimated_time,
+        message: assignment.rows[0].final_message,
+      };
+    } else {
+      task.assigned_worker = null;
+    }
 
     return task;
   },
@@ -293,6 +322,7 @@ const taskModel = {
     deadlineStart,
     deadlineEnd,
     allowInsurance,
+    images,
   }, db = pool) {
     const dbTaskType = taskType ? toDbTaskType(taskType) : undefined;
     const result = await db.query(
@@ -306,12 +336,14 @@ const taskModel = {
            deadline_start = COALESCE($8, deadline_start),
            deadline_end = COALESCE($9, deadline_end),
            allow_insurance = COALESCE($10, allow_insurance),
+           images = COALESCE($11, images),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
        RETURNING *`,
       [
         id, categoryId, title, description, dbTaskType,
-        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance
+        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance,
+        images !== undefined ? images : null
       ]
     );
     const task = result.rows[0] || null;

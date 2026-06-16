@@ -19,6 +19,8 @@ var authRouter = require('./routes/auth');
 var walletRoutes = require('./routes/walletRoutes');
 var escrowRoutes = require('./routes/escrowRoutes');
 var chatRoutes = require('./routes/chatRoutes');
+var bannerRoutes = require('./routes/bannerRoutes');
+
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -107,9 +109,13 @@ app.use('/api/escrows', escrowRoutes);
 // Chat routes
 app.use('/api/chat', chatRoutes);
 
+// Banner routes
+app.use('/api', bannerRoutes);
+
 // User & Auth routes
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
+
 
 // ==========================================
 // ERROR HANDLING

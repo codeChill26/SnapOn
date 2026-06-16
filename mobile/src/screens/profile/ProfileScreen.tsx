@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { walletService } from '../../services/walletService';
 import { UserRole } from '../../types';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatShortDate } from '../../utils/format';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '../../components/ui/Modal';
@@ -138,7 +138,7 @@ export const ProfileScreen: React.FC = () => {
     Alert.alert('Chuyển vai trò', `Chuyển sang vai trò ${role === 'hirer' ? 'Người thuê' : 'Người làm'}?`, [
       { text: 'Hủy', style: 'cancel' },
       {
-        text: 'Xác nhận',
+        text: 'Xác nhận', 
         onPress: () => switchRole(role),
       },
     ]);
@@ -230,7 +230,7 @@ export const ProfileScreen: React.FC = () => {
               <Text style={styles.infoLabel}>Tham gia từ</Text>
             </View>
             <Text style={styles.infoValue}>
-              {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : 'N/A'}
+              {user?.createdAt ? formatShortDate(user.createdAt) : 'N/A'}
             </Text>
           </View>
         </Card>
