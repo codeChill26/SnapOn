@@ -1040,6 +1040,170 @@
 
 /**
  * @swagger
+ * /api/wallet/withdraw:
+ *   get:
+ *     tags: [Wallet]
+ *     summary: 'Danh sách yêu cầu rút tiền (Admin)'
+ *     description: |
+ *       Admin xem tất cả yêu cầu rút tiền. Có thể lọc theo status.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, APPROVED, REJECTED, PAID, PROCESSING, FAILED]
+ *         description: Lọc theo trạng thái
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *     responses:
+ *       200:
+ *         description: Danh sách yêu cầu rút tiền
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền admin
+ */
+
+/**
+ * @swagger
+ * /api/wallet/withdraw/{id}:
+ *   get:
+ *     tags: [Wallet]
+ *     summary: Chi tiết yêu cầu rút tiền
+ *     description: Xem chi tiết một yêu cầu rút tiền
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID của yêu cầu rút tiền
+ *     responses:
+ *       200:
+ *         description: Chi tiết yêu cầu rút tiền
+ *       404:
+ *         description: Không tìm thấy
+ */
+
+/**
+ * @swagger
+ * /api/wallet/withdraw/{id}/approve:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: 'Duyệt yêu cầu rút tiền và gọi PayOS payout (Admin)'
+ *     description: |
+ *       Admin duyệt yêu cầu rút tiền. Hệ thống sẽ gọi PayOS Payout API
+ *       để chuyển tiền vào tài khoản ngân hàng của user.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID của yêu cầu rút tiền
+ *     responses:
+ *       200:
+ *         description: Duyệt thành công, đã gọi PayOS payout
+ *       400:
+ *         description: Không thể duyệt (sai trạng thái hoặc không tìm thấy bank BIN)
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền admin
+ *       502:
+ *         description: Lỗi PayOS payout
+ */
+
+/**
+ * @swagger
+ * /api/wallet/withdraw/{id}/reject:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: 'Từ chối yêu cầu rút tiền và hoàn tiền vào ví (Admin)'
+ *     description: |
+ *       Admin từ chối yêu cầu rút tiền. Số tiền sẽ được hoàn lại
+ *       vào available_balance của user.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID của yêu cầu rút tiền
+ *     responses:
+ *       200:
+ *         description: Từ chối thành công, đã hoàn tiền
+ *       400:
+ *         description: Không thể từ chối (sai trạng thái)
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền admin
+ */
+
+/**
+ * @swagger
+ * /api/wallet/payout/webhook:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: Webhook nhận kết quả payout từ PayOS
+ *     description: |
+ *       PayOS gọi webhook này khi có kết quả payout (thành công hoặc thất bại).
+ *       Hệ thống sẽ cập nhật trạng thái yêu cầu rút tiền tương ứng.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *                 description: PayOS payout ID
+ *               referenceId:
+ *                 type: string
+ *                 description: ID của yêu cầu rút tiền (withdrawal_id)
+ *               approvalState:
+ *                 type: string
+ *                 enum: [COMPLETED, FAILED, PROCESSING]
+ *               transactions:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     state:
+ *                       type: string
+ *                       enum: [SUCCEEDED, FAILED]
+ *     responses:
+ *       200:
+ *         description: Webhook processed successfully
+ */
+
+/**
+ * @swagger
  * /api/users/profile:
  *   put:
  *     tags: [Users]

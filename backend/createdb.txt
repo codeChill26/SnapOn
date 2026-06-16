@@ -28,7 +28,7 @@ CREATE TYPE escrow_status AS ENUM ('holding', 'released', 'refunded', 'disputed'
 CREATE TYPE payment_method AS ENUM ('bank_transfer', 'momo', 'zalopay', 'vnpay', 'cash');
 CREATE TYPE payment_status AS ENUM ('pending', 'success', 'failed', 'cancelled');
 
-CREATE TYPE withdraw_status AS ENUM ('pending', 'approved', 'rejected', 'paid');
+CREATE TYPE withdraw_status AS ENUM ('pending', 'approved', 'rejected', 'paid', 'processing', 'failed');
 
 CREATE TYPE review_criteria_type AS ENUM ('positive', 'negative');
 

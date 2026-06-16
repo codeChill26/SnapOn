@@ -26,6 +26,20 @@ router.get('/', function(req, res, next) {
         manualMatch: 'POST /api/tasks/:taskId/manual-match',
         rankedApplications: 'GET /api/tasks/:taskId/ranked-applications',
       },
+      wallet: {
+        me: 'GET /api/wallet/me',
+        transactions: 'GET /api/wallet/transactions',
+        topupMock: 'POST /api/wallet/topup/mock',
+        topupPayOS: 'POST /api/wallet/topup/payos/create',
+        payOSWebhook: 'POST /api/wallet/topup/payos/webhook',
+        payOSStatus: 'GET /api/wallet/topup/payos/status/:orderCode',
+        withdraw: 'POST /api/wallet/withdraw',
+        listWithdrawals: 'GET /api/wallet/withdraw',
+        withdrawalDetail: 'GET /api/wallet/withdraw/:id',
+        approveWithdrawal: 'POST /api/wallet/withdraw/:id/approve',
+        rejectWithdrawal: 'POST /api/wallet/withdraw/:id/reject',
+        payoutWebhook: 'POST /api/wallet/payout/webhook',
+      },
     },
   });
 });
