@@ -42,7 +42,7 @@ const escrowService = {
     const posterWallet = await walletModel.lockByUserId(posterId, db);
 
     if (Number(posterWallet.available_balance) < amt) {
-      const err = new Error('Insufficient wallet balance to hold escrow.');
+      const err = new Error('Vui lòng nạp thêm tiền vào tài khoản.');
       err.statusCode = 400;
       err.code = 'INSUFFICIENT_BALANCE';
       err.availableBalance = Number(posterWallet.available_balance);

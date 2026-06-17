@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { AppColors, Radius, Spacing, Shadows } from '../../theme';
+import { Colors } from '../../constants/colors';
 
 interface CardProps {
   children: React.ReactNode;
@@ -31,8 +32,8 @@ export const Card: React.FC<CardProps> = ({
         };
       default:
         return {
-          backgroundColor: AppColors.background.elevated,
-          borderColor: AppColors.border.subtle,
+          backgroundColor: Colors.card,
+          borderColor: Colors.border,
           borderWidth: 1,
         };
     }

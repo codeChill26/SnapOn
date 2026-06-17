@@ -78,6 +78,17 @@ const applicationController = {
         message: message || null,
       });
 
+      // Broadcast new application via Socket.io to the task poster
+      const io = req.app.get('io');
+      if (io) {
+        io.to(task.poster_id).emit('application_joined', {
+          taskId,
+          taskTitle: task.title,
+          taskerId,
+          taskerName: req.user.fullName,
+        });
+      }
+
       return success(res, application, 'Application submitted successfully.', 201);
     } catch (err) {
       console.error('Create application error:', err);

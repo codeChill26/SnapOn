@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { Alert } from 'react-native';
 import { User, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { storage } from '../utils/storage';
@@ -29,6 +30,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (token && user) {
       socketService.connect(user.id);
+
+      const handleApplicationJoined = (data: { taskTitle: string; taskerName: string }) => {
+        Alert.alert(
+          '💡 Ứng tuyển mới!',
+          `Ứng viên ${data.taskerName} đã đăng ký làm công việc: "${data.taskTitle}".`
+        );
+      };
+
+      const handleTaskAssigned = (data: { taskTitle: string }) => {
+        Alert.alert(
+          '🎉 Nhận việc thành công!',
+          `Bạn đã được chọn cho công việc: "${data.taskTitle}". Vui lòng vào kiểm tra công việc và bắt đầu làm việc!`
+        );
+      };
+
+      socketService.on('application_joined', handleApplicationJoined);
+      socketService.on('task_assigned', handleTaskAssigned);
+
+      return () => {
+        socketService.off('application_joined', handleApplicationJoined);
+        socketService.off('task_assigned', handleTaskAssigned);
+      };
     } else {
       socketService.disconnect();
     }

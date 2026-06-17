@@ -8,6 +8,8 @@ import { socketService } from '../../services/socketService';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { AppColors } from '../../theme';
+import { User } from '../../types';
+import { authService } from '../../services/authService';
 
 const formatMessageTime = (dateString: string) => {
   try {
@@ -84,6 +86,62 @@ export const ChatListScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResultUser, setSearchResultUser] = useState<User | null>(null);
+  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
+  const [hasSearchedPhone, setHasSearchedPhone] = useState(false);
+  const [phoneSearchError, setPhoneSearchError] = useState('');
+
+  const isPhoneQuery = /^\d{10}$/.test(searchQuery.trim());
+
+  const handlePhoneSearch = useCallback(async (phoneToSearch: string) => {
+    if (!phoneToSearch) return;
+    setIsSearchingPhone(true);
+    setPhoneSearchError('');
+    setHasSearchedPhone(true);
+    try {
+      const userFound = await authService.searchUserByPhone(phoneToSearch);
+      setSearchResultUser(userFound);
+      if (!userFound) {
+        setPhoneSearchError('Không tìm thấy người dùng nào với số điện thoại này.');
+      }
+    } catch (error: any) {
+      console.error('Failed to search phone:', error);
+      setPhoneSearchError('Đã xảy ra lỗi khi tìm kiếm số điện thoại.');
+    } finally {
+      setIsSearchingPhone(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const isPhone = /^\d{10}$/.test(searchQuery.trim());
+    if (isPhone) {
+      handlePhoneSearch(searchQuery.trim());
+    } else {
+      setSearchResultUser(null);
+      setHasSearchedPhone(false);
+      setPhoneSearchError('');
+    }
+  }, [searchQuery, handlePhoneSearch]);
+
+  const handleStartChatWithSearchResult = async (userId: string) => {
+    try {
+      setLoading(true);
+      const newConv = await chatService.startConversation(userId);
+      setSearchQuery('');
+      setSearchResultUser(null);
+      setHasSearchedPhone(false);
+      navigation.navigate('ChatDetail', {
+        conversationId: newConv.id,
+        otherUserId: newConv.otherUser.id,
+        otherUserName: newConv.otherUser.fullName,
+        otherUserAvatar: newConv.otherUser.avatarUrl,
+      });
+    } catch (error) {
+      console.error('Failed to start conversation:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadConversations = async () => {
     try {
@@ -188,6 +246,12 @@ export const ChatListScreen: React.FC = () => {
             placeholderTextColor={AppColors.text.disabled}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onSubmitEditing={() => {
+              if (isPhoneQuery) {
+                handlePhoneSearch(searchQuery.trim());
+              }
+            }}
+            returnKeyType={isPhoneQuery ? 'search' : 'default'}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearIcon}>
@@ -196,6 +260,55 @@ export const ChatListScreen: React.FC = () => {
           )}
         </View>
       </View>
+
+      {/* Phone Number Search Section */}
+      {isPhoneQuery && (
+        <View style={styles.phoneSearchContainer}>
+          {isSearchingPhone ? (
+            <View style={styles.phoneSearchLoading}>
+              <LoadingSpinner message="Đang tìm kiếm..." />
+            </View>
+          ) : searchResultUser ? (
+            <TouchableOpacity 
+              style={styles.phoneSearchResultCard}
+              onPress={() => handleStartChatWithSearchResult(searchResultUser.id)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.phoneSearchResultHeader}>Kết quả tìm kiếm số điện thoại:</Text>
+              <View style={styles.phoneSearchResultRow}>
+                <UserAvatar
+                  name={searchResultUser.fullName}
+                  avatarUrl={searchResultUser.avatarUrl}
+                  size={46}
+                />
+                <View style={styles.phoneSearchResultInfo}>
+                  <Text style={styles.phoneSearchResultName} numberOfLines={1}>
+                    {searchResultUser.fullName}
+                  </Text>
+                  <Text style={styles.phoneSearchResultPhone}>
+                    SĐT: {searchResultUser.phone}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.phoneSearchChatBtn}
+                  onPress={() => handleStartChatWithSearchResult(searchResultUser.id)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={18} color="#FFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.phoneSearchChatBtnText}>Nhắn tin</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          ) : hasSearchedPhone ? (
+            <View style={styles.phoneSearchEmpty}>
+              <Ionicons name="alert-circle-outline" size={20} color={AppColors.text.muted} />
+              <Text style={styles.phoneSearchEmptyText}>
+                {phoneSearchError || 'Không tìm thấy người dùng nào với số điện thoại này.'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      )}
 
       {loading && !refreshing ? (
         <LoadingSpinner message="Đang tải các cuộc hội thoại..." />
@@ -324,6 +437,101 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: AppColors.brand.primary,
+  },
+  phoneSearchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: AppColors.background.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border.subtle,
+  },
+  phoneSearchTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.brand.primarySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.25)',
+  },
+  phoneSearchTriggerText: {
+    fontSize: 14,
+    color: AppColors.brand.primary,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  phoneSearchLoading: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  phoneSearchResultCard: {
+    backgroundColor: AppColors.background.elevated,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: AppColors.border.subtle,
+  },
+  phoneSearchResultHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AppColors.text.muted,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    letterSpacing: 0.5,
+  },
+  phoneSearchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  phoneSearchResultInfo: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  phoneSearchResultName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AppColors.text.primary,
+    marginBottom: 2,
+  },
+  phoneSearchResultPhone: {
+    fontSize: 13,
+    color: AppColors.text.muted,
+  },
+  phoneSearchChatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.brand.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    shadowColor: AppColors.brand.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  phoneSearchChatBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  phoneSearchEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.background.elevated,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: AppColors.border.subtle,
+  },
+  phoneSearchEmptyText: {
+    fontSize: 13,
+    color: AppColors.text.muted,
+    marginLeft: 8,
+    flex: 1,
   },
   emptyContainer: {
     flex: 1,

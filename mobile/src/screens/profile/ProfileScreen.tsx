@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image, Act
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
+import { AppColors } from '../../theme';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -492,7 +493,7 @@ export const ProfileScreen: React.FC = () => {
       )}
 
       {/* Trust & Verification Completeness Progress */}
-      <Card style={styles.completionCard}>
+      <Card style={styles.completionCard} variant="glass">
         <View style={styles.completionHeader}>
           <Text style={styles.completionTitle}>Độ hoàn thiện hồ sơ</Text>
           <Text style={[styles.completionScore, { color: themeColor }]}>{completenessScore}%</Text>
@@ -555,7 +556,7 @@ export const ProfileScreen: React.FC = () => {
       </Card>
 
       {/* Stats Card Grid & Wallet Balance */}
-      <Card style={styles.statsCardContainer}>
+      <Card style={styles.statsCardContainer} variant="glass">
         <Text style={styles.sectionTitle}>Thống kê & Tài chính</Text>
         
         <View style={styles.statsGrid}>
@@ -609,7 +610,7 @@ export const ProfileScreen: React.FC = () => {
       </Card>
 
       {/* Role-based Quick Actions */}
-      <Card style={styles.quickActionsCard}>
+      <Card style={styles.quickActionsCard} variant="glass">
         <Text style={styles.sectionTitle}>Thao tác nhanh</Text>
         <View style={styles.quickActionsGrid}>
           {quickActions.map((action, idx) => (
@@ -629,7 +630,7 @@ export const ProfileScreen: React.FC = () => {
       </Card>
 
       {/* Recent Reviews (Social Proof Feed) */}
-      <Card style={styles.reviewsCard}>
+      <Card style={styles.reviewsCard} variant="glass">
         <View style={styles.reviewsHeader}>
           <Text style={styles.sectionTitle}>Đánh giá gần đây</Text>
           <TouchableOpacity onPress={() => Alert.alert("Tất cả đánh giá", "Tính năng xem tất cả đánh giá đang được phát triển.")}>
@@ -662,7 +663,7 @@ export const ProfileScreen: React.FC = () => {
       </Card>
 
       {/* Account Info Details */}
-      <Card style={styles.accountInfoCard}>
+      <Card style={styles.accountInfoCard} variant="glass">
         <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
         
         <View style={styles.infoRow}>
@@ -696,7 +697,7 @@ export const ProfileScreen: React.FC = () => {
       <View style={styles.settingsContainer}>
         <View style={styles.settingsSection}>
           <Text style={styles.settingsSectionTitle}>Dịch vụ & Hệ thống</Text>
-          <Card style={styles.settingsCard} padded={false}>
+          <Card style={styles.settingsCard} padded={false} variant="glass">
             <SettingsRow
               icon="wallet-outline"
               label="Lịch sử giao dịch ví"
@@ -1126,7 +1127,7 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.background.primary,
   },
   content: {
     paddingBottom: 40,
@@ -1162,7 +1163,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.background.elevated,
     borderRadius: 12,
     width: 24,
     height: 24,
@@ -1297,9 +1298,9 @@ const styles = StyleSheet.create({
   unverifiedAlertCard: {
     marginHorizontal: 20,
     marginTop: 14,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
     borderRadius: 14,
     padding: 14,
     shadowColor: '#F59E0B',
@@ -1327,11 +1328,11 @@ const styles = StyleSheet.create({
   unverifiedAlertTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#B45309',
+    color: AppColors.status.warning,
   },
   unverifiedAlertDesc: {
     fontSize: 11,
-    color: '#D97706',
+    color: AppColors.text.secondary,
     lineHeight: 14,
   },
   completionCard: {
@@ -1354,7 +1355,7 @@ const styles = StyleSheet.create({
   completionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   completionScore: {
     fontSize: 16,
@@ -1363,7 +1364,7 @@ const styles = StyleSheet.create({
   progressBarBg: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.divider,
+    backgroundColor: AppColors.border.subtle,
     overflow: 'hidden',
     marginBottom: 14,
   },
@@ -1375,14 +1376,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: AppColors.background.soft,
     padding: 10,
     borderRadius: 10,
     marginBottom: 14,
   },
   motivationText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     fontWeight: '500',
     flex: 1,
     lineHeight: 16,
@@ -1399,17 +1400,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#00000004',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: Colors.divider,
+    borderColor: AppColors.border.subtle,
   },
   checklistLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     fontWeight: '500',
   },
   checklistLabelDone: {
-    color: Colors.textSecondary,
+    color: AppColors.text.disabled,
     textDecorationLine: 'line-through',
     opacity: 0.7,
   },
@@ -1426,7 +1427,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 14,
   },
   statsGrid: {
@@ -1440,20 +1441,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    backgroundColor: '#00000004',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.divider,
+    borderColor: AppColors.border.subtle,
   },
   statBlockValue: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginTop: 4,
   },
   statBlockSubText: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
     marginTop: 2,
     textAlign: 'center',
   },
@@ -1462,22 +1463,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
   },
   statBadgeText: {
     fontSize: 9,
     fontWeight: '700',
-    color: Colors.warning,
+    color: AppColors.status.warning,
   },
   walletBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#00000004',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.divider,
+    borderColor: AppColors.border.subtle,
   },
   walletBarLeft: {
     flexDirection: 'row',
@@ -1489,13 +1490,13 @@ const styles = StyleSheet.create({
   },
   walletBarLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
     fontWeight: '500',
   },
   walletBarValue: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   walletBarButton: {
     flexDirection: 'row',
@@ -1552,7 +1553,7 @@ const styles = StyleSheet.create({
   quickActionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.secondary,
     textAlign: 'center',
   },
   accountInfoCard: {
@@ -1571,7 +1572,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: AppColors.border.subtle,
   },
   infoLabelContainer: {
     flexDirection: 'row',
@@ -1583,13 +1584,13 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     fontWeight: '500',
   },
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   reviewsCard: {
     marginHorizontal: 20,
@@ -1615,11 +1616,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   reviewItem: {
-    backgroundColor: '#00000003',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.divider,
+    borderColor: AppColors.border.subtle,
   },
   reviewItemHeader: {
     flexDirection: 'row',
@@ -1634,11 +1635,11 @@ const styles = StyleSheet.create({
   reviewerName: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   reviewTaskName: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
     fontWeight: '500',
   },
   reviewItemRight: {
@@ -1653,15 +1654,15 @@ const styles = StyleSheet.create({
   reviewRatingValue: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   reviewTimeAgo: {
     fontSize: 10,
-    color: Colors.textLight,
+    color: AppColors.text.disabled,
   },
   reviewComment: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     fontStyle: 'italic',
     lineHeight: 16,
   },
@@ -1674,7 +1675,7 @@ const styles = StyleSheet.create({
   settingsSectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
     textTransform: 'uppercase',
     marginBottom: 8,
     paddingLeft: 4,
@@ -1687,7 +1688,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
     overflow: 'hidden',
   },
   settingsRow: {
@@ -1696,7 +1697,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
   },
   settingsRowLeft: {
     flexDirection: 'row',
@@ -1712,11 +1713,11 @@ const styles = StyleSheet.create({
   },
   settingsRowLabel: {
     fontSize: 14,
-    color: Colors.text,
+    color: AppColors.text.primary,
     fontWeight: '600',
   },
   settingsRowLabelDanger: {
-    color: Colors.error,
+    color: AppColors.status.error,
   },
   settingsRowRight: {
     flexDirection: 'row',
@@ -1725,12 +1726,12 @@ const styles = StyleSheet.create({
   },
   settingsRowValue: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     fontWeight: '500',
   },
   rowDivider: {
     height: 1,
-    backgroundColor: Colors.divider,
+    backgroundColor: AppColors.border.subtle,
     marginLeft: 60,
   },
   modalForm: {
@@ -1765,7 +1766,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: AppColors.background.elevated,
   },
   avatarPickerHelpText: {
     fontSize: 12,
@@ -1781,12 +1782,12 @@ const styles = StyleSheet.create({
   verifyStepTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
     textAlign: 'center',
   },
   verifyStepDesc: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 18,
@@ -1796,11 +1797,11 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.normal,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#00000005',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     overflow: 'hidden',
   },
   verifyPreviewImage: {
@@ -1814,7 +1815,7 @@ const styles = StyleSheet.create({
   },
   verifyPlaceholderText: {
     fontSize: 13,
-    color: Colors.textLight,
+    color: AppColors.text.muted,
     fontWeight: '500',
   },
   verifyActionButtons: {
@@ -1837,13 +1838,13 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.border,
+    backgroundColor: AppColors.border.normal,
     justifyContent: 'center',
     alignItems: 'center',
   },
   verifyProgressDotText: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     fontWeight: '700',
   },
   verifyProgressDotTextActive: {
@@ -1852,19 +1853,19 @@ const styles = StyleSheet.create({
   verifyProgressLine: {
     width: 30,
     height: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: AppColors.border.normal,
   },
   verifyOtpTipBox: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: AppColors.background.soft,
     padding: 12,
     borderRadius: 8,
     marginVertical: 4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.normal,
   },
   verifyOtpTipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -1900,23 +1901,23 @@ const styles = StyleSheet.create({
   roleConfirmTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.text,
+    color: AppColors.text.primary,
     textAlign: 'center',
   },
   roleConfirmDesc: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 10,
   },
   roleConfirmDetailDesc: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: AppColors.text.muted,
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: AppColors.background.soft,
     padding: 12,
     borderRadius: 10,
     marginTop: 6,

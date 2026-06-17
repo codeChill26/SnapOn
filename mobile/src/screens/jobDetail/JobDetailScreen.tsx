@@ -626,7 +626,7 @@ export const JobDetailScreen: React.FC = () => {
 
           {/* 5. Task đang IN_PROGRESS */}
           {task.status === 'IN_PROGRESS' && (
-            <Card style={styles.inProgressCard}>
+            <Card style={styles.inProgressCard} variant="glass">
               <View style={styles.inProgressHeader}>
                 <Ionicons name="flash-outline" size={24} color={AppColors.status.warning} />
                 <Text style={styles.inProgressTitle}>Dự án đang triển khai</Text>

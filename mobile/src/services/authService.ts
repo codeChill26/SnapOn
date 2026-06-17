@@ -26,6 +26,13 @@ export const authService = {
     return response.data.avatarUrl;
   },
 
+  async searchUserByPhone(phone: string): Promise<User | null> {
+    const response = await api.get<any>('/users/search', {
+      params: { phone },
+    });
+    return response.data.user;
+  },
+
   async verifyAccount(frontImage: string, backImage: string, selfieImage: string): Promise<User> {
     const response = await api.post<any>('/users/verify', {
       frontImage,

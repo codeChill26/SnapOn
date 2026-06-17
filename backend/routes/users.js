@@ -13,6 +13,45 @@ router.get("/profile", verifyFirebaseToken, async (req, res) => {
   });
 });
 
+// GET /api/users/search
+router.get("/search", verifyFirebaseToken, async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) {
+    return res.status(400).json({ success: false, message: "Phone number is required" });
+  }
+
+  try {
+    const trimmedPhone = phone.trim();
+    // Query users by phone, excluding current user
+    const result = await pool.query(
+      `SELECT id, full_name, email, phone, avatar_url, role 
+       FROM users 
+       WHERE phone = $1 AND id != $2`,
+      [trimmedPhone, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ success: true, user: null, message: "No user found with this phone number." });
+    }
+
+    const foundUser = result.rows[0];
+    res.json({
+      success: true,
+      user: {
+        id: foundUser.id,
+        fullName: foundUser.full_name,
+        email: foundUser.email,
+        phone: foundUser.phone,
+        avatarUrl: foundUser.avatar_url,
+        role: foundUser.role,
+      },
+    });
+  } catch (error) {
+    console.error("Search user by phone error:", error);
+    res.status(500).json({ success: false, message: "Server error during phone search", error: error.message });
+  }
+});
+
 // PUT /api/users/profile
 router.put("/profile", verifyFirebaseToken, async (req, res) => {
   const { fullName, phone, avatarUrl } = req.body;
