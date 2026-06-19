@@ -48,7 +48,7 @@ const assignmentController = {
       await assignedTaskModel.updateStatus(id, 'IN_PROGRESS', client);
 
       // 5. Update task to IN_PROGRESS if we have met or exceeded the hiring quota (people_needed)
-      const task = await taskModel.findById(assignment.task_id, client);
+      const task = await taskModel.findBaseById(assignment.task_id, client);
       if (task && task.status === TASK_STATUS.OPEN) {
         const activeAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
         const inProgressCount = activeAssignments.filter(a => a.status === 'IN_PROGRESS').length;
@@ -161,7 +161,7 @@ const assignmentController = {
       }
 
       // 2. Fetch task
-      const task = await taskModel.findById(assignment.task_id, client);
+      const task = await taskModel.findBaseById(assignment.task_id, client);
       if (!task) {
         await client.query('ROLLBACK');
         return error(res, 'Không tìm thấy công việc tương ứng.', 404);
@@ -233,7 +233,7 @@ const assignmentController = {
       }
 
       // 2. Fetch task
-      const task = await taskModel.findById(assignment.task_id, client);
+      const task = await taskModel.findBaseById(assignment.task_id, client);
       if (!task) {
         await client.query('ROLLBACK');
         return error(res, 'Không tìm thấy công việc tương ứng.', 404);

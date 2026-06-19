@@ -580,7 +580,6 @@ router.post("/verify", verifyFirebaseToken, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 // DELETE /api/users/profile — Delete user account (soft-delete: set status to BANNED)
 router.delete("/profile", verifyFirebaseToken, async (req, res) => {
   try {
@@ -608,6 +607,3 @@ router.delete("/profile", verifyFirebaseToken, async (req, res) => {
 });
 
 module.exports = router;
-=======
-module.exports = router;
->>>>>>> adc01e75b24a3ded9435b4ab671e440505ad45c8
