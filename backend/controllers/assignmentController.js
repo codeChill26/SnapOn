@@ -1,6 +1,7 @@
 const assignedTaskModel = require('../models/assignedTaskModel');
 const taskModel = require('../models/taskModel');
 const taskApplicationModel = require('../models/taskApplicationModel');
+const escrowService = require('../services/escrowService');
 const pool = require('../config/db');
 const { success, error } = require('../utils/responseHandler');
 const { TASK_STATUS, APPLICATION_STATUS } = require('../utils/constants');
@@ -187,6 +188,8 @@ const assignmentController = {
       // If there are no more active or pending assignments, we can set the task to COMPLETED
       if (activeOrAssigned.length === 0) {
         await taskModel.updateStatus(task.id, TASK_STATUS.COMPLETED, client);
+        // Release escrow: locked_balance → tasker
+        await escrowService.releaseForTask(task.id, client);
       }
 
       await client.query('COMMIT');
@@ -257,6 +260,8 @@ const assignmentController = {
       // If there are no more active assignments, and the task status is IN_PROGRESS, return task to OPEN
       if (activeOrAssigned.length === 0 && task.status === TASK_STATUS.IN_PROGRESS) {
         await taskModel.updateStatus(task.id, TASK_STATUS.OPEN, client);
+        // Refund escrow: locked_balance → available_balance
+        await escrowService.refundForTask(task.id, client);
       }
 
       await client.query('COMMIT');
