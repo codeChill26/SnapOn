@@ -54,6 +54,15 @@ router.patch(
   applicationController.updateApplication
 );
 
+// PATCH /api/applications/:id/status — Accept or reject application (Poster only)
+router.patch(
+  '/applications/:id/status',
+  authenticate,
+  applicationValidator.applicationIdParam,
+  validate,
+  applicationController.updateApplicationStatus
+);
+
 // DELETE /api/applications/:id — Delete application
 router.delete(
   '/applications/:id',
@@ -61,6 +70,13 @@ router.delete(
   applicationValidator.applicationIdParam,
   validate,
   applicationController.deleteApplication
+);
+
+// GET /api/tasks/:taskId/my-application — Get current worker's application for a task
+router.get(
+  '/tasks/:taskId/my-application',
+  authenticate,
+  applicationController.getMyApplicationForTask
 );
 
 module.exports = router;

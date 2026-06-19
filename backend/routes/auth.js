@@ -211,4 +211,134 @@ router.post('/dev/register', async (req, res) => {
   }
 });
 
+// POST /api/auth/send-otp
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+    
+    // Simulate sending OTP. For testing, we use '123456' as standard OTP.
+    console.log(`📱 [OTP SERVICE] Generating OTP for ${phone}: 123456`);
+    
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully (Simulated)',
+      otp: '123456'
+    });
+  } catch (err) {
+    console.error('Send OTP error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to send OTP' });
+  }
+});
+
+// POST /api/auth/verify-otp
+router.post('/verify-otp', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
+    }
+
+    if (otp !== '123456') {
+      return res.status(400).json({ success: false, message: 'Invalid OTP code' });
+    }
+
+    await client.query('BEGIN');
+
+    // Check if user already exists with this phone number
+    const checkUser = await client.query('SELECT * FROM users WHERE phone = $1', [phone]);
+    let user;
+
+    if (checkUser.rows.length > 0) {
+      user = checkUser.rows[0];
+    } else {
+      // Register new user with phone-based values
+      const email = `${phone}@snapon.vn`;
+      const fullName = `Thành viên ${phone.slice(-4)}`;
+      
+      const host = req.get('host');
+      const protocol = req.protocol;
+      const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
+
+      // Check if email already exists (edge case)
+      const emailCheck = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+      let finalEmail = email;
+      if (emailCheck.rows.length > 0) {
+        finalEmail = `${phone}_${Date.now()}@snapon.vn`;
+      }
+
+      const insertUserQuery = `
+        INSERT INTO users (
+          id,
+          firebase_uid,
+          email,
+          full_name,
+          phone,
+          avatar_url,
+          status,
+          is_verified,
+          role
+        )
+        VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', true, 'USER')
+        RETURNING *;
+      `;
+      const userResult = await client.query(insertUserQuery, [
+        finalEmail,
+        fullName,
+        phone,
+        defaultAvatar
+      ]);
+      user = userResult.rows[0];
+
+      // Auto-create wallet for new user
+      const createWalletQuery = `
+        INSERT INTO wallets (id, user_id, balance, available_balance, locked_balance)
+        VALUES (gen_random_uuid(), $1, 0, 0, 0)
+        ON CONFLICT (user_id) DO NOTHING;
+      `;
+      await client.query(createWalletQuery, [user.id]);
+
+      // Auto-create tasker profile
+      const createProfileQuery = `
+        INSERT INTO tasker_profiles (id, user_id, bio, experience, portfolio_url, location_text, latitude, longitude, average_rating)
+        VALUES (gen_random_uuid(), $1, 'Thành viên mới', '', '', '', 10.7769, 106.7009, 5.0)
+        ON CONFLICT (user_id) DO NOTHING;
+      `;
+      await client.query(createProfileQuery, [user.id]);
+    }
+
+    await client.query('COMMIT');
+
+    // Standardize user object keys to camelCase for mobile
+    const userResponse = {
+      id: user.id,
+      firebaseUid: user.firebase_uid,
+      fullName: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      avatarUrl: user.avatar_url,
+      role: user.role || 'USER',
+      status: user.status,
+      isVerified: user.is_verified,
+      createdAt: user.created_at,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully',
+      user: userResponse,
+      token: user.id
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Verify OTP error:', err);
+    return res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

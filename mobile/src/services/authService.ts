@@ -14,7 +14,15 @@ export const authService = {
     return response.data.user;
   },
 
-  async updateProfile(profileData: { fullName?: string; phone?: string; avatarUrl?: string }): Promise<User> {
+  async updateProfile(profileData: {
+    fullName?: string;
+    phone?: string;
+    avatarUrl?: string;
+    coverUrl?: string;
+    bio?: string;
+    headline?: string;
+    skills?: string[];
+  }): Promise<User> {
     const response = await api.put<any>('/users/profile', profileData);
     return response.data.user;
   },
@@ -24,6 +32,13 @@ export const authService = {
       base64Image,
     });
     return response.data.avatarUrl;
+  },
+
+  async uploadCover(base64Image: string): Promise<string> {
+    const response = await api.post<any>('/users/upload-cover', {
+      base64Image,
+    });
+    return response.data.coverUrl;
   },
 
   async searchUserByPhone(phone: string): Promise<User | null> {
@@ -40,5 +55,15 @@ export const authService = {
       selfieImage,
     });
     return response.data.user;
+  },
+
+  async sendOtp(phone: string): Promise<{ success: boolean; message: string; otp?: string }> {
+    const response = await api.post<any>('/auth/send-otp', { phone });
+    return response.data;
+  },
+
+  async verifyOtp(phone: string, otp: string): Promise<{ success: boolean; user: User; token: string }> {
+    const response = await api.post<any>('/auth/verify-otp', { phone, otp });
+    return response.data;
   },
 };

@@ -281,6 +281,19 @@ CREATE TABLE review_selected_criteria (
 
 
 -- =========================
+-- SAVED TASKS (Bookmarks)
+-- =========================
+
+CREATE TABLE saved_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, task_id)
+);
+
+
+-- =========================
 -- REPORTS
 -- =========================
 
@@ -316,6 +329,8 @@ CREATE INDEX idx_assigned_tasks_tasker_id ON assigned_tasks(tasker_id);
 CREATE INDEX idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id);
 
 CREATE INDEX idx_reviews_task_id ON reviews(task_id);
+CREATE INDEX idx_saved_tasks_task_id ON saved_tasks(task_id);
+CREATE INDEX idx_saved_tasks_user_created_at ON saved_tasks(user_id, created_at DESC);
 CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
 
 
@@ -346,4 +361,4 @@ CREATE INDEX idx_banners_is_active ON banners(is_active);
 CREATE INDEX idx_banners_display_order ON banners(display_order);
 CREATE INDEX idx_banners_start_at ON banners(start_at);
 CREATE INDEX idx_banners_end_at ON banners(end_at);
-CREATE INDEX idx_banners_placement_active_order ON banners(placement, is_active, display_order);
+CREATE INDEX idx_banners_placement_active_order ON banners(placement, is_active, display_order);

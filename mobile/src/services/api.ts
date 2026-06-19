@@ -22,11 +22,20 @@ api.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error)
 );
 
+let onUnauthorizedCallback: (() => void) | null = null;
+
+export const setOnUnauthorized = (cb: () => void) => {
+  onUnauthorizedCallback = cb;
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     if (error.response?.status === 401) {
       await storage.clearAll();
+      if (onUnauthorizedCallback) {
+        onUnauthorizedCallback();
+      }
     }
     return Promise.reject(error);
   }

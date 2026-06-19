@@ -103,4 +103,10 @@ router.get('/conversations/:id/messages', chatController.getMessages);
  */
 router.post('/conversations/:id/messages', chatController.sendMessage);
 
+// Upload chat image attachment
+router.post('/attachments/image', chatController.uploadChatImage);
+
+// Mark conversation as read
+router.post('/conversations/:id/read', chatController.markConversationAsRead);
+
 module.exports = router;

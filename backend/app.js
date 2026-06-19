@@ -12,6 +12,7 @@ var fs = require('fs');
 
 // Import routes
 var taskRoutes = require('./routes/taskRoutes');
+var activityRoutes = require('./routes/activityRoutes');
 var applicationRoutes = require('./routes/applicationRoutes');
 var matchingRoutes = require('./routes/matchingRoutes');
 var usersRouter = require("./routes/users");
@@ -20,6 +21,8 @@ var walletRoutes = require('./routes/walletRoutes');
 var escrowRoutes = require('./routes/escrowRoutes');
 var chatRoutes = require('./routes/chatRoutes');
 var bannerRoutes = require('./routes/bannerRoutes');
+var categoryRoutes = require('./routes/categoryRoutes');
+var assignmentRoutes = require('./routes/assignmentRoutes');
 
 
 const http = require('http');
@@ -97,6 +100,7 @@ app.get('/api/health', (req, res) => {
 
 // API Routes — Flow A: Posting → Bidding → Matching
 app.use('/api/tasks', taskRoutes);
+app.use('/api/activities', activityRoutes);
 app.use('/api', applicationRoutes);
 app.use('/api', matchingRoutes);
 
@@ -112,9 +116,13 @@ app.use('/api/chat', chatRoutes);
 // Banner routes
 app.use('/api', bannerRoutes);
 
+// Category routes
+app.use('/api', categoryRoutes);
+
 // User & Auth routes
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
+app.use('/api/assignments', assignmentRoutes);
 
 
 // ==========================================

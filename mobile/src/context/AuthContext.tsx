@@ -4,6 +4,8 @@ import { User, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { storage } from '../utils/storage';
 import { socketService } from '../services/socketService';
+import { setOnUnauthorized } from '../services/api';
+import { notificationService } from '../services/notificationService';
 
 interface AuthContextType {
   user: User | null;
@@ -25,11 +27,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     loadStoredAuth();
+
+    // Listen for 401 unauthorized events to log out cleanly
+    setOnUnauthorized(() => {
+      setToken(null);
+      setUser(null);
+      Alert.alert(
+        'Phiên làm việc hết hạn',
+        'Phiên đăng nhập của bạn đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.',
+        [{ text: 'Đồng ý' }]
+      );
+    });
+
+    return () => {
+      setOnUnauthorized(() => {});
+    };
   }, []);
 
   useEffect(() => {
     if (token && user) {
       socketService.connect(user.id);
+      void notificationService.registerDeviceForChatNotifications().catch((error) => {
+        console.warn('Failed to register push token:', error);
+      });
 
       const handleApplicationJoined = (data: { taskTitle: string; taskerName: string }) => {
         Alert.alert(
@@ -98,13 +118,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const switchRole = useCallback(async (role: UserRole) => {
-    if (user) {
-      const updatedUser = { ...user, role };
-      setUser(updatedUser);
-      await storage.setUserData(updatedUser);
-      await storage.setRole(role);
-    }
-  }, [user]);
+    // switchRole is deprecated. All normal accounts now use the unified USER role.
+    void role;
+  }, []);
 
   return (
     <AuthContext.Provider
