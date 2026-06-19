@@ -39,16 +39,6 @@ const escrowService = {
       return { escrow, created: false };
     }
 
-    const posterWallet = await walletModel.lockByUserId(posterId, db);
-
-    if (Number(posterWallet.available_balance) < amt) {
-      const err = new Error('Insufficient wallet balance to hold escrow.');
-      err.statusCode = 400;
-      err.code = 'INSUFFICIENT_BALANCE';
-      err.availableBalance = Number(posterWallet.available_balance);
-      throw err;
-    }
-
     const feeRate = getPlatformFeeRate();
 
     const escrowInsert = await db.query(
@@ -69,28 +59,6 @@ const escrowService = {
     );
 
     const escrow = escrowInsert.rows[0];
-
-    // Move money: available -> pending
-    await db.query(
-      `UPDATE wallets
-       SET available_balance = available_balance - $2,
-           locked_balance = locked_balance + $2
-       WHERE id = $1`,
-      [posterWallet.id, amt]
-    );
-
-    // Ledger: payment pending
-    await walletTransactionModel.create(
-      {
-        walletId: posterWallet.id,
-        type: 'ESCROW_HOLD',
-        amount: amt,
-        status: 'PENDING',
-        referenceId: escrow.id,
-      },
-      db
-    );
-
     return { escrow, created: true };
   },
 
@@ -114,31 +82,6 @@ const escrowService = {
 
     if (escrow.status !== 'HOLDING') return escrow;
 
-    const amount = Number(escrow.amount);
-    const fee = Number(escrow.platform_fee_amount || 0);
-    const net = Math.max(0, amount - fee);
-
-    const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
-    const taskerWallet = await walletModel.lockByUserId(escrow.tasker_id, db);
-
-    // Poster: pending -> out (balance decreases)
-    await db.query(
-      `UPDATE wallets
-       SET locked_balance = locked_balance - $2,
-           balance = balance - $2
-       WHERE id = $1`,
-      [posterWallet.id, amount]
-    );
-
-    // Tasker: receive net
-    await db.query(
-      `UPDATE wallets
-       SET available_balance = available_balance + $2,
-           balance = balance + $2
-       WHERE id = $1`,
-      [taskerWallet.id, net]
-    );
-
     // Update escrow
     const updatedEscrow = await db.query(
       `UPDATE escrows
@@ -147,44 +90,6 @@ const escrowService = {
        RETURNING *`,
       [escrow.id]
     );
-
-    // Poster payment tx: pending -> success
-    const posterPaymentTx = await walletTransactionModel.findByReference(
-      posterWallet.id,
-      escrow.id,
-      'ESCROW_HOLD',
-      db
-    );
-    if (posterPaymentTx && posterPaymentTx.status === 'PENDING') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'SUCCESS', db);
-    }
-
-    // Tasker ledger
-    if (net > 0) {
-      await walletTransactionModel.create(
-        {
-          walletId: taskerWallet.id,
-          type: 'ESCROW_RELEASE',
-          amount: net,
-          status: 'SUCCESS',
-          referenceId: escrow.id,
-        },
-        db
-      );
-    }
-
-    if (fee > 0) {
-      await walletTransactionModel.create(
-        {
-          walletId: taskerWallet.id,
-          type: 'PLATFORM_FEE',
-          amount: fee,
-          status: 'SUCCESS',
-          referenceId: escrow.id,
-        },
-        db
-      );
-    }
 
     return updatedEscrow.rows[0];
   },
@@ -208,44 +113,12 @@ const escrowService = {
 
     if (escrow.status !== 'HOLDING') return escrow;
 
-    const amount = Number(escrow.amount);
-    const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
-
-    await db.query(
-      `UPDATE wallets
-       SET locked_balance = locked_balance - $2,
-           available_balance = available_balance + $2
-       WHERE id = $1`,
-      [posterWallet.id, amount]
-    );
-
     const updatedEscrow = await db.query(
       `UPDATE escrows
        SET status = 'REFUNDED'
        WHERE id = $1
        RETURNING *`,
       [escrow.id]
-    );
-
-    const posterPaymentTx = await walletTransactionModel.findByReference(
-      posterWallet.id,
-      escrow.id,
-      'ESCROW_HOLD',
-      db
-    );
-    if (posterPaymentTx && posterPaymentTx.status === 'PENDING') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'CANCELLED', db);
-    }
-
-    await walletTransactionModel.create(
-      {
-        walletId: posterWallet.id,
-        type: 'REFUND',
-        amount,
-        status: 'SUCCESS',
-        referenceId: escrow.id,
-      },
-      db
     );
 
     return updatedEscrow.rows[0];

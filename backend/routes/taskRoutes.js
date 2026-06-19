@@ -37,6 +37,31 @@ router.post(
   taskController.uploadTaskImages
 );
 
+// GET /api/tasks/saved — Get current user's saved tasks
+router.get(
+  '/saved',
+  authenticate,
+  taskController.getSavedTasks
+);
+
+// POST /api/tasks/:id/save — Save a task
+router.post(
+  '/:id/save',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.saveTask
+);
+
+// DELETE /api/tasks/:id/save — Remove a saved task
+router.delete(
+  '/:id/save',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.unsaveTask
+);
+
 // GET /api/tasks/:id — Get task details
 router.get(
   '/:id',
@@ -71,6 +96,15 @@ router.patch(
   taskValidator.updateTask,
   validate,
   taskController.updateTask
+);
+
+// PATCH /api/tasks/:id/close-recruitment — Close recruitment early
+router.patch(
+  '/:id/close-recruitment',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.closeRecruitment
 );
 
 // DELETE /api/tasks/:id — Delete a task
