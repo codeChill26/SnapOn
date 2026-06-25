@@ -606,15 +606,5 @@ router.delete("/profile", verifyFirebaseToken, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
 module.exports = router;
-<<<<<<< Updated upstream
-=======
-module.exports = router;
->>>>>>> Stashed changes
-=======
-module.exports = router;
->>>>>>> 87e4b5f29e584af243811f5cf20eea8339a7ec41
-=======
->>>>>>> Stashed changes
+
