@@ -8,9 +8,10 @@ const apiSecret = process.env.CLOUDINARY_API_SECRET;
 /**
  * Uploads a base64 image string to Cloudinary.
  * @param {string} base64Data The base64 encoded image content (can be with or without data:image/xxx;base64, prefix).
+ * @param {{ folder?: string }} [options] Upload options.
  * @returns {Promise<string>} The uploaded image secure URL.
  */
-async function uploadImage(base64Data) {
+async function uploadImage(base64Data, options = {}) {
   if (!cloudName || !apiKey || !apiSecret) {
     console.error('❌ Cloudinary environment variables are missing! Make sure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are set in .env.');
     throw new Error('Cloudinary configuration is missing. Please contact the administrator.');
@@ -24,7 +25,7 @@ async function uploadImage(base64Data) {
 
   try {
     const timestamp = Math.round(new Date().getTime() / 1000);
-    const folder = 'snapon_tasks';
+    const folder = options.folder || 'snapon_tasks';
 
     // Cloudinary signature parameters must be sorted alphabetically: folder, then timestamp
     const signatureStr = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;

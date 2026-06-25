@@ -26,17 +26,42 @@ const taskModel = {
     deadlineEnd,
     allowInsurance = false,
     images = [],
+    postType = 'RECRUITMENT',
+    workMode = 'ONSITE',
+    salaryUnit = 'PER_JOB',
+    employmentType = 'ONE_TIME',
+    peopleNeeded = 1,
+    contactPhone,
+    startDate,
+    experienceLevel = 'NO_REQUIREMENT',
+    educationLevel = 'NO_REQUIREMENT',
+    genderRequirement = 'NO_REQUIREMENT',
+    minAge,
+    maxAge,
+    minHeightCm,
+    maxHeightCm,
+    hashtags = [],
+    applicationDeadline,
   }) {
     const dbTaskType = toDbTaskType(taskType);
     const result = await pool.query(
       `INSERT INTO tasks (
         id, poster_id, category_id, title, description, task_type,
-        status, budget_min, budget_max, deadline_start, deadline_end, allow_insurance, images
-      ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'OPEN', $6, $7, $8, $9, $10, $11)
+        status, budget_min, budget_max, deadline_start, deadline_end, allow_insurance, images,
+        post_type, work_mode, salary_unit, employment_type, people_needed, contact_phone,
+        start_date, experience_level, education_level, gender_requirement, min_age, max_age,
+        min_height_cm, max_height_cm, hashtags, application_deadline
+      ) VALUES (
+        gen_random_uuid(), $1, $2, $3, $4, $5, 'OPEN', $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+      )
       RETURNING *`,
       [
         posterId, categoryId, title, description, dbTaskType,
         budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance, images,
+        postType, workMode, salaryUnit, employmentType, peopleNeeded, contactPhone,
+        startDate, experienceLevel, educationLevel, genderRequirement, minAge, maxAge,
+        minHeightCm, maxHeightCm, hashtags, applicationDeadline,
       ]
     );
     const task = result.rows[0];
@@ -50,16 +75,26 @@ const taskModel = {
   /**
    * Find task by ID with category info
    */
-  async findById(id) {
+  async findById(id, currentUserId = null) {
     const result = await pool.query(
       `SELECT t.*, 
               c.name AS category_name, c.slug AS category_slug,
-              u.full_name AS poster_name, u.avatar_url AS poster_avatar
+              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
+               FROM task_required_skills trs
+               JOIN skills s ON trs.skill_id = s.id
+               WHERE trs.task_id = t.id
+               LIMIT 1) AS subcategory,
+              u.full_name AS poster_name, u.avatar_url AS poster_avatar,
+              EXISTS (
+                SELECT 1 FROM saved_tasks st
+                WHERE st.task_id = t.id AND st.user_id = $2
+              ) AS is_saved
        FROM tasks t
        LEFT JOIN categories c ON t.category_id = c.id
        LEFT JOIN users u ON t.poster_id = u.id
        WHERE t.id = $1`,
-      [id]
+      [id, currentUserId]
     );
     if (result.rows.length === 0) return null;
 
@@ -141,7 +176,7 @@ const taskModel = {
   /**
    * Find all tasks with filters and pagination
    */
-  async findAll({ status, categoryId, taskType, search, page, limit } = {}) {
+  async findAll({ status, categoryId, fieldId, taskType, search, page, limit, postType, workMode, salaryUnit, currentUserId } = {}) {
     const currentPage = page || PAGINATION.DEFAULT_PAGE;
     const currentLimit = Math.min(limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
     const offset = (currentPage - 1) * currentLimit;
@@ -151,16 +186,36 @@ const taskModel = {
     let paramIndex = 1;
 
     if (status) {
-      whereClause += ` AND t.status = $${paramIndex++}`;
-      params.push(toDbTaskStatus(status));
+      if (status === 'OPEN') {
+        whereClause += ` AND t.status = 'OPEN' AND (t.application_deadline IS NULL OR t.application_deadline > CURRENT_TIMESTAMP)`;
+      } else {
+        whereClause += ` AND t.status = $${paramIndex++}`;
+        params.push(toDbTaskStatus(status));
+      }
+    }
+    if (fieldId) {
+      whereClause += ` AND t.category_id = $${paramIndex++}`;
+      params.push(fieldId);
     }
     if (categoryId) {
-      whereClause += ` AND t.category_id = $${paramIndex++}`;
+      whereClause += ` AND EXISTS (SELECT 1 FROM task_required_skills trs WHERE trs.task_id = t.id AND trs.skill_id = $${paramIndex++})`;
       params.push(categoryId);
     }
     if (taskType) {
       whereClause += ` AND t.task_type = $${paramIndex++}`;
       params.push(toDbTaskType(taskType));
+    }
+    if (postType) {
+      whereClause += ` AND t.post_type = $${paramIndex++}`;
+      params.push(postType);
+    }
+    if (workMode) {
+      whereClause += ` AND t.work_mode = $${paramIndex++}`;
+      params.push(workMode);
+    }
+    if (salaryUnit) {
+      whereClause += ` AND t.salary_unit = $${paramIndex++}`;
+      params.push(salaryUnit);
     }
     if (search) {
       whereClause += ` AND (t.title ILIKE $${paramIndex} OR t.description ILIKE $${paramIndex})`;
@@ -179,18 +234,106 @@ const taskModel = {
     const result = await pool.query(
       `SELECT t.*, 
               c.name AS category_name, c.slug AS category_slug,
+              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
+               FROM task_required_skills trs
+               JOIN skills s ON trs.skill_id = s.id
+               WHERE trs.task_id = t.id
+               LIMIT 1) AS subcategory,
               u.full_name AS poster_name, u.avatar_url AS poster_avatar,
-              (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count
+              (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count,
+              EXISTS (
+                SELECT 1 FROM saved_tasks st
+                WHERE st.task_id = t.id AND st.user_id = $${paramIndex}
+              ) AS is_saved
        FROM tasks t
        LEFT JOIN categories c ON t.category_id = c.id
        LEFT JOIN users u ON t.poster_id = u.id
        ${whereClause}
        ORDER BY t.id DESC
-       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
-      [...params, currentLimit, offset]
+       LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}`,
+      [...params, currentUserId || null, currentLimit, offset]
     );
 
     // Map enums for API
+    for (const t of result.rows) {
+      t.status = fromDbTaskStatus(t.status);
+      t.task_type = fromDbTaskType(t.task_type);
+    }
+
+    return {
+      tasks: result.rows,
+      pagination: {
+        page: currentPage,
+        limit: currentLimit,
+        total,
+        totalPages: Math.ceil(total / currentLimit),
+      },
+    };
+  },
+
+  /**
+   * Save a task for a user.
+   */
+  async saveForUser(userId, taskId) {
+    const result = await pool.query(
+      `INSERT INTO saved_tasks (id, user_id, task_id)
+       VALUES (gen_random_uuid(), $1, $2)
+       ON CONFLICT (user_id, task_id) DO NOTHING
+       RETURNING *`,
+      [userId, taskId]
+    );
+
+    return result.rows[0] || null;
+  },
+
+  /**
+   * Remove a saved task for a user.
+   */
+  async unsaveForUser(userId, taskId) {
+    await pool.query(
+      'DELETE FROM saved_tasks WHERE user_id = $1 AND task_id = $2',
+      [userId, taskId]
+    );
+  },
+
+  /**
+   * Find saved tasks for a user.
+   */
+  async findSavedByUser(userId, { page, limit } = {}) {
+    const currentPage = page || PAGINATION.DEFAULT_PAGE;
+    const currentLimit = Math.min(limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
+    const offset = (currentPage - 1) * currentLimit;
+
+    const countResult = await pool.query(
+      'SELECT COUNT(*) as total FROM saved_tasks WHERE user_id = $1',
+      [userId]
+    );
+    const total = parseInt(countResult.rows[0].total);
+
+    const result = await pool.query(
+      `SELECT t.*,
+              c.name AS category_name, c.slug AS category_slug,
+              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
+               FROM task_required_skills trs
+               JOIN skills s ON trs.skill_id = s.id
+               WHERE trs.task_id = t.id
+               LIMIT 1) AS subcategory,
+              u.full_name AS poster_name, u.avatar_url AS poster_avatar,
+              (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count,
+              TRUE AS is_saved,
+              st.created_at AS saved_at
+       FROM saved_tasks st
+       JOIN tasks t ON st.task_id = t.id
+       LEFT JOIN categories c ON t.category_id = c.id
+       LEFT JOIN users u ON t.poster_id = u.id
+       WHERE st.user_id = $1
+       ORDER BY st.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, currentLimit, offset]
+    );
+
     for (const t of result.rows) {
       t.status = fromDbTaskStatus(t.status);
       t.task_type = fromDbTaskType(t.task_type);
@@ -224,6 +367,12 @@ const taskModel = {
     const result = await pool.query(
       `SELECT t.*, 
               c.name AS category_name, c.slug AS category_slug,
+              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
+               FROM task_required_skills trs
+               JOIN skills s ON trs.skill_id = s.id
+               WHERE trs.task_id = t.id
+               LIMIT 1) AS subcategory,
               (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count
        FROM tasks t
        LEFT JOIN categories c ON t.category_id = c.id
@@ -257,6 +406,28 @@ const taskModel = {
     const result = await db.query(
       'UPDATE tasks SET status = $2 WHERE id = $1 RETURNING *',
       [id, dbStatus]
+    );
+    const task = result.rows[0] || null;
+    if (task) {
+      task.status = fromDbTaskStatus(task.status);
+      task.task_type = fromDbTaskType(task.task_type);
+    }
+    return task;
+  },
+
+  /**
+   * Close recruitment for a task
+   */
+  async closeRecruitment(id, closedById, closedReason, db = pool) {
+    const result = await db.query(
+      `UPDATE tasks 
+       SET status = 'CLOSED', 
+           closed_at = CURRENT_TIMESTAMP, 
+           closed_by_id = $2, 
+           closed_reason = $3 
+       WHERE id = $1 
+       RETURNING *`,
+      [id, closedById, closedReason]
     );
     const task = result.rows[0] || null;
     if (task) {
@@ -323,27 +494,61 @@ const taskModel = {
     deadlineEnd,
     allowInsurance,
     images,
+    postType,
+    workMode,
+    salaryUnit,
+    employmentType,
+    peopleNeeded,
+    contactPhone,
+    startDate,
+    experienceLevel,
+    educationLevel,
+    genderRequirement,
+    minAge,
+    maxAge,
+    minHeightCm,
+    maxHeightCm,
+    hashtags,
+    applicationDeadline,
   }, db = pool) {
     const dbTaskType = taskType ? toDbTaskType(taskType) : undefined;
     const result = await db.query(
       `UPDATE tasks
-       SET category_id = COALESCE($2, category_id),
-           title = COALESCE($3, title),
-           description = COALESCE($4, description),
-           task_type = COALESCE($5, task_type),
-           budget_min = COALESCE($6, budget_min),
-           budget_max = COALESCE($7, budget_max),
-           deadline_start = COALESCE($8, deadline_start),
-           deadline_end = COALESCE($9, deadline_end),
-           allow_insurance = COALESCE($10, allow_insurance),
-           images = COALESCE($11, images),
+       SET category_id = $2,
+           title = $3,
+           description = $4,
+           task_type = $5,
+           budget_min = $6,
+           budget_max = $7,
+           deadline_start = $8,
+           deadline_end = $9,
+           allow_insurance = $10,
+           images = $11,
+           post_type = $12,
+           work_mode = $13,
+           salary_unit = $14,
+           employment_type = $15,
+           people_needed = $16,
+           contact_phone = $17,
+           start_date = $18,
+           experience_level = $19,
+           education_level = $20,
+           gender_requirement = $21,
+           min_age = $22,
+           max_age = $23,
+           min_height_cm = $24,
+           max_height_cm = $25,
+           hashtags = $26,
+           application_deadline = $27,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
        RETURNING *`,
       [
         id, categoryId, title, description, dbTaskType,
-        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance,
-        images !== undefined ? images : null
+        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance, images,
+        postType, workMode, salaryUnit, employmentType, peopleNeeded, contactPhone,
+        startDate, experienceLevel, educationLevel, genderRequirement, minAge, maxAge,
+        minHeightCm, maxHeightCm, hashtags, applicationDeadline,
       ]
     );
     const task = result.rows[0] || null;

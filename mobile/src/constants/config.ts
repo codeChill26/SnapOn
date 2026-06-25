@@ -1,7 +1,11 @@
+const LOCAL_API_URL = 'http://192.168.1.89:3000/api';
+const DEPLOYED_API_URL = 'https://snapon.onrender.com/api';
+
 const Config = {
-  API_BASE_URL: 'http://192.168.1.74:3000/api',
-  // Set this to your deployed backend URL to use remote API instead of local
-  DEPLOYED_API_URL: 'https://snapon-1.onrender.com/api',
+  API_BASE_URL: __DEV__ ? LOCAL_API_URL : DEPLOYED_API_URL,
+  LOCAL_API_URL,
+  DEPLOYED_API_URL,
+  EXPO_PROJECT_ID: 'ebcc55c8-278c-4ee0-aa61-7ade2a54e646',
   FIREBASE: {
     apiKey: 'AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ',
     authDomain: 'hcm202-2d75e.firebaseapp.com',

@@ -16,7 +16,6 @@ import { useAuth } from '../context/AuthContext';
 
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { PostJobScreen } from '../screens/postJob/PostJobScreen';
-import { WorkerDashboardScreen } from '../screens/worker/WorkerDashboardScreen';
 import { ChatListScreen } from '../screens/chat/ChatListScreen';
 import { ActivityScreen } from '../screens/activity/ActivityScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
@@ -25,8 +24,7 @@ import { UserRole } from '../types';
 
 export type MainTabParamList = {
   Home: undefined;
-  PostJob: undefined;
-  WorkerDashboard: undefined;
+  PostJob: { taskId?: string; initialPostType?: 'RECRUITMENT' | 'SERVICE_OFFER' } | undefined;
   ChatList: undefined;
   Activity: undefined;
   Profile: undefined;
@@ -45,15 +43,15 @@ interface TabConfig {
 }
 
 const TAB_COLORS = {
-  background: '#0B111D',
-  backgroundElevated: '#111A2A',
-  activeSurface: 'rgba(255, 107, 53, 0.14)',
+  background: '#F7F8FA',
+  backgroundElevated: '#FFFFFF',
+  activeSurface: '#FFF1EB',
 
   active: '#FF6B35',
-  inactive: '#7F8CA3',
+  inactive: '#98A2B3',
 
-  border: 'rgba(255, 255, 255, 0.08)',
-  shadow: '#000000',
+  border: '#EAECF0',
+  shadow: '#101828',
   white: '#FFFFFF',
 };
 
@@ -64,7 +62,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'home',
     iconOutline: 'home-outline',
     component: HomeScreen,
-    roles: ['hirer', 'worker'],
+    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
   },
   {
     name: 'PostJob',
@@ -72,15 +70,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'add',
     iconOutline: 'add',
     component: PostJobScreen,
-    roles: ['hirer'],
-  },
-  {
-    name: 'WorkerDashboard',
-    label: 'Việc gần',
-    iconFocused: 'map',
-    iconOutline: 'map-outline',
-    component: WorkerDashboardScreen,
-    roles: ['worker'],
+    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
   },
   {
     name: 'ChatList',
@@ -88,7 +78,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'chatbubble-ellipses',
     iconOutline: 'chatbubble-ellipses-outline',
     component: ChatListScreen,
-    roles: ['hirer', 'worker'],
+    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
   },
   {
     name: 'Activity',
@@ -96,7 +86,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'clipboard',
     iconOutline: 'clipboard-outline',
     component: ActivityScreen,
-    roles: ['hirer', 'worker'],
+    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
   },
   {
     name: 'Profile',
@@ -104,7 +94,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'person',
     iconOutline: 'person-outline',
     component: ProfileScreen,
-    roles: ['hirer', 'worker'],
+    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
   },
 ];
 
@@ -113,7 +103,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export const MainTabNavigator: React.FC = () => {
   const { user } = useAuth();
 
-  const role: UserRole = user?.role ?? 'hirer';
+  const role: UserRole = user?.role ?? 'USER';
 
   const visibleTabs = tabConfigs.filter((tab) =>
     tab.roles.includes(role),
@@ -218,12 +208,12 @@ const styles = StyleSheet.create({
     shadowColor: TAB_COLORS.shadow,
     shadowOffset: {
       width: 0,
-      height: -5,
+      height: -4,
     },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
 
-    elevation: 18,
+    elevation: 8,
   },
 
   tabBarItem: {
@@ -273,18 +263,18 @@ const styles = StyleSheet.create({
     shadowColor: TAB_COLORS.active,
     shadowOffset: {
       width: 0,
-      height: 5,
+      height: 4,
     },
-    shadowOpacity: 0.35,
-    shadowRadius: 9,
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
 
-    elevation: 10,
+    elevation: 6,
   },
 
   postJobButtonFocused: {
     transform: [{ scale: 1.06 }],
 
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
 });

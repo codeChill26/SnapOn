@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { AppColors } from '../../theme';
 
 interface ModalProps {
   visible: boolean;
@@ -56,10 +57,10 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: Colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   content: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AppColors.background.elevated,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -74,13 +75,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   closeBtn: {
     padding: 4,
   },
   closeText: {
     fontSize: 18,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
   },
 });

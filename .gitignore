@@ -26,6 +26,7 @@ dist/
 build/
 .vite/
 coverage/
+.expo/
 
 # OS junk
 .DS_Store

@@ -128,6 +128,15 @@ const matchingController = {
 
         await client.query('COMMIT');
 
+        // Broadcast to the accepted worker (tasker) via Socket.io
+        const io = req.app.get('io');
+        if (io) {
+          io.to(application.tasker_id).emit('task_assigned', {
+            taskId,
+            taskTitle: lockedTask.title,
+          });
+        }
+
         return success(
           res,
           { assignedTask, matchedTasker: bestMatch, escrow },
@@ -261,6 +270,15 @@ const matchingController = {
         await taskApplicationModel.rejectAllExcept(taskId, application_id, client);
 
         await client.query('COMMIT');
+
+        // Broadcast to the accepted worker (tasker) via Socket.io
+        const io = req.app.get('io');
+        if (io) {
+          io.to(lockedApp.tasker_id).emit('task_assigned', {
+            taskId,
+            taskTitle: lockedTask.title,
+          });
+        }
 
         return success(
           res,

@@ -4,9 +4,11 @@ import type { Socket } from 'socket.io-client';
 import Config from '../constants/config';
 import { storage } from '../utils/storage';
 
+type SocketCallback<T = unknown> = (payload: T) => void;
+
 class SocketService {
   private socket: Socket | null = null;
-  private listeners: { [event: string]: Function[] } = {};
+  private listeners: Record<string, SocketCallback[]> = {};
 
   async connect(userId?: string) {
     if (this.socket) {
@@ -15,7 +17,7 @@ class SocketService {
 
     const token = await storage.getToken();
 
-    const authPayload: any = {};
+    const authPayload: { token?: string; xUserId?: string } = {};
     if (token) {
       authPayload.token = token;
     }
@@ -36,15 +38,21 @@ class SocketService {
     this.socket = socketInstance;
 
     socketInstance.on('connect', () => {
-      console.log('🔌 Socket connected successfully:', socketInstance.id);
+      if (__DEV__) {
+        console.log('Socket connected successfully:', socketInstance.id);
+      }
     });
 
     socketInstance.on('disconnect', (reason) => {
-      console.log('🔌 Socket disconnected:', reason);
+      if (__DEV__) {
+        console.log('Socket disconnected:', reason);
+      }
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('🔌 Socket connection error:', error);
+      if (__DEV__) {
+        console.warn('Socket connection error:', error.message || error);
+      }
     });
 
     // Re-register all existing event listeners on the new socket
@@ -62,18 +70,18 @@ class SocketService {
     }
   }
 
-  on(event: string, callback: Function) {
+  on<T = unknown>(event: string, callback: SocketCallback<T>) {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
-    this.listeners[event].push(callback);
+    this.listeners[event].push(callback as SocketCallback);
 
     if (this.socket) {
       this.socket.on(event, callback as any);
     }
   }
 
-  off(event: string, callback?: Function) {
+  off<T = unknown>(event: string, callback?: SocketCallback<T>) {
     if (!this.listeners[event]) return;
 
     if (callback) {
@@ -89,7 +97,7 @@ class SocketService {
     }
   }
 
-  emit(event: string, data: any) {
+  emit(event: string, data?: unknown) {
     if (this.socket) {
       this.socket.emit(event, data);
     }

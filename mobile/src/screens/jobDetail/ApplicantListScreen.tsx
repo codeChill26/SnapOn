@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,37 +6,37 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
-  StatusBar,
   Platform,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { UserAvatar } from '../../components/common/UserAvatar';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { applicationService } from '../../services/applicationService';
 import { matchingService } from '../../services/matchingService';
 import { TaskApplication } from '../../types';
-import { formatCurrency } from '../../utils/format';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { AppColors } from '../../theme';
+import { HomeTheme } from '../../components/home/HomeTheme';
+import { formatDate } from '../../utils/format';
+import { UserAvatar } from '../../components/common/UserAvatar';
 
 type ApplicantListRouteProp = RouteProp<RootStackParamList, 'ApplicantList'>;
+type FilterTab = 'ALL' | 'PENDING' | 'ACCEPTED' | 'REJECTED';
 
 export const ApplicantListScreen: React.FC = () => {
   const route = useRoute<ApplicantListRouteProp>();
   const navigation = useNavigation<any>();
+
   const [applicants, setApplicants] = useState<TaskApplication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
 
   useEffect(() => {
     loadApplicants();
-  }, []);
+  }, [route.params.taskId]);
 
   const loadApplicants = async () => {
     try {
@@ -44,43 +44,55 @@ export const ApplicantListScreen: React.FC = () => {
       try {
         const ranked = await matchingService.getRankedApplications(route.params.taskId);
         if (ranked && ranked.length > 0) {
-          apps = ranked;
+          // Merge details if score is present
+          apps = apps.map(app => {
+            const rankInfo = ranked.find(r => r.id === app.id);
+            return rankInfo ? { ...app, score: rankInfo.score } : app;
+          });
+          // Sort by score desc if score exists
+          apps.sort((a, b) => (b.score || 0) - (a.score || 0));
         }
-      } catch {
-        // ranking not available
+      } catch (err) {
+        if (__DEV__) {
+          console.warn('AI ranking not available:', err);
+        }
       }
       setApplicants(apps);
     } catch (error) {
-      console.error('Failed to load applicants:', error);
+      if (__DEV__) {
+        console.error('Failed to load applicants:', error);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleManualMatch = async (applicantId?: string) => {
-    const targetId = applicantId || selectedId;
-    if (!targetId) {
-      Alert.alert('Lỗi', 'Vui lòng chọn một ứng viên');
-      return;
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadApplicants();
+    setRefreshing(false);
+  };
+
+  const handleUpdateStatus = (applicantId: string, status: 'ACCEPTED' | 'REJECTED', name: string) => {
+    const actionLabel = status === 'ACCEPTED' ? 'nhận (tuyển)' : 'từ chối';
     Alert.alert(
-      'Xác nhận chọn ứng viên',
-      'Bạn có chắc chắn muốn chọn ứng viên này cho công việc không?',
+      'Xác nhận hành động',
+      `Bạn có chắc chắn muốn ${actionLabel} ứng viên ${name}?`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
           text: 'Xác nhận',
           onPress: async () => {
-            setConfirming(true);
+            setActionInProgressId(applicantId);
             try {
-              await matchingService.manualMatch(route.params.taskId, targetId);
-              Alert.alert('Thành công', 'Đã ghép ứng viên thành công!', [
-                { text: 'OK', onPress: () => navigation.goBack() },
-              ]);
-            } catch (error: any) {
-              Alert.alert('Lỗi', error.message || 'Ghép ứng viên thất bại');
+              await applicationService.updateApplicationStatus(applicantId, status);
+              Alert.alert('Thành công', `Đã cập nhật trạng thái ứng viên.`);
+              loadApplicants();
+            } catch (err: any) {
+              const msg = err.response?.data?.message || err.message || 'Cập nhật trạng thái thất bại.';
+              Alert.alert('Lỗi', msg);
             } finally {
-              setConfirming(false);
+              setActionInProgressId(null);
             }
           },
         },
@@ -88,549 +100,417 @@ export const ApplicantListScreen: React.FC = () => {
     );
   };
 
-  if (loading) return <LoadingSpinner fullScreen message="Đang tải ứng viên..." />;
+  const filteredApplicants = useMemo(() => {
+    if (activeTab === 'ALL') return applicants;
+    return applicants.filter(app => app.status === activeTab);
+  }, [applicants, activeTab]);
+
+  if (loading) return <LoadingSpinner fullScreen message="Đang tải danh sách..." />;
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-
-      {/* ── HEADER ── */}
-      <LinearGradient
-        colors={[AppColors.background.secondary, AppColors.background.primary]}
-        style={styles.header}
-      >
+    <SafeAreaView style={styles.safeContainer}>
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={AppColors.text.primary} />
+          <Ionicons name="chevron-back" size={24} color={HomeTheme.colors.text} />
         </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
+        <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Danh sách ứng viên</Text>
-          <View style={styles.headerCountBadge}>
-            <Text style={styles.headerCountText}>{applicants.length}</Text>
-          </View>
+          <Text style={styles.headerSubtitle}>Tổng số: {applicants.length} ứng viên</Text>
         </View>
+        <View style={styles.headerPlaceholder} />
+      </View>
 
-        {/* AI ranked indicator */}
-        <View style={styles.aiTag}>
-          <Ionicons name="sparkles-outline" size={12} color={AppColors.brand.primary} />
-          <Text style={styles.aiTagText}>AI xếp hạng</Text>
-        </View>
-      </LinearGradient>
+      {/* Tabs Filter */}
+      <View style={styles.tabsWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'ALL' && styles.activeTab]}
+            onPress={() => setActiveTab('ALL')}
+          >
+            <Text style={[styles.tabText, activeTab === 'ALL' && styles.activeTabText]}>Tất cả</Text>
+          </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'PENDING' && styles.activeTab]}
+            onPress={() => setActiveTab('PENDING')}
+          >
+            <Text style={[styles.tabText, activeTab === 'PENDING' && styles.activeTabText]}>Chờ duyệt</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'ACCEPTED' && styles.activeTab]}
+            onPress={() => setActiveTab('ACCEPTED')}
+          >
+            <Text style={[styles.tabText, activeTab === 'ACCEPTED' && styles.activeTabText]}>Đã nhận</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'REJECTED' && styles.activeTab]}
+            onPress={() => setActiveTab('REJECTED')}
+          >
+            <Text style={[styles.tabText, activeTab === 'REJECTED' && styles.activeTabText]}>Đã từ chối</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* List content */}
       <ScrollView
-        style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {applicants.length === 0 ? (
-          /* Empty state */
-          <View style={styles.emptyWrapper}>
-            <View style={styles.emptyIconRing}>
-              <Ionicons name="people-outline" size={36} color={AppColors.text.disabled} />
-            </View>
-            <Text style={styles.emptyTitle}>Chưa có ứng viên</Text>
-            <Text style={styles.emptyDesc}>
-              Chưa có ai ứng tuyển công việc này. Hãy chờ thêm hoặc thử tính năng tự động ghép.
-            </Text>
+        {filteredApplicants.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="people-outline" size={48} color={HomeTheme.colors.textMuted} />
+            <Text style={styles.emptyTitle}>Chưa có ứng viên nào</Text>
+            <Text style={styles.emptySubtitle}>Không tìm thấy ứng viên trong mục này.</Text>
           </View>
         ) : (
-          <>
-            <Text style={styles.listHint}>
-              Nhấn vào card để chọn · Nhấn nút để xác nhận ghép
-            </Text>
-
-            {applicants.map((applicant, index) => {
-              const isSelected = selectedId === applicant.id;
-              const isTopMatch = index === 0 && applicant.score !== undefined;
-              return (
-                <TouchableOpacity
-                  key={applicant.id}
-                  onPress={() => setSelectedId(isSelected ? null : applicant.id)}
-                  activeOpacity={0.88}
-                  style={[
-                    styles.cardWrapper,
-                    isSelected && styles.cardWrapperSelected,
-                  ]}
-                >
-                  {/* Top match ribbon */}
-                  {isTopMatch && (
-                    <View style={styles.topMatchRibbon}>
-                      <Ionicons name="trophy-outline" size={11} color="#FFFFFF" />
-                      <Text style={styles.topMatchText}>Phù hợp nhất</Text>
-                    </View>
-                  )}
-
-                  {/* Rank number */}
-                  <View style={[styles.rankBadge, isSelected && styles.rankBadgeSelected]}>
-                    <Text style={[styles.rankText, isSelected && styles.rankTextSelected]}>
-                      #{index + 1}
-                    </Text>
+          filteredApplicants.map((applicant, index) => {
+            const hasScore = applicant.score !== undefined;
+            return (
+              <View key={applicant.id} style={styles.applicantCard}>
+                {/* AI Score Badge if present */}
+                {hasScore && (
+                  <View style={styles.scoreBadge}>
+                    <Ionicons name="sparkles" size={12} color="#FFFFFF" />
+                    <Text style={styles.scoreText}>AI Phù hợp {(applicant.score! * 100).toFixed(0)}%</Text>
                   </View>
+                )}
 
-                  {/* Main row */}
-                  <View style={styles.cardMain}>
-                    {/* Avatar */}
+                <View style={styles.cardHeader}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (applicant.taskerId) {
+                        navigation.navigate('PublicProfile', { userId: applicant.taskerId });
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <UserAvatar
                       name={applicant.taskerName || 'N/A'}
                       avatarUrl={applicant.taskerAvatar}
-                      size={50}
+                      size={44}
                     />
-
-                    {/* Info */}
-                    <View style={styles.applicantInfo}>
-                      <View style={styles.nameRow}>
-                        <Text style={styles.applicantName} numberOfLines={1}>
-                          {applicant.taskerName || 'N/A'}
-                        </Text>
-
-                        {/* Chat button */}
-                        <TouchableOpacity
-                          onPress={() =>
-                            navigation.navigate('ChatDetail', {
-                              otherUserId: applicant.taskerId,
-                              otherUserName: applicant.taskerName || 'N/A',
-                              otherUserAvatar: applicant.taskerAvatar,
-                            })
+                  </TouchableOpacity>
+                  <View style={styles.applicantMeta}>
+                    <View style={styles.nameRow}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (applicant.taskerId) {
+                            navigation.navigate('PublicProfile', { userId: applicant.taskerId });
                           }
-                          style={styles.chatBtn}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="chatbubble-ellipses" size={15} color={AppColors.brand.primary} />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Rating & ETA */}
-                      <View style={styles.ratingRow}>
-                        <Ionicons name="star" size={13} color={AppColors.status.warning} />
-                        <Text style={styles.ratingText}>
-                          {applicant.taskerRating?.toFixed(1) ?? 'N/A'}
-                        </Text>
-
-                        <View style={styles.etaBadge}>
-                          <Ionicons name="time-outline" size={11} color={AppColors.text.muted} />
-                          <Text style={styles.etaText}>
-                            {applicant.estimatedTime || 'N/A'}
-                          </Text>
-                        </View>
-
-                        {applicant.score !== undefined && (
-                          <View style={styles.scoreBadge}>
-                            <Text style={styles.scoreText}>
-                              AI {(applicant.score * 100).toFixed(0)}%
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Message */}
-                      {applicant.message ? (
-                        <Text style={styles.messageText} numberOfLines={2}>
-                          "{applicant.message}"
-                        </Text>
-                      ) : null}
+                        }}
+                        activeOpacity={0.7}
+                        style={{ flex: 1 }}
+                      >
+                        <Text style={styles.applicantName}>{applicant.taskerName || 'Người ứng tuyển'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.chatBtn}
+                        onPress={() =>
+                          navigation.navigate('ChatDetail', {
+                            otherUserId: applicant.taskerId,
+                            otherUserName: applicant.taskerName || 'Người ứng tuyển',
+                            otherUserAvatar: null,
+                          })
+                        }
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={HomeTheme.colors.primary} />
+                      </TouchableOpacity>
                     </View>
-
-                    {/* Bid price */}
-                    <View style={styles.bidBlock}>
-                      <Text style={styles.bidAmount}>{formatCurrency(applicant.bidPrice)}</Text>
-                      <Text style={styles.bidLabel}>Đề xuất</Text>
+                    
+                    <View style={styles.subMetaRow}>
+                      <Ionicons name="star" size={13} color="#F59E0B" />
+                      <Text style={styles.ratingText}>
+                        {applicant.taskerRating !== undefined && applicant.taskerRating > 0
+                          ? applicant.taskerRating.toFixed(1)
+                          : '5.0'}
+                      </Text>
+                      <View style={styles.dotSeparator} />
+                      <Text style={styles.timeText}>
+                        Ứng tuyển lúc: {formatDate(applicant.createdAt)}
+                      </Text>
                     </View>
                   </View>
+                </View>
 
-                  {/* Select indicator */}
-                  {isSelected && (
-                    <View style={styles.selectedIndicator}>
-                      <Ionicons name="checkmark-circle" size={18} color={AppColors.status.success} />
-                      <Text style={styles.selectedText}>Đã chọn · Nhấn xác nhận để ghép</Text>
+                {applicant.message && (
+                  <View style={styles.messageBox}>
+                    <Text style={styles.messageText}>"{applicant.message}"</Text>
+                  </View>
+                )}
+
+                {/* Actions Row */}
+                <View style={styles.cardActions}>
+                  {applicant.status === 'PENDING' ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.btnReject]}
+                        disabled={actionInProgressId === applicant.id}
+                        onPress={() => handleUpdateStatus(applicant.id, 'REJECTED', applicant.taskerName || '')}
+                      >
+                        <Text style={styles.btnRejectText}>Từ chối</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.btnAccept]}
+                        disabled={actionInProgressId === applicant.id}
+                        onPress={() => handleUpdateStatus(applicant.id, 'ACCEPTED', applicant.taskerName || '')}
+                      >
+                        <Text style={styles.btnAcceptText}>Duyệt nhận</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <View style={styles.statusDisplayRow}>
+                      <Ionicons
+                        name={applicant.status === 'ACCEPTED' ? 'checkmark-circle' : 'close-circle'}
+                        size={16}
+                        color={applicant.status === 'ACCEPTED' ? HomeTheme.colors.success : HomeTheme.colors.error}
+                      />
+                      <Text
+                        style={[
+                          styles.statusDisplayText,
+                          { color: applicant.status === 'ACCEPTED' ? HomeTheme.colors.success : HomeTheme.colors.error },
+                        ]}
+                      >
+                        {applicant.status === 'ACCEPTED' ? 'Đã duyệt nhận' : 'Đã từ chối'}
+                      </Text>
                     </View>
                   )}
-
-                  {/* Quick select button */}
-                  <TouchableOpacity
-                    style={[
-                      styles.quickSelectBtn,
-                      isSelected && styles.quickSelectBtnActive,
-                    ]}
-                    onPress={() => handleManualMatch(applicant.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name={isSelected ? 'checkmark-done' : 'person-add-outline'}
-                      size={14}
-                      color={isSelected ? '#FFFFFF' : AppColors.brand.primary}
-                    />
-                    <Text
-                      style={[
-                        styles.quickSelectText,
-                        isSelected && styles.quickSelectTextActive,
-                      ]}
-                    >
-                      {isSelected ? 'Xác nhận ghép' : 'Chọn ứng viên này'}
-                    </Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })}
-          </>
+                </View>
+              </View>
+            );
+          })
         )}
       </ScrollView>
-
-      {/* ── FLOATING CONFIRM BAR ── */}
-      {selectedId && (
-        <View style={styles.floatingBar}>
-          <View style={styles.floatingInfo}>
-            <Ionicons name="person-circle-outline" size={20} color={AppColors.brand.primary} />
-            <Text style={styles.floatingInfoText}>1 ứng viên đã được chọn</Text>
-          </View>
-          <Button
-            title={confirming ? 'Đang ghép...' : 'Xác nhận ghép'}
-            onPress={() => handleManualMatch()}
-            loading={confirming}
-            size="md"
-            style={styles.floatingBtn}
-          />
-        </View>
-      )}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  root: {
+  safeContainer: {
     flex: 1,
-    backgroundColor: AppColors.background.primary,
+    backgroundColor: HomeTheme.colors.page,
   },
-
-  /* ── HEADER ── */
   header: {
-    paddingTop: Platform.OS === 'ios' ? 56 : 44,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: AppColors.border.subtle,
+    borderBottomColor: HomeTheme.colors.border,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
+    padding: 4,
   },
-  headerCenter: {
-    flex: 1,
-    flexDirection: 'row',
+  headerTitleContainer: {
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: AppColors.text.primary,
+    color: HomeTheme.colors.text,
   },
-  headerCountBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: AppColors.brand.primarySoft,
-  },
-  headerCountText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: AppColors.brand.primary,
-  },
-  aiTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 107, 53, 0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 53, 0.25)',
-  },
-  aiTagText: {
+  headerSubtitle: {
     fontSize: 11,
-    fontWeight: '700',
-    color: AppColors.brand.primary,
+    color: HomeTheme.colors.textSecondary,
+    marginTop: 2,
   },
-
-  /* ── LIST ── */
-  list: {
-    flex: 1,
+  headerPlaceholder: {
+    width: 32,
+  },
+  tabsWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: HomeTheme.colors.border,
+  },
+  tabsScroll: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: HomeTheme.radius.small,
+    backgroundColor: HomeTheme.colors.page,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+  },
+  activeTab: {
+    backgroundColor: HomeTheme.colors.primarySoft,
+    borderColor: HomeTheme.colors.primary,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: HomeTheme.colors.textSecondary,
+  },
+  activeTabText: {
+    color: HomeTheme.colors.primary,
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 100,
-    gap: 12,
+    padding: 16,
+    gap: 16,
+    paddingBottom: 40,
   },
-  listHint: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: AppColors.text.disabled,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-
-  /* ── EMPTY STATE ── */
-  emptyWrapper: {
-    alignItems: 'center',
-    paddingTop: 60,
-    gap: 14,
-  },
-  emptyIconRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
+    paddingVertical: 80,
+    gap: 12,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
-    color: AppColors.text.primary,
+    color: HomeTheme.colors.text,
   },
-  emptyDesc: {
+  emptySubtitle: {
     fontSize: 13,
-    lineHeight: 20,
-    color: AppColors.text.muted,
+    color: HomeTheme.colors.textSecondary,
     textAlign: 'center',
-    paddingHorizontal: 24,
   },
-
-  /* ── APPLICANT CARD ── */
-  cardWrapper: {
+  applicantCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: HomeTheme.radius.medium,
     padding: 16,
-    borderRadius: 20,
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1.5,
-    borderColor: AppColors.border.subtle,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    position: 'relative',
     overflow: 'hidden',
   },
-  cardWrapperSelected: {
-    borderColor: AppColors.status.success,
-    backgroundColor: 'rgba(34, 197, 94, 0.06)',
-  },
-
-  /* Top match ribbon */
-  topMatchRibbon: {
+  scoreBadge: {
     position: 'absolute',
     top: 0,
-    left: 0,
+    right: 0,
+    backgroundColor: '#34A853',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderBottomRightRadius: 12,
-    backgroundColor: AppColors.brand.primary,
   },
-  topMatchText: {
-    fontSize: 10,
-    fontWeight: '800',
+  scoreText: {
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    fontSize: 11,
+    fontWeight: '700',
   },
-
-  /* Rank badge */
-  rankBadge: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 28,
-    height: 28,
-    borderRadius: 9,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  avatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: HomeTheme.colors.page,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: AppColors.surface.subtle,
     borderWidth: 1,
-    borderColor: AppColors.border.subtle,
+    borderColor: HomeTheme.colors.border,
+    marginRight: 12,
   },
-  rankBadgeSelected: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderColor: AppColors.status.success,
-  },
-  rankText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: AppColors.text.muted,
-  },
-  rankTextSelected: {
-    color: AppColors.status.success,
-  },
-
-  /* Main content row */
-  cardMain: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginTop: 12,
-  },
-  applicantInfo: {
+  applicantMeta: {
     flex: 1,
     gap: 4,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingRight: 100, // Leave room for scoreBadge
   },
   applicantName: {
-    flex: 1,
     fontSize: 15,
     fontWeight: '800',
-    color: AppColors.text.primary,
+    color: HomeTheme.colors.text,
   },
   chatBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: AppColors.brand.primarySoft,
+    padding: 4,
+    marginLeft: 6,
   },
-  ratingRow: {
+  subMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
   },
   ratingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: AppColors.text.secondary,
+    fontSize: 12,
+    color: HomeTheme.colors.textSecondary,
+    fontWeight: '700',
+    marginLeft: 4,
   },
-  etaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  dotSeparator: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: HomeTheme.colors.textMuted,
+    marginHorizontal: 8,
   },
-  etaText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: AppColors.text.muted,
+  timeText: {
+    fontSize: 11,
+    color: HomeTheme.colors.textSecondary,
   },
-  scoreBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 107, 53, 0.12)',
-  },
-  scoreText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: AppColors.brand.primary,
+  messageBox: {
+    backgroundColor: HomeTheme.colors.page,
+    padding: 10,
+    borderRadius: HomeTheme.radius.small,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
   },
   messageText: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: AppColors.text.muted,
+    fontSize: 13,
+    color: HomeTheme.colors.textSecondary,
     fontStyle: 'italic',
-    marginTop: 2,
+    lineHeight: 18,
   },
-
-  /* Bid block */
-  bidBlock: {
-    alignItems: 'flex-end',
-    paddingTop: 2,
-    minWidth: 80,
-  },
-  bidAmount: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: AppColors.brand.primary,
-  },
-  bidLabel: {
-    marginTop: 2,
-    fontSize: 10,
-    fontWeight: '600',
-    color: AppColors.text.disabled,
-    letterSpacing: 0.3,
-  },
-
-  /* Selected indicator */
-  selectedIndicator: {
+  cardActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: 'rgba(34, 197, 94, 0.10)',
+    gap: 12,
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: HomeTheme.colors.divider,
+    paddingTop: 12,
   },
-  selectedText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: AppColors.status.success,
-  },
-
-  /* Quick select button */
-  quickSelectBtn: {
-    flexDirection: 'row',
+  actionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 90,
+  },
+  btnReject: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+  },
+  btnRejectText: {
+    color: HomeTheme.colors.textSecondary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  btnAccept: {
+    backgroundColor: HomeTheme.colors.primary,
+  },
+  btnAcceptText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  statusDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    marginTop: 12,
-    paddingVertical: 10,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: AppColors.brand.primary,
-    backgroundColor: 'transparent',
   },
-  quickSelectBtnActive: {
-    backgroundColor: AppColors.brand.primary,
-    borderColor: AppColors.brand.primary,
-  },
-  quickSelectText: {
+  statusDisplayText: {
     fontSize: 13,
     fontWeight: '700',
-    color: AppColors.brand.primary,
-  },
-  quickSelectTextActive: {
-    color: '#FFFFFF',
-  },
-
-  /* ── FLOATING CONFIRM BAR ── */
-  floatingBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 14,
-    backgroundColor: AppColors.background.elevated,
-    borderTopWidth: 1,
-    borderTopColor: AppColors.border.subtle,
-  },
-  floatingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  floatingInfoText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: AppColors.text.secondary,
-  },
-  floatingBtn: {
-    minWidth: 140,
   },
 });
