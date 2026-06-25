@@ -5,7 +5,8 @@ const Config = {
   API_BASE_URL: __DEV__ ? LOCAL_API_URL : DEPLOYED_API_URL,
   LOCAL_API_URL,
   DEPLOYED_API_URL,
-  EXPO_PROJECT_ID: 'ebcc55c8-278c-4ee0-aa61-7ade2a54e646',
+  // EXPO_PROJECT_ID: 'ebcc55c8-278c-4ee0-aa61-7ade2a54e646',
+  EXPO_PROJECT_ID: '242e7c6a-8b3c-4113-b78b-09d385d0a34f',
   FIREBASE: {
     apiKey: 'AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ',
     authDomain: 'hcm202-2d75e.firebaseapp.com',
