@@ -1,3 +1,9 @@
+<<<<<<< Updated upstream
+=======
+const LOCAL_API_URL = 'http://192.168.1.5:3000/api';
+const DEPLOYED_API_URL = 'https://snapon.onrender.com/api';
+
+>>>>>>> Stashed changes
 const Config = {
   API_BASE_URL: 'http://192.168.1.74:3000/api',
   // Set this to your deployed backend URL to use remote API instead of local

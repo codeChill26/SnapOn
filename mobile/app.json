@@ -2,6 +2,9 @@
   "expo": {
     "name": "SnapOn",
     "slug": "snapon-mobile",
+    "updates": {
+      "enabled": false
+    },
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,7 +32,20 @@
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
+<<<<<<< Updated upstream
         "android.permission.ACCESS_FINE_LOCATION"
+=======
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+>>>>>>> Stashed changes
       ]
     },
     "plugins": [
@@ -45,7 +61,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "ebcc55c8-278c-4ee0-aa61-7ade2a54e646"
+        "projectId": "61d6e62d-a4ba-4ae8-bd01-66f2dcca6dd7"
       }
     }
   }

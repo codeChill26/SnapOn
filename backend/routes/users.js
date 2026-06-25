@@ -290,4 +290,8 @@ router.delete("/profile", verifyFirebaseToken, async (req, res) => {
   }
 });
 
+<<<<<<< Updated upstream
 module.exports = router;
+=======
+module.exports = router;
+>>>>>>> Stashed changes
