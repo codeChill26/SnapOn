@@ -13,11 +13,11 @@ const options = {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
+        url: 'http://localhost:8000',
         description: 'Development server',
       },
       {
-        url: "https://snapon.onrender.com",
+        url: "https://snapon-1.onrender.com",
         description: "Production server",
       },
     ],
