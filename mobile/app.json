@@ -73,8 +73,10 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "61d6e62d-a4ba-4ae8-bd01-66f2dcca6dd7"
+        "projectId": "242e7c6a-8b3c-4113-b78b-09d385d0a34f",
+        "_projectId_friend": "61d6e62d-a4ba-4ae8-bd01-66f2dcca6dd7"
       }
-    }
+    },
+    "owner": "winkiwar"
   }
 }
