@@ -26,7 +26,7 @@ import { HomeBanner } from '../../types';
 
 interface HomeBannerCarouselProps {
   onSelectCategory: (categoryId: string, categoryName: string) => void;
-  selectedCategory?: string;
+  selectedFieldId?: string;
   refreshKey?: number;
 }
 
@@ -50,42 +50,11 @@ const AUTO_PLAY_INTERVAL = 5000;
 const CARD_GAP = 16;
 const IMAGE_HEIGHT = 148;
 
-const normalizeText = (value?: string) =>
-  (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-
 const resolveCategory = (banner: HomeBanner): ResolvedCategory | null => {
   if (!banner.category) return null;
-
-  const apiId = String(banner.category.id);
-  const apiName = banner.category.name?.trim() || 'Danh mục';
-  const apiCode = banner.category.code?.trim().toLowerCase();
-  const normalizedApiName = normalizeText(apiName);
-
-  const localCategory = CATEGORIES.find((category) => {
-    const normalizedLocalName = normalizeText(category.name);
-
-    return (
-      category.slug === apiCode ||
-      normalizedLocalName === normalizedApiName ||
-      normalizedLocalName.includes(normalizedApiName) ||
-      normalizedApiName.includes(normalizedLocalName)
-    );
-  });
-
-  if (localCategory) {
-    return {
-      id: localCategory.slug,
-      name: localCategory.name,
-    };
-  }
-
   return {
-    id: apiCode || apiId,
-    name: apiName,
+    id: banner.category.id,
+    name: banner.category.name,
   };
 };
 
@@ -185,9 +154,9 @@ const BannerItem = React.memo<BannerItemProps>(
   },
 );
 
-export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = ({
+export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = React.memo(({
   onSelectCategory,
-  selectedCategory,
+  selectedFieldId,
   refreshKey = 0,
 }) => {
   const { width: screenWidth } = useWindowDimensions();
@@ -351,21 +320,16 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = ({
 
   const handleBannerPress = useCallback(
     (banner: HomeBanner) => {
-      const category = resolveCategory(banner);
-      if (!category) return;
-
-      onSelectCategory(category.id, category.name);
+      if (banner.category) {
+        onSelectCategory(banner.category.id, banner.category.name);
+      }
     },
     [onSelectCategory],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: HomeBannerLoopItem }) => {
-      const category = resolveCategory(item);
-      const isSelected = Boolean(
-        category && selectedCategory && category.id === selectedCategory,
-      );
-
+      const isSelected = item.category?.id === selectedFieldId;
       return (
         <BannerItem
           item={item}
@@ -375,7 +339,7 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = ({
         />
       );
     },
-    [cardWidth, handleBannerPress, selectedCategory],
+    [cardWidth, handleBannerPress, selectedFieldId],
   );
 
   const getItemLayout = useCallback(
@@ -468,7 +432,7 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = ({
       ) : null}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -700,4 +664,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(HomeBannerCarousel);
+export default HomeBannerCarousel;

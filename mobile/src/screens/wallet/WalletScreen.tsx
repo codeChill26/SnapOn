@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
+import { AppColors } from '../../theme';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -183,7 +184,7 @@ export const WalletScreen: React.FC = () => {
       )}
 
       {!route.params?.scrollToHistory && (
-        <Card style={styles.topupCard}>
+        <Card style={styles.topupCard} variant="glass">
           <Text style={styles.sectionTitle}>Nạp tiền</Text>
           <View style={styles.presetRow}>
             {TOPUP_PRESETS.map(amount => (
@@ -239,12 +240,12 @@ export const WalletScreen: React.FC = () => {
         >
           <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
           {transactions.length === 0 ? (
-            <Card style={styles.emptyCard}>
+            <Card style={styles.emptyCard} variant="glass">
               <Text style={styles.emptyText}>Chưa có giao dịch nào</Text>
             </Card>
           ) : (
             transactions.map(tx => (
-              <Card key={tx.id} style={styles.txCard}>
+              <Card key={tx.id} style={styles.txCard} variant="glass">
                 <View style={styles.txRow}>
                   <View style={styles.txLeft}>
                     <Text style={styles.txType}>
@@ -287,7 +288,7 @@ export const WalletScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.background.primary,
   },
   content: {
     padding: 16,
@@ -349,7 +350,7 @@ const styles = StyleSheet.create({
   },
   pendingDesc: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
     marginBottom: 14,
     lineHeight: 18,
   },
@@ -366,7 +367,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 12,
   },
   presetRow: {
@@ -380,7 +381,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
+    backgroundColor: AppColors.background.soft,
   },
   presetChipActive: {
     backgroundColor: Colors.primary,
@@ -389,7 +391,7 @@ const styles = StyleSheet.create({
   presetText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.muted,
   },
   presetTextActive: {
     color: Colors.textWhite,
@@ -397,7 +399,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 8,
     marginTop: 8,
   },
@@ -410,8 +412,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: AppColors.border.subtle,
+    backgroundColor: AppColors.background.soft,
   },
   methodChipActive: {
     borderColor: Colors.primary,
@@ -420,7 +422,7 @@ const styles = StyleSheet.create({
   methodText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: AppColors.text.secondary,
   },
   methodTextActive: {
     color: Colors.primary,
@@ -438,7 +440,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: Colors.textLight,
+    color: AppColors.text.muted,
   },
   txCard: {
     marginBottom: 12,
@@ -454,11 +456,11 @@ const styles = StyleSheet.create({
   txType: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.primary,
   },
   txDate: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: AppColors.text.muted,
   },
   txRight: {
     alignItems: 'flex-end',

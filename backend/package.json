@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "start": "node app.js",
-    "build": "prisma generate",
-    "dev": "nodemon app.js",  
+    "dev": "nodemon app.js",
     "db:ping": "node scripts/db-ping.js",
     "db:tables": "node scripts/db-list-tables.js",
     "prisma:generate": "prisma generate",
     "prisma:pull": "prisma db pull",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "migrate:chat-message-features": "node scripts/migration-chat-message-features.js",
+    "migrate:saved-tasks": "node scripts/migration-saved-tasks.js"
   },
   "dependencies": {
     "@payos/node": "^2.0.5",
@@ -26,6 +27,7 @@
     "helmet": "^8.1.0",
     "http-errors": "~1.6.3",
     "jade": "~1.11.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "~1.9.1",
     "pg": "^8.21.0",
     "socket.io": "^4.8.3",

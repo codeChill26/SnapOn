@@ -1,6 +1,6 @@
-export type UserRole = 'hirer' | 'worker' | 'admin';
+export type UserRole = 'USER' | 'ADMIN' | 'hirer' | 'worker' | 'admin';
 
-export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'CLOSED' | 'EXPIRED';
 
 export type ApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
 
@@ -13,11 +13,50 @@ export interface User {
   email: string;
   phone?: string;
   avatarUrl?: string;
+  coverUrl?: string;
   role: UserRole;
   status: 'ACTIVE' | 'BANNED' | 'SUSPENDED';
   isVerified: boolean;
   createdAt: string;
+  bio?: string;
+  headline?: string;
+  skills?: string[];
 }
+
+export interface PublicProfile {
+  id: string;
+  fullName: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+  bio: string;
+  headline: string;
+  skills: string[];
+  isVerified: boolean;
+  joinedAt: string;
+  ratingAverage: number;
+  reviewCount: number;
+  completedJobsCount: number;
+  postedJobsCount: number;
+  serviceOffersCount: number;
+  activePostsCount: number;
+  publicStats?: {
+    posted: number;
+    services: number;
+    completed: number;
+    rating: number;
+  };
+}
+
+export interface ProfileReview {
+  id: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  taskName?: string;
+}
+
 
 export interface Task {
   id: string;
@@ -34,12 +73,33 @@ export interface Task {
   deadlineEnd: string;
   allowInsurance: boolean;
   createdAt: string;
+  applicationDeadline?: string;
+  closedAt?: string;
+  closedById?: string;
+  closedReason?: string;
   posterName?: string;
   categoryName?: string;
+  field?: Category;
+  subcategory?: Skill;
   skills?: Skill[];
   locations?: TaskLocation[];
   poster?: User;
   images?: string[];
+  postType?: 'RECRUITMENT' | 'SERVICE_OFFER';
+  workMode?: 'ONSITE' | 'REMOTE' | 'NEGOTIABLE';
+  salaryUnit?: 'PER_JOB' | 'PER_HOUR' | 'PER_DAY' | 'PER_MONTH';
+  employmentType?: 'ONE_TIME' | 'PART_TIME' | 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'SHIFT' | 'INTERNSHIP' | 'NEGOTIABLE';
+  peopleNeeded?: number | null;
+  contactPhone?: string | null;
+  startDate?: string | null;
+  experienceLevel?: string;
+  educationLevel?: string;
+  genderRequirement?: string;
+  minAge?: number | null;
+  maxAge?: number | null;
+  minHeightCm?: number | null;
+  maxHeightCm?: number | null;
+  hashtags?: string[];
   assignedWorker?: {
     id: string;
     name: string;
@@ -52,6 +112,8 @@ export interface Task {
     estimatedTime?: string;
     message?: string;
   } | null;
+  isSaved?: boolean;
+  savedAt?: string;
 }
 
 export interface Skill {
@@ -91,6 +153,12 @@ export interface TaskApplication {
   taskerAvatar?: string;
   taskerRating?: number;
   score?: number;
+  taskTitle?: string;
+  taskStatus?: string;
+  taskPostType?: string;
+  taskSalaryUnit?: string;
+  assignmentId?: string;
+  assignmentStatus?: string;
 }
 
 export interface AssignedTask {

@@ -26,8 +26,10 @@ const authorize = (...allowedRoles) => {
     }
 
     const userRole = req.user.role;
+    const normalizedUserRole = userRole ? userRole.toUpperCase() : '';
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toUpperCase());
 
-    if (!userRole || !allowedRoles.includes(userRole)) {
+    if (!normalizedUserRole || !normalizedAllowedRoles.includes(normalizedUserRole)) {
       return error(
         res,
         'Access denied. You do not have permission to perform this action.',

@@ -5,31 +5,33 @@ import React, {
   useRef,
   useState,
 } from 'react';
-
 import {
   FlatList,
+  Alert,
   Keyboard,
   Platform,
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
-  Animated,
 } from 'react-native';
-
-import { LinearGradient } from 'expo-linear-gradient';
-
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors } from '../../constants/colors';
-import { JobCard } from '../../components/common/JobCard';
-import { UserAvatar } from '../../components/common/UserAvatar';
+import { HomeMarketplaceHeader } from '../../components/home/HomeMarketplaceHeader';
+import { HomePostTypeTabs, PostTypeFilter } from '../../components/home/HomeRoleTabs';
+import { HomeSearchFilterBar } from '../../components/home/HomeSearchFilterBar';
+import { HomeQuickFilters } from '../../components/home/HomeQuickFilters';
+import { HomeCompactJobCard } from '../../components/home/HomeCompactJobCard';
+import { HomeJobGridSkeleton } from '../../components/home/HomeJobGridSkeleton';
+import { HomeTheme } from '../../components/home/HomeTheme';
 import { HomeBannerCarousel } from '../../components/home/HomeBannerCarousel';
+
+import { CategoryPickerModal } from '../../components/categories/CategoryPickerModal';
+import { JOB_FIELDS, JobField, JobSubcategory } from '../../constants/jobCategories';
+import { categoryService } from '../../services/categoryService';
 
 import { taskService } from '../../services/taskService';
 import { useApp } from '../../context/AppContext';
@@ -37,429 +39,16 @@ import { useAuth } from '../../context/AuthContext';
 
 import { Task } from '../../types';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { AppColors } from '../../theme';
 
 type HomeNavProp = NativeStackNavigationProp<RootStackParamList>;
-
-const UIColors = {
-  page: '#090E17',
-  surface: 'rgba(30, 41, 59, 0.55)',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
-  border: 'rgba(255, 255, 255, 0.08)',
-  primarySoft: 'rgba(245, 130, 32, 0.15)',
-  successSoft: 'rgba(16, 185, 129, 0.15)',
-  warningSoft: 'rgba(245, 158, 11, 0.15)',
-  purpleSoft: 'rgba(139, 92, 246, 0.15)',
-};
-
-interface HomeScreenHeaderProps {
-  user: any;
-  userRole: string;
-  onSelectWork: () => void;
-  onSelectHire: () => void;
-  searchQuery: string;
-  setSearchQuery: (text: string) => void;
-  handleSubmitSearch: () => void;
-  handleClearSearch: () => void;
-  handleCategorySelect: (categoryId: string, categoryName: string) => void;
-  bannerRefreshKey: number;
-  hasActiveFilter: boolean;
-  selectedCategory: string | undefined;
-  selectedCategoryName: string | undefined;
-  debouncedSearch: string;
-  handleResetFilters: () => void;
-  resultDescription: string;
-  loading: boolean;
-  tasksLength: number;
-}
-
-const HomeScreenHeader: React.FC<HomeScreenHeaderProps> = React.memo(({
-  user,
-  userRole,
-  searchQuery,
-  setSearchQuery,
-  handleSubmitSearch,
-  handleClearSearch,
-  handleCategorySelect,
-  bannerRefreshKey,
-  hasActiveFilter,
-  selectedCategory,
-  selectedCategoryName,
-  debouncedSearch,
-  handleResetFilters,
-  resultDescription,
-  loading,
-  tasksLength,
-  onSelectWork,
-  onSelectHire,
-}) => {
-  const animatedValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(animatedValue, {
-        toValue: 4,
-        duration: 16000,
-        useNativeDriver: false,
-      })
-    ).start();
-  }, [animatedValue]);
-
-  const backgroundColor = animatedValue.interpolate({
-    inputRange: [0, 1, 2, 3, 4],
-    outputRange: ['#F58220', '#EC4899', '#8B5CF6', '#10B981', '#F58220']
-  });
-
-  return (
-    <>
-      {/* COMPACT HEADER */}
-      <Animated.View style={[styles.header, { backgroundColor }]}>
-        <View style={styles.headerCircle} />
-        <View style={styles.headerCircle2} />
-
-        <View style={styles.headerTop}>
-          <View style={styles.userContainer}>
-            <View style={styles.avatarBorder}>
-              <UserAvatar
-                name={user?.fullName || 'Người dùng'}
-                avatarUrl={user?.avatarUrl}
-                size={44}
-              />
-            </View>
-
-            <View style={styles.userInformation}>
-              <Text style={styles.greetingLabel} numberOfLines={1}>
-                Chào buổi sáng 👋
-              </Text>
-
-              <Text
-                style={styles.greetingName}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {user?.fullName || 'Người dùng'}
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.notificationButton}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Mở thông báo"
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={20}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.headline}>
-          Hôm nay bạn muốn{"\n"}hoàn thành việc gì?
-        </Text>
-
-        {/* INTENT SELECTOR */}
-        <View style={styles.selectorContainer}>
-          <TouchableOpacity
-            style={[styles.selectorButton, userRole === 'worker' && styles.selectorButtonActive]}
-            onPress={onSelectWork}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityState={{ selected: userRole === 'worker' }}
-          >
-            <Ionicons
-              name="search"
-              size={15}
-              color={userRole === 'worker' ? AppColors.brand.primary : 'rgba(255,255,255,0.75)'}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.selectorText, userRole === 'worker' && styles.selectorTextActive]}>
-              Tìm việc
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.selectorButton, userRole === 'hirer' && styles.selectorButtonActive]}
-            onPress={onSelectHire}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityState={{ selected: userRole === 'hirer' }}
-          >
-            <Ionicons
-              name="create-outline"
-              size={15}
-              color={userRole === 'hirer' ? AppColors.brand.primary : 'rgba(255,255,255,0.75)'}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.selectorText, userRole === 'hirer' && styles.selectorTextActive]}>
-              Thuê người
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
-      {/* SEARCH BAR (Placed immediately below to prevent shadow clipping) */}
-      <View style={styles.searchOuterContainer}>
-        <View style={styles.searchWrapper}>
-          <Ionicons
-            name="search-outline"
-            size={20}
-            color={UIColors.textSecondary}
-          />
-
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Bạn muốn tìm công việc gì?"
-            placeholderTextColor={UIColors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSubmitSearch}
-            returnKeyType="search"
-            autoCorrect={false}
-            clearButtonMode="never"
-            accessibilityLabel="Tìm kiếm công việc"
-          />
-
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              style={styles.searchAction}
-              onPress={handleClearSearch}
-              activeOpacity={0.7}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Xóa nội dung tìm kiếm"
-            >
-              <Ionicons
-                name="close"
-                size={18}
-                color={UIColors.textSecondary}
-              />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.filterButton}
-            onPress={() => {
-              if (selectedCategory) {
-                handleCategorySelect(selectedCategory, selectedCategoryName || '');
-              }
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel="Lọc danh mục"
-          >
-            <Ionicons
-              name="options-outline"
-              size={20}
-              color={selectedCategory ? AppColors.brand.primary : UIColors.textSecondary}
-            />
-            {selectedCategory ? <View style={styles.activeFilterDot} /> : null}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* CATEGORY DISCOVERY: banner image + category filter in one card */}
-      <View style={[styles.sectionCard, styles.discoveryCard]}>
-        <View style={styles.discoveryHeader}>
-          <View style={styles.sectionHeading}>
-            <Text style={styles.sectionEyebrow}>KHÁM PHÁ THEO DANH MỤC</Text>
-            <Text style={styles.sectionTitle}>Chọn dịch vụ bạn đang quan tâm</Text>
-            <Text style={styles.discoveryDescription}>
-              Mỗi banner là một danh mục. Chạm vào card để lọc danh sách công việc ngay bên dưới.
-            </Text>
-          </View>
-        </View>
-
-        <HomeBannerCarousel
-          onSelectCategory={handleCategorySelect}
-          selectedCategory={selectedCategory}
-          refreshKey={bannerRefreshKey}
-        />
-      </View>
-
-      {/* ACTIVE FILTERS ROW */}
-      {hasActiveFilter && (
-        <View style={styles.activeFiltersRow}>
-          {selectedCategory && (
-            <View style={styles.filterChip}>
-              <Ionicons
-                name="funnel-outline"
-                size={14}
-                color={Colors.primary}
-              />
-              <Text style={styles.filterChipText} numberOfLines={1}>
-                Danh mục: {selectedCategoryName}
-              </Text>
-              <TouchableOpacity
-                style={styles.filterChipClose}
-                onPress={() => handleCategorySelect(selectedCategory, selectedCategoryName || '')}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Xóa lọc danh mục"
-              >
-                <Ionicons
-                  name="close-circle"
-                  size={16}
-                  color={UIColors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {debouncedSearch && (
-            <View style={styles.filterChip}>
-              <Ionicons
-                name="search-outline"
-                size={14}
-                color={Colors.primary}
-              />
-              <Text style={styles.filterChipText} numberOfLines={1}>
-                Tìm kiếm: "{debouncedSearch}"
-              </Text>
-              <TouchableOpacity
-                style={styles.filterChipClose}
-                onPress={handleClearSearch}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Xóa tìm kiếm"
-              >
-                <Ionicons
-                  name="close-circle"
-                  size={16}
-                  color={UIColors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Reset all button if both are active */}
-          {selectedCategory && debouncedSearch && (
-            <TouchableOpacity
-              style={styles.clearAllFiltersTextBtn}
-              onPress={handleResetFilters}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Xóa tất cả bộ lọc"
-            >
-              <Text style={styles.clearAllFiltersText}>Đặt lại</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* JOB HEADER - NEW SECTION BACKGROUND */}
-      <View style={styles.latestJobsSectionContainer}>
-        <View style={styles.latestJobsSectionHeader}>
-          <View style={styles.latestJobsTopRow}>
-            <View style={[styles.latestJobsIcon, selectedCategory ? { backgroundColor: `${Colors.primary}15` } : undefined]}>
-              <Ionicons name="flash" size={16} color={selectedCategory ? Colors.primary : Colors.primary} />
-            </View>
-
-            <View style={styles.latestJobsCountChip}>
-              {loading && tasksLength > 0 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={styles.updatingDot} />
-                  <Text style={styles.latestJobsCountText}>Đang cập nhật...</Text>
-                </View>
-              ) : (
-                <Text style={styles.latestJobsCountText}>{tasksLength} việc đang mở</Text>
-              )}
-            </View>
-          </View>
-
-          <Text style={[styles.latestJobsEyebrow, selectedCategory ? { color: Colors.primary } : undefined]}>
-            VIỆC MỚI MỖI NGÀY
-          </Text>
-
-          <Text style={styles.latestJobsTitle}>
-            Công việc mới nhất
-          </Text>
-
-          <Text style={styles.latestJobsDescription}>
-            {selectedCategoryName 
-              ? `Khám phá các công việc thuộc danh mục ${selectedCategoryName} vừa được đăng.`
-              : 'Khám phá các công việc vừa được đăng và ứng tuyển ngay.'}
-          </Text>
-
-          {debouncedSearch ? (
-             <Text style={styles.resultDescription}>
-               Trạng thái tìm kiếm: {resultDescription}
-             </Text>
-          ) : null}
-        </View>
-      </View>
-    </>
-  );
-});
-
-const JobCardSkeleton = () => (
-  <View style={styles.skeletonCard}>
-    <View style={styles.skeletonImage} />
-    <View style={styles.skeletonContent}>
-      <View style={styles.skeletonTitle} />
-      <View style={styles.skeletonText} />
-      <View style={styles.skeletonTextLine} />
-      <View style={styles.skeletonFooter}>
-        <View style={styles.skeletonBudget} />
-        <View style={styles.skeletonCta} />
-      </View>
-    </View>
-  </View>
-);
-
-const MemoizedJobItem = React.memo(
-  ({ item, onPress }: { item: Task; onPress: (task: Task) => void }) => (
-    <View style={styles.jobItemWrapper}>
-      <JobCard task={item} onPress={onPress} isDark={true} />
-    </View>
-  ),
-  (prev, next) => prev.item.id === next.item.id && prev.item.status === next.item.status && prev.item.deadlineEnd === next.item.deadlineEnd
-);
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeNavProp>();
   const latestRequestRef = useRef(0);
+  const didInitialFocusRef = useRef(false);
 
-  const blobAnim1 = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const blobAnim2 = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-
-  useEffect(() => {
-    const startBlobAnimation = (
-      anim: Animated.ValueXY,
-      config: { targetX1: number; targetY1: number; targetX2: number; targetY2: number; duration: number }
-    ) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim, {
-            toValue: { x: config.targetX1, y: config.targetY1 },
-            duration: config.duration,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: { x: config.targetX2, y: config.targetY2 },
-            duration: config.duration,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: { x: 0, y: 0 },
-            duration: config.duration,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    };
-
-    startBlobAnimation(blobAnim1, { targetX1: 30, targetY1: 50, targetX2: -40, targetY2: 90, duration: 15000 });
-    startBlobAnimation(blobAnim2, { targetX1: -40, targetY1: -60, targetX2: 50, targetY2: -30, duration: 18000 });
-  }, [blobAnim1, blobAnim2]);
-
-  const { user, switchRole } = useAuth();
-  const { tasks, setTasks } = useApp();
+  const { user } = useAuth();
+  const { tasks, setTasks, updateTask } = useApp();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -468,41 +57,38 @@ export const HomeScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const [selectedCategory, setSelectedCategory] = useState<
-    string | undefined
-  >();
+  // Post type filter state
+  const [postTypeFilter, setPostTypeFilter] = useState<PostTypeFilter>('ALL');
 
-  const [selectedCategoryName, setSelectedCategoryName] = useState<
-    string | undefined
-  >();
+  // UI state variables for the two-level category selector
+  const [selectedFieldId, setSelectedFieldId] = useState<string | undefined>();
+  const [selectedFieldName, setSelectedFieldName] = useState<string | undefined>();
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | undefined>();
+  const [selectedSubcategoryName, setSelectedSubcategoryName] = useState<string | undefined>();
+  
+  // Custom local state for frontend sorting and category picker visibility
+  const [activeSort, setActiveSort] = useState<'hot' | 'newest' | null>(null);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [categoriesList, setCategoriesList] = useState<JobField[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
+  const [savingTaskIds, setSavingTaskIds] = useState<Record<string, boolean>>({});
 
-  const handleSelectWork = useCallback(async () => {
-    if (user?.role !== 'worker') {
-      try {
-        await switchRole('worker');
-      } catch (err) {
-        console.error('Failed to switch role to worker:', err);
+  // Load dynamic categories on mount
+  useEffect(() => {
+    let active = true;
+    const fetchCategoriesList = async () => {
+      const data = await categoryService.getCategories();
+      if (active && data) {
+        setCategoriesList(data);
       }
-    }
-  }, [user?.role, switchRole]);
+    };
+    void fetchCategoriesList();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const handleSelectHire = useCallback(async () => {
-    if (user?.role !== 'hirer') {
-      try {
-        await switchRole('hirer');
-      } catch (err) {
-        console.error('Failed to switch role to hirer:', err);
-      }
-    }
-    setTimeout(() => {
-      navigation.navigate('PostJob' as any);
-    }, 120);
-  }, [user?.role, switchRole, navigation]);
-
-  /**
-   * Chờ người dùng nhập xong rồi mới gọi API.
-   * Tránh gọi API sau mỗi ký tự.
-   */
+  // Debouncing search query (450ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery.trim());
@@ -511,6 +97,7 @@ export const HomeScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Fetching tasks from backend
   const fetchTasks = useCallback(
     async ({
       showLoading = true,
@@ -529,25 +116,29 @@ export const HomeScreen: React.FC = () => {
           limit: 20,
         };
 
-        if (selectedCategory) {
-          params.category_id = selectedCategory;
+        if (selectedSubcategoryId) {
+          params.category_id = selectedSubcategoryId;
+        } else if (selectedFieldId) {
+          params.field_id = selectedFieldId;
         }
 
         if (debouncedSearch) {
           params.search = debouncedSearch;
         }
 
+        if (postTypeFilter !== 'ALL') {
+          params.post_type = postTypeFilter;
+        }
+
         const result = await taskService.getTasks(params);
 
-        /**
-         * Chỉ cập nhật dữ liệu của request gần nhất.
-         * Tránh request cũ ghi đè kết quả mới.
-         */
         if (currentRequestId === latestRequestRef.current) {
           setTasks(result.data ?? []);
         }
       } catch (error) {
-        console.error('Failed to fetch tasks:', error);
+        if (__DEV__) {
+          console.warn('Failed to fetch tasks:', error);
+        }
 
         if (currentRequestId === latestRequestRef.current) {
           setTasks([]);
@@ -559,43 +150,79 @@ export const HomeScreen: React.FC = () => {
         }
       }
     },
-    [
-      debouncedSearch,
-      selectedCategory,
-      setTasks,
-    ],
+    [debouncedSearch, selectedFieldId, selectedSubcategoryId, postTypeFilter, setTasks],
   );
 
   useEffect(() => {
     void fetchTasks();
   }, [fetchTasks]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-
-    setBannerRefreshKey((current) => current + 1);
-
-    void fetchTasks({
-      showLoading: false,
-    });
-  }, [fetchTasks]);
-
-  const handleCategorySelect = useCallback(
-    (categoryId: string, categoryName: string) => {
-      const isSelectingCurrentCategory =
-        selectedCategory === categoryId;
-
-      if (isSelectingCurrentCategory) {
-        setSelectedCategory(undefined);
-        setSelectedCategoryName(undefined);
+  useFocusEffect(
+    useCallback(() => {
+      if (!didInitialFocusRef.current) {
+        didInitialFocusRef.current = true;
         return;
       }
-
-      setSelectedCategory(categoryId);
-      setSelectedCategoryName(categoryName);
-    },
-    [selectedCategory],
+      void fetchTasks({ showLoading: false });
+    }, [fetchTasks])
   );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setBannerRefreshKey((current) => current + 1);
+    void fetchTasks({ showLoading: false });
+  }, [fetchTasks]);
+
+  const handleResetFilters = useCallback(() => {
+    setSearchQuery('');
+    setDebouncedSearch('');
+    setSelectedFieldId(undefined);
+    setSelectedFieldName(undefined);
+    setSelectedSubcategoryId(undefined);
+    setSelectedSubcategoryName(undefined);
+    setPostTypeFilter('ALL');
+    setActiveSort(null);
+    setStatusFilter('ALL');
+    Keyboard.dismiss();
+  }, []);
+
+  // Handle banner selection click
+  const handleCategorySelect = useCallback(
+    (categoryId: string, categoryName: string) => {
+      if (!categoryId) {
+        handleResetFilters();
+        return;
+      }
+      setSelectedFieldId(categoryId);
+      setSelectedFieldName(categoryName);
+      setSelectedSubcategoryId(undefined);
+      setSelectedSubcategoryName(undefined);
+    },
+    [handleResetFilters],
+  );
+
+  const handleSelectField = useCallback((field: JobField) => {
+    setSelectedFieldId(field.id);
+    setSelectedFieldName(field.name);
+    setSelectedSubcategoryId(undefined);
+    setSelectedSubcategoryName(undefined);
+    setCategoryModalVisible(false);
+  }, []);
+
+  const handleSelectSubcategory = useCallback((field: JobField, subcategory: JobSubcategory) => {
+    setSelectedFieldId(field.id);
+    setSelectedFieldName(field.name);
+    setSelectedSubcategoryId(subcategory.id);
+    setSelectedSubcategoryName(subcategory.name);
+    setCategoryModalVisible(false);
+  }, []);
+
+  const handleClearCategoryFilter = useCallback(() => {
+    setSelectedFieldId(undefined);
+    setSelectedFieldName(undefined);
+    setSelectedSubcategoryId(undefined);
+    setSelectedSubcategoryName(undefined);
+  }, []);
 
   const handleJobPress = useCallback(
     (task: Task) => {
@@ -606,17 +233,41 @@ export const HomeScreen: React.FC = () => {
     [navigation],
   );
 
+  const handleSavedPress = useCallback(() => {
+    navigation.navigate('SavedJobs');
+  }, [navigation]);
+
+  const handleToggleSaved = useCallback(async (task: Task) => {
+    if (savingTaskIds[task.id]) return;
+
+    const nextSaved = !task.isSaved;
+    setSavingTaskIds((current) => ({ ...current, [task.id]: true }));
+    updateTask(task.id, { isSaved: nextSaved });
+
+    try {
+      if (nextSaved) {
+        await taskService.saveTask(task.id);
+      } else {
+        await taskService.unsaveTask(task.id);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('Failed to toggle saved task:', error);
+      }
+      updateTask(task.id, { isSaved: !nextSaved });
+      Alert.alert('Không cập nhật được', 'Vui lòng thử lại sau ít phút.');
+    } finally {
+      setSavingTaskIds((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
+    }
+  }, [savingTaskIds, updateTask]);
+
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
     setDebouncedSearch('');
-    Keyboard.dismiss();
-  }, []);
-
-  const handleResetFilters = useCallback(() => {
-    setSearchQuery('');
-    setDebouncedSearch('');
-    setSelectedCategory(undefined);
-    setSelectedCategoryName(undefined);
     Keyboard.dismiss();
   }, []);
 
@@ -625,59 +276,63 @@ export const HomeScreen: React.FC = () => {
     Keyboard.dismiss();
   }, [searchQuery]);
 
-  const hasActiveFilter = Boolean(
-    selectedCategory || debouncedSearch,
-  );
+  const hasActiveFilter = Boolean(selectedFieldId || debouncedSearch || postTypeFilter !== 'ALL');
 
-  const resultDescription = useMemo(() => {
-    if (loading && tasks.length === 0) {
-      return 'Đang tìm công việc phù hợp';
+  // Client-side sorting logic based on activeSort selection
+  const sortedTasks = useMemo(() => {
+    let list = [...tasks];
+
+    // Apply status filter for RECRUITMENT or ALL post types
+    if (postTypeFilter === 'RECRUITMENT' || postTypeFilter === 'ALL') {
+      if (statusFilter === 'OPEN') {
+        list = list.filter(item => {
+          if (item.postType === 'SERVICE_OFFER') return true;
+          const isExpired = item.applicationDeadline && new Date(item.applicationDeadline).getTime() < Date.now();
+          return item.status === 'OPEN' && !isExpired;
+        });
+      } else if (statusFilter === 'CLOSED') {
+        list = list.filter(item => {
+          if (item.postType === 'SERVICE_OFFER') return false;
+          const isExpired = item.applicationDeadline && new Date(item.applicationDeadline).getTime() < Date.now();
+          return item.status !== 'OPEN' || isExpired;
+        });
+      }
     }
 
-    if (debouncedSearch) {
-      return `${tasks.length} kết quả cho “${debouncedSearch}”`;
+    if (activeSort === 'newest') {
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (activeSort === 'hot') {
+      // Sort by budgetMax descending to represent premium/high-paying jobs
+      list.sort((a, b) => b.budgetMax - a.budgetMax);
     }
-
-    if (selectedCategoryName) {
-      return `${tasks.length} công việc trong ${selectedCategoryName}`;
-    }
-
-    return `${tasks.length} công việc đang mở`;
-  }, [
-    loading,
-    tasks.length,
-    debouncedSearch,
-    selectedCategoryName,
-  ]);
-
-
-
-// ... inside HomeScreen component ...
+    return list;
+  }, [tasks, activeSort, statusFilter, postTypeFilter]);
 
   const renderJobItem = useCallback(
     ({ item }: { item: Task }) => (
-      <MemoizedJobItem item={item} onPress={handleJobPress} />
+      <HomeCompactJobCard
+        task={item}
+        onPress={handleJobPress}
+        onToggleSaved={handleToggleSaved}
+        saving={Boolean(savingTaskIds[item.id])}
+      />
     ),
-    [handleJobPress],
+    [handleJobPress, handleToggleSaved, savingTaskIds],
   );
 
-  const renderEmptyState = () => {
+  const listEmptyComponent = useMemo(() => {
     if (loading) {
-      return (
-        <View style={styles.skeletonContainer}>
-          <JobCardSkeleton />
-          <JobCardSkeleton />
-          <JobCardSkeleton />
-        </View>
-      );
+      return <HomeJobGridSkeleton />;
     }
 
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="search-outline" size={48} color={UIColors.textMuted} style={{ marginBottom: 12 }} />
+        <View style={styles.emptyIconCircle}>
+          <Ionicons name="briefcase-outline" size={36} color={HomeTheme.colors.primary} />
+        </View>
         <Text style={styles.emptyTitle}>Chưa tìm thấy công việc phù hợp</Text>
         <Text style={styles.emptySubtitle}>
-          Hãy thử từ khóa khác hoặc thay đổi danh mục đang chọn.
+          Hãy thử từ khóa khác hoặc thay đổi bộ lọc danh mục.
         </Text>
 
         {hasActiveFilter && (
@@ -686,111 +341,204 @@ export const HomeScreen: React.FC = () => {
             onPress={handleResetFilters}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Xóa tất cả bộ lọc"
+            accessibilityLabel="Đặt lại bộ lọc"
           >
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color={Colors.primary}
-            />
-
-            <Text style={styles.resetButtonText}>
-              Đặt lại tìm kiếm
-            </Text>
+            <Ionicons name="refresh-outline" size={18} color={HomeTheme.colors.primaryDark} />
+            <Text style={styles.resetButtonText}>Đặt lại bộ lọc</Text>
           </TouchableOpacity>
         )}
       </View>
     );
-  };
+  }, [loading, hasActiveFilter, handleResetFilters]);
+
+  const listHeader = useMemo(() => (
+    <View style={styles.headerWrapper}>
+      {/* 1. Header with quick dropdown selectors */}
+      <HomeMarketplaceHeader
+        user={user}
+        selectedCategoryName={selectedSubcategoryName || selectedFieldName}
+        onCategoryPress={() => setCategoryModalVisible(true)}
+        onSavedPress={handleSavedPress}
+      />
+
+      {/* 2. Banner Discovery Carousel */}
+      <View style={styles.bannerContainer}>
+        <HomeBannerCarousel
+          onSelectCategory={handleCategorySelect}
+          selectedFieldId={selectedFieldId}
+          refreshKey={bannerRefreshKey}
+        />
+      </View>
+
+      {/* 3. Curved White Content Sheet container starts here */}
+      <View style={styles.whiteSheet}>
+        {/* Post Type tabs */}
+        <HomePostTypeTabs
+          selectedFilter={postTypeFilter}
+          onSelectFilter={setPostTypeFilter}
+          hasActiveFilter={hasActiveFilter}
+          onResetFilters={handleResetFilters}
+        />
+
+        {/* Input search bar */}
+        <HomeSearchFilterBar
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onSubmitSearch={handleSubmitSearch}
+          onClearSearch={handleClearSearch}
+          selectedCategory={selectedFieldId || selectedSubcategoryId}
+          onPressFilter={() => setCategoryModalVisible(true)}
+        />
+
+        {/* Hot / Newest Chips */}
+        <HomeQuickFilters
+          activeSort={activeSort}
+          onSortChange={setActiveSort}
+          selectedCategory={selectedFieldId || selectedSubcategoryId}
+          onFilterPress={() => setCategoryModalVisible(true)}
+        />
+
+        {/* Status Filters (Only for recruitment or all) */}
+        {(postTypeFilter === 'RECRUITMENT' || postTypeFilter === 'ALL') && (
+          <View style={styles.statusFiltersContainer}>
+            <TouchableOpacity
+              style={[
+                styles.statusFilterChip,
+                statusFilter === 'ALL' && styles.statusFilterChipActive,
+              ]}
+              onPress={() => setStatusFilter('ALL')}
+            >
+              <Text style={[styles.statusFilterText, statusFilter === 'ALL' && styles.statusFilterTextActive]}>
+                Tất cả
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.statusFilterChip,
+                statusFilter === 'OPEN' && styles.statusFilterChipActive,
+              ]}
+              onPress={() => setStatusFilter('OPEN')}
+            >
+              <Text style={[styles.statusFilterText, statusFilter === 'OPEN' && styles.statusFilterTextActive]}>
+                Đang mở
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.statusFilterChip,
+                statusFilter === 'CLOSED' && styles.statusFilterChipActive,
+              ]}
+              onPress={() => setStatusFilter('CLOSED')}
+            >
+              <Text style={[styles.statusFilterText, statusFilter === 'CLOSED' && styles.statusFilterTextActive]}>
+                Đã đóng
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Active filter tags */}
+        {hasActiveFilter && (
+          <View style={styles.activeChipsRow}>
+            {selectedFieldId && (
+              <View style={styles.activeChip}>
+                <Ionicons name="funnel-outline" size={12} color={HomeTheme.colors.primary} />
+                <Text style={styles.activeChipText} numberOfLines={1}>
+                  {selectedSubcategoryName 
+                    ? `${selectedFieldName} · ${selectedSubcategoryName}`
+                    : selectedFieldName}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleClearCategoryFilter}
+                  hitSlop={6}
+                  style={styles.activeChipClose}
+                >
+                  <Ionicons name="close-circle" size={14} color={HomeTheme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {debouncedSearch && (
+              <View style={styles.activeChip}>
+                <Ionicons name="search-outline" size={12} color={HomeTheme.colors.primary} />
+                <Text style={styles.activeChipText} numberOfLines={1}>
+                  Tìm: "{debouncedSearch}"
+                </Text>
+                <TouchableOpacity
+                  onPress={handleClearSearch}
+                  hitSlop={6}
+                  style={styles.activeChipClose}
+                >
+                  <Ionicons name="close-circle" size={14} color={HomeTheme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedFieldId && debouncedSearch && (
+              <TouchableOpacity
+                onPress={handleResetFilters}
+                style={styles.activeResetAllBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.activeResetAllText}>Đặt lại</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* List Header Title and Count */}
+        <View style={styles.listTitleRow}>
+          <Text style={styles.listTitle}>
+            {debouncedSearch
+              ? `Kết quả cho "${debouncedSearch}"`
+              : selectedSubcategoryName
+              ? selectedSubcategoryName
+              : selectedFieldName
+              ? selectedFieldName
+              : 'Việc mới dành cho bạn'}
+          </Text>
+          <Text style={styles.listCount}>
+            {loading ? '...' : `${sortedTasks.length} việc`}
+          </Text>
+        </View>
+      </View>
+    </View>
+  ), [
+    user,
+    selectedSubcategoryName,
+    selectedFieldName,
+    selectedFieldId,
+    bannerRefreshKey,
+    postTypeFilter,
+    hasActiveFilter,
+    searchQuery,
+    selectedSubcategoryId,
+    activeSort,
+    statusFilter,
+    debouncedSearch,
+    loading,
+    sortedTasks.length,
+    handleCategorySelect,
+    handleResetFilters,
+    handleSavedPress,
+    handleSubmitSearch,
+    handleClearSearch,
+    handleClearCategoryFilter,
+  ]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* GLOWING BACKGROUND GRADIENT FOR PREMIUM GLASSMORPHISM */}
-      <LinearGradient
-        colors={['#090E17', '#121A2E', '#18122B']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
-      {/* Floating Animated Glowing Blobs */}
-      <Animated.View
-        style={[
-          styles.glowBlob1,
-          {
-            transform: [
-              { translateX: blobAnim1.x },
-              { translateY: blobAnim1.y },
-            ],
-          },
-        ]}
-        pointerEvents="none"
-      />
-      <Animated.View
-        style={[
-          styles.glowBlob2,
-          {
-            transform: [
-              { translateX: blobAnim2.x },
-              { translateY: blobAnim2.y },
-            ],
-          },
-        ]}
-        pointerEvents="none"
-      />
-
-      {/* Decorative dynamic background patterns */}
-      <View style={styles.gridLineV} pointerEvents="none" />
-      <View style={styles.gridLineV2} pointerEvents="none" />
-      <View style={styles.gridLineV3} pointerEvents="none" />
-      <View style={styles.gridLineV4} pointerEvents="none" />
-      <View style={styles.gridLineH} pointerEvents="none" />
-      <View style={styles.gridLineH2} pointerEvents="none" />
-      <View style={styles.gridLineH3} pointerEvents="none" />
-      <View style={styles.gridLineH4} pointerEvents="none" />
-
-      <View style={styles.bgWireframe1} pointerEvents="none" />
-      <View style={styles.bgWireframe2} pointerEvents="none" />
-      <View style={styles.bgWireframe3} pointerEvents="none" />
-      <View style={styles.bgWireframe4} pointerEvents="none" />
-      <Ionicons name="sparkles-outline" size={20} color="#FF8F5E" style={styles.bgSparkle1} pointerEvents="none" />
-      <Ionicons name="ellipse" size={12} color="#1A6BA8" style={styles.bgDot1} pointerEvents="none" />
-      <Ionicons name="sparkles" size={24} color="#A78BFA" style={styles.bgSparkle2} pointerEvents="none" />
-      <Ionicons name="ellipse" size={16} color="#34D399" style={styles.bgDot2} pointerEvents="none" />
-      <Ionicons name="sparkles-outline" size={18} color="#FBBF24" style={styles.bgSparkle3} pointerEvents="none" />
-      <Ionicons name="ellipse" size={14} color="#F472B6" style={styles.bgDot3} pointerEvents="none" />
-
+    <View style={styles.mainContainer}>
       <FlatList
-        style={styles.container}
-        data={tasks}
+        style={styles.list}
+        data={sortedTasks}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderJobItem}
-        ListHeaderComponent={
-          <HomeScreenHeader
-            user={user}
-            userRole={user?.role || 'worker'}
-            onSelectWork={handleSelectWork}
-            onSelectHire={handleSelectHire}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            handleSubmitSearch={handleSubmitSearch}
-            handleClearSearch={handleClearSearch}
-            handleCategorySelect={handleCategorySelect}
-            bannerRefreshKey={bannerRefreshKey}
-            hasActiveFilter={hasActiveFilter}
-            selectedCategory={selectedCategory}
-            selectedCategoryName={selectedCategoryName}
-            debouncedSearch={debouncedSearch}
-            handleResetFilters={handleResetFilters}
-            resultDescription={resultDescription}
-            loading={loading}
-            tasksLength={tasks.length}
-          />
-        }
-        ListEmptyComponent={renderEmptyState}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={listEmptyComponent}
         ListFooterComponent={<View style={styles.listFooter} />}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -802,744 +550,203 @@ export const HomeScreen: React.FC = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={HomeTheme.colors.primary}
+            colors={[HomeTheme.colors.primary]}
           />
         }
       />
-    </SafeAreaView>
+
+      {/* Screen-wide Category picker modal */}
+      <CategoryPickerModal
+        visible={categoryModalVisible}
+        selectedFieldId={selectedFieldId}
+        selectedSubcategoryId={selectedSubcategoryId}
+        onClose={() => setCategoryModalVisible(false)}
+        onSelectField={handleSelectField}
+        onSelectSubcategory={handleSelectSubcategory}
+        onClear={handleClearCategoryFilter}
+        fields={categoriesList}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  mainContainer: {
     flex: 1,
-    backgroundColor: '#090E17',
-  },
-  glowBlob1: {
-    position: 'absolute',
-    top: '18%',
-    left: '-10%',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(245, 130, 32, 0.08)',
-  },
-  glowBlob2: {
-    position: 'absolute',
-    top: '55%',
-    right: '-15%',
-    width: 350,
-    height: 350,
-    borderRadius: 175,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-  },
-
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-
-  content: {
-    paddingBottom: 24,
-  },
-
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-
-  headerCircle: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    top: -60,
-    right: -50,
-  },
-
-  headerCircle2: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    bottom: -40,
-    left: -30,
-  },
-
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-
-  userContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  avatarBorder: {
-    padding: 2,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-
-  userInformation: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  greetingLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 1,
-  },
-
-  greetingName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  notificationButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-  },
-
-  headline: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    lineHeight: 28,
-  },
-
-  selectorContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    borderRadius: 14,
-    padding: 3,
-    marginTop: 16,
-  },
-
-  selectorButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 11,
-  },
-
-  selectorButtonActive: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
   },
-
-  selectorText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  selectorTextActive: {
-    color: Colors.primary,
-  },
-
-  searchOuterContainer: {
-    paddingHorizontal: 20,
-    marginTop: -26,
-    marginBottom: 28,
-    zIndex: 10,
-  },
-
-  searchWrapper: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    backgroundColor: 'rgba(30, 41, 59, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-
-  searchInput: {
+  list: {
     flex: 1,
-    height: '100%',
-    paddingHorizontal: 10,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
   },
-
-  searchAction: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    marginRight: 8,
+  contentContainer: {
+    paddingBottom: 24,
   },
-
-  filterButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-
-  activeFilterDot: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: Colors.primary,
-  },
-
-  section: {
-    marginBottom: 28,
-    paddingHorizontal: 20,
-  },
-
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+  columnWrapper: {
     justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
   },
-
-  sectionHeading: {
-    flex: 1,
+  headerWrapper: {
+    backgroundColor: '#F7F8FA',
   },
-
-  sectionEyebrow: {
-    marginBottom: 5,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: Colors.primary,
+  bannerContainer: {
+    backgroundColor: '#F7F8FA',
+    paddingBottom: HomeTheme.spacing.md,
   },
-
-  sectionTitle: {
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    color: '#FFFFFF',
+  whiteSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: HomeTheme.radius.sheet,
+    borderTopRightRadius: HomeTheme.radius.sheet,
+    marginTop: -28,
+    paddingTop: HomeTheme.spacing.sm,
+    shadowColor: '#101828',
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    elevation: 3,
   },
-
-  discoveryCard: {
-    paddingVertical: 0,
-    overflow: 'hidden',
-  },
-
-  discoveryHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 2,
-  },
-
-  discoveryDescription: {
-    marginTop: 7,
-    color: UIColors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  activeFiltersRow: {
+  activeChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 8,
+    paddingHorizontal: HomeTheme.spacing.xl,
+    paddingVertical: HomeTheme.spacing.xs,
+    gap: HomeTheme.spacing.sm,
   },
-
-  filterChip: {
+  activeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 130, 32, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 130, 32, 0.3)',
-  },
-
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-    marginLeft: 6,
-    marginRight: 4,
-    maxWidth: 160,
-  },
-
-  filterChipClose: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  clearAllFiltersTextBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-
-  clearAllFiltersText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-
-  sectionCard: {
-    backgroundColor: 'rgba(30, 41, 59, 0.55)',
-    marginHorizontal: 16,
-    borderRadius: 24,
-    paddingVertical: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-
-  latestJobsSectionContainer: {
-    backgroundColor: 'rgba(30, 41, 59, 0.55)',
-    marginHorizontal: 16,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingTop: 24,
-    paddingHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 1,
-  },
-
-  latestJobsSectionHeader: {
-    marginBottom: 20,
-  },
-
-  latestJobsTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-
-  latestJobsIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-
-  latestJobsCountChip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: HomeTheme.colors.primarySoft,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: HomeTheme.radius.small,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: HomeTheme.colors.primaryBorder,
   },
-
-  latestJobsCountText: {
+  activeChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: HomeTheme.colors.primaryDark,
+    marginLeft: HomeTheme.spacing.xs,
+    marginRight: HomeTheme.spacing.xs,
+    maxWidth: 200,
+  },
+  activeChipClose: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeResetAllBtn: {
+    paddingVertical: HomeTheme.spacing.xs,
+    paddingHorizontal: HomeTheme.spacing.sm,
+  },
+  activeResetAllText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: UIColors.textSecondary,
-  },
-
-  latestJobsEyebrow: {
-    fontSize: 11,
     fontWeight: '700',
-    color: UIColors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    color: HomeTheme.colors.primary,
   },
-
-  latestJobsTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: UIColors.text,
-    marginBottom: 6,
-  },
-
-  latestJobsDescription: {
-    fontSize: 14,
-    color: UIColors.textSecondary,
-    lineHeight: 20,
-  },
-
-  resultDescription: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-    color: Colors.primary,
-  },
-
-  jobItemWrapper: {
-    paddingHorizontal: 20,
-  },
-
-  updatingContainer: {
-    alignSelf: 'center',
+  listTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: UIColors.surface,
-  },
-
-  inlineUpdatingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: Colors.primarySoft,
-  },
-
-  updatingDot: {
-    width: 6,
-    height: 6,
-    marginRight: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.primary,
-  },
-
-  updatingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-
-  inlineUpdatingText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primaryDark,
-  },
-
-  jobCardContainer: {
-    marginHorizontal: 20,
-    marginBottom: 14,
-  },
-
-  loadingContainer: {
-    minHeight: 240,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-
-  skeletonContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-
-  skeletonCard: {
-    backgroundColor: 'rgba(30, 41, 59, 0.55)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-
-  skeletonImage: {
-    width: '100%',
-    aspectRatio: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-  },
-
-  skeletonContent: {
-    padding: 16,
-  },
-
-  skeletonTitle: {
-    width: '70%',
-    height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 4,
-    marginBottom: 10,
-  },
-
-  skeletonText: {
-    width: '100%',
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 4,
-    marginBottom: 6,
-  },
-
-  skeletonTextLine: {
-    width: '55%',
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 4,
-    marginBottom: 16,
-  },
-
-  skeletonFooter: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: HomeTheme.spacing.xl,
+    paddingTop: HomeTheme.spacing.md,
+    paddingBottom: HomeTheme.spacing.sm,
+    backgroundColor: '#FFFFFF',
   },
-
-  skeletonBudget: {
-    width: 60,
-    height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 4,
+  listTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: HomeTheme.colors.text,
   },
-
-  skeletonCta: {
-    width: 100,
-    height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 8,
+  listCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: HomeTheme.colors.primary,
   },
-
+  listFooter: {
+    height: 40,
+    backgroundColor: '#FFFFFF',
+  },
   emptyContainer: {
-    paddingVertical: 40,
-    paddingHorizontal: 20,
+    paddingVertical: 50,
+    paddingHorizontal: HomeTheme.spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    width: '100%',
   },
-
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: HomeTheme.colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: HomeTheme.spacing.md,
+  },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: UIColors.text,
-    marginBottom: 4,
+    fontWeight: '800',
+    color: HomeTheme.colors.text,
+    marginBottom: HomeTheme.spacing.xs,
+    textAlign: 'center',
   },
-
   emptySubtitle: {
     fontSize: 13,
-    color: UIColors.textSecondary,
+    color: HomeTheme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 19,
   },
-
   resetButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 13,
-    backgroundColor: UIColors.primarySoft,
+    marginTop: HomeTheme.spacing.xl,
+    paddingHorizontal: HomeTheme.spacing.lg,
+    paddingVertical: 10,
+    borderRadius: HomeTheme.radius.medium,
+    backgroundColor: HomeTheme.colors.primarySoft,
+    borderWidth: 1.5,
+    borderColor: HomeTheme.colors.primaryBorder,
   },
-
   resetButtonText: {
-    marginLeft: 7,
+    marginLeft: HomeTheme.spacing.xs,
     fontSize: 13,
+    fontWeight: '800',
+    color: HomeTheme.colors.primaryDark,
+  },
+  statusFiltersContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: HomeTheme.spacing.xl,
+    paddingVertical: HomeTheme.spacing.xs,
+    backgroundColor: '#FFFFFF',
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  statusFilterChip: {
+    paddingHorizontal: HomeTheme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: HomeTheme.radius.small - 2,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  statusFilterChipActive: {
+    backgroundColor: '#FFF1EB',
+    borderColor: '#FFD7B5',
+  },
+  statusFilterText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
+    color: '#64748B',
   },
-
-  listFooter: {
-    height: 24,
-  },
-
-  gridLineV: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '20%',
-    width: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineV2: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '40%',
-    width: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineV3: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '60%',
-    width: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineV4: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '80%',
-    width: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineH: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 200,
-    height: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineH2: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 400,
-    height: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineH3: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 600,
-    height: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  gridLineH4: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 800,
-    height: 1,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.03,
-  },
-  bgWireframe1: {
-    position: 'absolute',
-    top: 180,
-    right: -25,
-    width: 90,
-    height: 90,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 143, 94, 0.15)', // Primary Orange soft
-    opacity: 0.08,
-    borderRadius: 20,
-    transform: [{ rotate: '15deg' }],
-  },
-  bgWireframe2: {
-    position: 'absolute',
-    top: 520,
-    left: -35,
-    width: 130,
-    height: 130,
-    borderWidth: 1.5,
-    borderColor: 'rgba(26, 107, 168, 0.15)', // Secondary Blue soft
-    opacity: 0.07,
-    borderRadius: 28,
-    transform: [{ rotate: '-25deg' }],
-  },
-  bgWireframe3: {
-    position: 'absolute',
-    top: 380,
-    right: -20,
-    width: 70,
-    height: 70,
-    borderWidth: 1.5,
-    borderColor: 'rgba(167, 139, 250, 0.15)', // Purple soft
-    opacity: 0.06,
-    borderRadius: 16,
-    transform: [{ rotate: '45deg' }],
-  },
-  bgWireframe4: {
-    position: 'absolute',
-    bottom: 120,
-    left: -25,
-    width: 110,
-    height: 110,
-    borderWidth: 1.5,
-    borderColor: 'rgba(52, 211, 153, 0.15)', // Green soft
-    opacity: 0.06,
-    borderRadius: 24,
-    transform: [{ rotate: '-10deg' }],
-  },
-  bgSparkle1: {
-    position: 'absolute',
-    top: 220,
-    left: 40,
-    opacity: 0.08,
-  },
-  bgDot1: {
-    position: 'absolute',
-    top: 160,
-    right: 80,
-    opacity: 0.06,
-  },
-  bgSparkle2: {
-    position: 'absolute',
-    top: 480,
-    right: 40,
-    opacity: 0.08,
-  },
-  bgDot2: {
-    position: 'absolute',
-    top: 620,
-    left: 80,
-    opacity: 0.06,
-  },
-  bgSparkle3: {
-    position: 'absolute',
-    top: 980, // moved down since content can be tall
-    left: 30,
-    opacity: 0.08,
-  },
-  bgDot3: {
-    position: 'absolute',
-    top: 880, // moved down
-    right: 60,
-    opacity: 0.06,
+  statusFilterTextActive: {
+    color: '#FF6B35',
   },
 });

@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
@@ -7,219 +5,257 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  TextInput,
   TouchableOpacity,
   Image,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { UserAvatar } from '../../components/common/UserAvatar';
-import { CountdownTimer } from '../../components/common/CountdownTimer';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { taskService } from '../../services/taskService';
 import { applicationService } from '../../services/applicationService';
-import { matchingService } from '../../services/matchingService';
 import { useAuth } from '../../context/AuthContext';
 import { Task, TaskApplication } from '../../types';
 import { formatCurrency, getStatusLabel, formatDate } from '../../utils/format';
 import { getCategoryById } from '../../constants/categories';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { AppColors } from '../../theme';
-import { getCategoryThemeBySlug } from '../../theme/categoryThemes';
+import { HomeTheme } from '../../components/home/HomeTheme';
+import { ApplyConfirmationModal } from '../../components/job-detail/ApplyConfirmationModal';
+import { CloseRecruitmentModal } from '../../components/job-detail/CloseRecruitmentModal';
+import { UserAvatar } from '../../components/common/UserAvatar';
 
 type JobDetailRouteProp = RouteProp<RootStackParamList, 'JobDetail'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HERO_HEIGHT = Math.min(
-  430,
-  Math.max(350, SCREEN_WIDTH * 1.02)
-);
+const HERO_HEIGHT = 240;
+
+const WORK_MODES = [
+  { label: 'Tại chỗ (Onsite)', value: 'ONSITE' },
+  { label: 'Từ xa (Remote)', value: 'REMOTE' },
+  { label: 'Theo thỏa thuận', value: 'NEGOTIABLE' },
+];
+
+const EMPLOYMENT_TYPES = [
+  { label: 'Công việc một lần', value: 'ONE_TIME' },
+  { label: 'Bán thời gian', value: 'PART_TIME' },
+  { label: 'Toàn thời gian', value: 'FULL_TIME' },
+  { label: 'Theo hợp đồng', value: 'CONTRACT' },
+  { label: 'Freelance', value: 'FREELANCE' },
+  { label: 'Theo ca', value: 'SHIFT' },
+  { label: 'Thực tập', value: 'INTERNSHIP' },
+  { label: 'Theo thỏa thuận', value: 'NEGOTIABLE' },
+];
+
+const EXPERIENCE_LEVELS = [
+  { label: 'Không yêu cầu kinh nghiệm', value: 'NO_REQUIREMENT' },
+  { label: 'Chưa có kinh nghiệm', value: 'NO_EXPERIENCE' },
+  { label: 'Dưới 1 năm', value: 'UNDER_1_YEAR' },
+  { label: '1–2 năm', value: 'ONE_TO_TWO_YEARS' },
+  { label: '3–5 năm', value: 'THREE_TO_FIVE_YEARS' },
+  { label: 'Trên 5 năm', value: 'OVER_FIVE_YEARS' },
+];
+
+const EDUCATION_LEVELS = [
+  { label: 'Không yêu cầu bằng cấp', value: 'NO_REQUIREMENT' },
+  { label: 'Trung học cơ sở', value: 'SECONDARY_SCHOOL' },
+  { label: 'Trung học phổ thông', value: 'HIGH_SCHOOL' },
+  { label: 'Trung cấp nghề', value: 'VOCATIONAL' },
+  { label: 'Cao đẳng', value: 'COLLEGE' },
+  { label: 'Đại học', value: 'UNIVERSITY' },
+  { label: 'Sau đại học', value: 'POSTGRADUATE' },
+  { label: 'Chứng chỉ chuyên môn', value: 'CERTIFICATE' },
+];
+
+const GENDER_REQUIREMENTS = [
+  { label: 'Không yêu cầu giới tính', value: 'NO_REQUIREMENT' },
+  { label: 'Nam', value: 'MALE' },
+  { label: 'Nữ', value: 'FEMALE' },
+  { label: 'Khác', value: 'OTHER' },
+];
 
 export const JobDetailScreen: React.FC = () => {
   const route = useRoute<JobDetailRouteProp>();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  
   const [task, setTask] = useState<Task | null>(null);
   const [applications, setApplications] = useState<TaskApplication[]>([]);
+  const [userApplication, setUserApplication] = useState<TaskApplication | null>(null);
+  
   const [loading, setLoading] = useState(true);
-  const [bidPrice, setBidPrice] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  // null = đang kiểm tra, true = worker đang bận job khác, false = rảnh
-  const [workerHasActiveJob, setWorkerHasActiveJob] = useState<boolean | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  
+  const [workerHasActiveJob, setWorkerHasActiveJob] = useState<boolean | null>(null);
+  
+  // Modals Visibility
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [submittingApply, setSubmittingApply] = useState(false);
+  const [submittingClose, setSubmittingClose] = useState(false);
 
   const isPoster = user?.id === task?.posterId;
+  const isWorker = user?.role === 'USER' || user?.role === 'worker';
   const category = task ? getCategoryById(task.categoryId) : undefined;
-  const categoryTheme = useMemo(() => {
-    return getCategoryThemeBySlug(category?.slug, category?.color);
-  }, [category?.slug, category?.color]);
+
+  const activeWorkers = useMemo(() => {
+    return applications.filter(
+      app => app.assignmentStatus === 'ASSIGNED' || app.assignmentStatus === 'IN_PROGRESS' || app.assignmentStatus === 'COMPLETED'
+    );
+  }, [applications]);
 
   useEffect(() => {
     loadTaskDetail();
-
-    // Auto reload when screen comes into focus (e.g. after choosing an applicant and going back)
     const unsubscribe = navigation.addListener('focus', () => {
       loadTaskDetail();
-      if (user?.role === 'worker') {
-        checkWorkerAvailability();
-      }
     });
-
     return unsubscribe;
-  }, [navigation, route.params.taskId, user?.role]);
-
-  // Kiểm tra worker có đang nhận job nào không (role = worker, task IN_PROGRESS)
-  useEffect(() => {
-    if (!user || user.role !== 'worker') return;
-    checkWorkerAvailability();
-  }, [user?.id, user?.role]);
-
-  const checkWorkerAvailability = async () => {
-    setWorkerHasActiveJob(null); // đang check
-    try {
-      // Thử gọi API my-applications trước, fallback về getMyTasks
-      const myApps = await applicationService.getMyApplications();
-      const hasActiveAccepted = myApps.some(app => app.status === 'ACCEPTED');
-      if (hasActiveAccepted) {
-        setWorkerHasActiveJob(true);
-        return;
-      }
-    } catch {
-      // API chưa có → fallback
-    }
-    try {
-      const myTasks = await taskService.getMyTasks();
-      const isBusy = (myTasks.data || []).some(
-        t => t.status === 'IN_PROGRESS' && t.id !== route.params.taskId
-      );
-      setWorkerHasActiveJob(isBusy);
-    } catch {
-      setWorkerHasActiveJob(false); // không xác định được → cho phép apply
-    }
-  };
+  }, [navigation, route.params.taskId, user?.id]);
 
   const loadTaskDetail = async () => {
     try {
       const taskData = await taskService.getTaskById(route.params.taskId);
       setTask(taskData);
-      try {
-        const apps = await applicationService.getApplicationsByTask(route.params.taskId);
-        setApplications(apps);
-      } catch {
-        // not poster, can't see apps
+      
+      // Load applications if poster
+      if (user?.id === taskData.posterId) {
+        try {
+          const apps = await applicationService.getApplicationsByTask(route.params.taskId);
+          setApplications(apps);
+        } catch (err) {
+          if (__DEV__) {
+            console.warn('Not authorized to view application list:', err);
+          }
+        }
+      } else if (user?.id) {
+        // Load logged in user's application for this task
+        try {
+          const myApp = await applicationService.getMyApplicationForTask(route.params.taskId);
+          setUserApplication(myApp);
+        } catch (err) {
+          if (__DEV__) {
+            console.warn('Failed to fetch user application:', err);
+          }
+        }
+      }
+
+      if (isWorker && user?.id) {
+        checkWorkerAvailability();
       }
     } catch (error) {
-      console.error('Failed to load task:', error);
+      if (__DEV__) {
+        console.warn('Failed to load task details:', error);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const checkWorkerAvailability = async () => {
+    try {
+      const myApps = await applicationService.getMyApplications();
+      // worker is busy if they have 3 or more jobs IN_PROGRESS
+      const inProgressCount = myApps.filter(
+        app => app.assignmentStatus === 'IN_PROGRESS'
+      ).length;
+      setWorkerHasActiveJob(inProgressCount >= 3);
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('Failed to check worker availability:', err);
+      }
+      setWorkerHasActiveJob(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      await loadTaskDetail();
-      if (user?.role === 'worker') {
-        await checkWorkerAvailability();
-      }
-    } catch (error) {
-      console.error('Failed to refresh task:', error);
-    } finally {
-      setRefreshing(false);
-    }
+    await loadTaskDetail();
+    setRefreshing(false);
   };
 
-  const handleApply = async () => {
-    const cleanPrice = bidPrice.replace(/[^0-9]/g, '');
-    const numericPrice = parseInt(cleanPrice, 10);
-
-    if (isNaN(numericPrice)) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số tiền đề xuất hợp lệ.');
-      return;
-    }
-
-    if (numericPrice < (task?.budgetMin || 0) || numericPrice > (task?.budgetMax || 0)) {
-      Alert.alert(
-        'Lỗi',
-        `Giá đề xuất phải từ ${formatCurrency(task?.budgetMin || 0)} đến ${formatCurrency(task?.budgetMax || 0)}`
-      );
-      return;
-    }
-
-    setSubmitting(true);
+  const handleApplyConfirm = async (message: string) => {
+    setShowApplyModal(false);
+    setSubmittingApply(true);
     try {
       await applicationService.createApplication(route.params.taskId, {
-        bid_price: numericPrice,
-        estimated_time: '3 ngày',
-        message: 'Tôi muốn ứng tuyển công việc này',
+        estimated_time: 'Thương lượng',
+        message: message || '',
       });
-      Alert.alert('Thành công', 'Đã gửi đơn ứng tuyển!');
+      Alert.alert(
+        'Ứng tuyển thành công',
+        'Ứng tuyển thành công! Vui lòng bật thông báo cho ứng dụng để nhận thông báo từ người đăng về việc được duyệt hay không.'
+      );
       loadTaskDetail();
-    } catch (error: any) {
-      const serverMessage = error.response?.data?.message;
-      Alert.alert('Lỗi', serverMessage || error.message || 'Ứng tuyển thất bại');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Ứng tuyển thất bại.';
+      Alert.alert('Lỗi', msg);
     } finally {
-      setSubmitting(false);
+      setSubmittingApply(false);
     }
   };
 
-  const handleAutoMatch = async () => {
+  const handleWithdraw = () => {
+    const appId = userApplication?.id;
+    if (!appId) return;
+
     Alert.alert(
-      'Xác nhận',
-      'Hệ thống sẽ tự động chọn ứng viên phù hợp nhất?',
+      'Hủy ứng tuyển',
+      'Bạn có chắc chắn muốn rút hồ sơ ứng tuyển công việc này?',
+      [
+        { text: 'Quay lại', style: 'cancel' },
+        {
+          text: 'Rút hồ sơ',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await applicationService.withdrawApplication(appId);
+              Alert.alert('Thành công', 'Đã rút hồ sơ ứng tuyển.');
+              loadTaskDetail();
+            } catch (err: any) {
+              Alert.alert('Lỗi', err.message || 'Hủy ứng tuyển thất bại.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCloseConfirm = async (reason: string) => {
+    setShowCloseModal(false);
+    setSubmittingClose(true);
+    try {
+      await taskService.closeRecruitment(route.params.taskId);
+      Alert.alert('Thành công', 'Đã đóng tuyển dụng sớm cho công việc này.');
+      loadTaskDetail();
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.message || 'Không thể đóng tuyển dụng.');
+    } finally {
+      setSubmittingClose(false);
+    }
+  };
+
+  const handleDeleteTask = () => {
+    if (!task) return;
+    Alert.alert(
+      'Xác nhận xóa',
+      'Bạn có chắc chắn muốn xóa vĩnh viễn bài đăng này?',
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xác nhận',
-          onPress: async () => {
-            try {
-              await matchingService.autoMatch(route.params.taskId);
-              Alert.alert('Thành công', 'Đã ghép ứng viên thành công!');
-              loadTaskDetail();
-            } catch (error: any) {
-              Alert.alert('Lỗi', error.message || 'Ghép ứng viên thất bại');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleWithdraw = async () => {
-    if (!userApplication?.id) {
-      Alert.alert('Lỗi', 'Không tìm thấy đơn ứng tuyển để hủy');
-      return;
-    }
-    Alert.alert(
-      'Hủy đề xuất',
-      'Bạn có chắc muốn hủy đề xuất này không?',
-      [
-        { text: 'Không', style: 'cancel' },
-        {
-          text: 'Hủy đề xuất',
+          text: 'Xóa bài',
           style: 'destructive',
           onPress: async () => {
-            setWithdrawing(true);
             try {
-              await applicationService.withdrawApplication(userApplication.id);
-              Alert.alert('Thành công', 'Đã hủy đề xuất');
-              loadTaskDetail();
-              // Refresh worker availability sau khi hủy
-              if (user?.role === 'worker') checkWorkerAvailability();
-            } catch (error: any) {
-              Alert.alert('Lỗi', error.message || 'Hủy đề xuất thất bại');
-            } finally {
-              setWithdrawing(false);
+              await taskService.deleteTask(task.id);
+              Alert.alert('Thành công', 'Đã xóa bài đăng.');
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert('Lỗi', e.message || 'Xóa bài viết thất bại.');
             }
           },
         },
@@ -227,126 +263,48 @@ export const JobDetailScreen: React.FC = () => {
     );
   };
 
-  if (loading) return <LoadingSpinner fullScreen message="Đang tải..." />;
+  if (loading) return <LoadingSpinner fullScreen message="Đang tải chi tiết..." />;
   if (!task) return <LoadingSpinner fullScreen message="Không tìm thấy công việc" />;
 
-  // NOTE: userApplication khai báo 1 lần duy nhất ở đây
-  const userApplication = applications.find(app => app.taskerId === user?.id);
-  const hasApplied = !!userApplication;
-  // Worker được phép apply khi: role=worker, rảnh (workerHasActiveJob===false), chưa apply
-  const isWorker = user?.role === 'worker';
-  const workerCanApply = isWorker && workerHasActiveJob === false && !isPoster;
+  const subcategoryName = task.subcategory?.name || (task.skills && task.skills[0]?.name) || 'Chưa phân loại';
+  const deadlineText = task.applicationDeadline ? formatDate(task.applicationDeadline) : 'Không giới hạn thời gian';
 
   const renderCarousel = () => {
-  const images = task.images ?? [];
-  const imageCount = images.length;
-
-  if (imageCount === 0) {
+    const images = task.images || [];
+    if (images.length === 0) {
       return (
-        <View
-          style={[
-            styles.fallbackBanner,
-            {
-              backgroundColor:
-                categoryTheme.primary,
-            },
-          ]}
-        >
-          <View style={styles.fallbackDecorationLarge} />
-          <View style={styles.fallbackDecorationSmall} />
-
-          <View style={styles.fallbackOverlay}>
-            <View style={styles.fallbackIcon}>
-              <Ionicons
-                name={
-                  (category?.icon as any) ||
-                  'briefcase-outline'
-                }
-                size={42}
-                color="#FFFFFF"
-              />
-            </View>
-
-            <Text style={styles.fallbackCategoryText}>
-              {category?.name || 'Công việc'}
-            </Text>
-
-            <Text style={styles.fallbackSubtitle}>
-              Chưa có hình ảnh công việc
-            </Text>
-
-          </View>
+        <View style={styles.fallbackHeader}>
+          <View style={styles.fallbackCircle} />
+          <Ionicons
+            name={(category?.icon as any) || 'briefcase'}
+            size={40}
+            color={HomeTheme.colors.primary}
+          />
+          <Text style={styles.fallbackText}>{category?.name || 'SnapOn Job'}</Text>
         </View>
       );
     }
 
-    // Có ảnh
     return (
-      <View style={styles.carouselContainer}>
+      <View style={styles.carouselWrapper}>
         <ScrollView
           horizontal
           pagingEnabled
-          decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={(event) => {
-            const offsetX =
-              event.nativeEvent.contentOffset.x;
-
-            const nextIndex = Math.round(
-              offsetX / SCREEN_WIDTH
-            );
-
-            setActiveImageIndex(nextIndex);
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+            setActiveImageIndex(index);
           }}
         >
-          {images.map((imgUrl, index) => (
-            <Image
-              key={`${imgUrl}-${index}`}
-              source={{ uri: imgUrl }}
-              style={styles.carouselImage}
-              resizeMode="cover"
-            />
+          {images.map((img, i) => (
+            <Image key={i} source={{ uri: img }} style={styles.carouselImage} />
           ))}
         </ScrollView>
-
-        {/* Overlay trên ảnh */}
-        <View
-          pointerEvents="none"
-          style={styles.imageOverlayTop}
-        />
-
-        <View
-          pointerEvents="none"
-          style={styles.imageOverlayBottom}
-        />
-
-        {/* Số lượng hình ảnh */}
-        <View style={styles.imageCounter}>
-          <Ionicons
-            name="images-outline"
-            size={15}
-            color="#FFFFFF"
-          />
-
-          <Text style={styles.imageCounterText}>
-            {activeImageIndex + 1}/{imageCount}
-          </Text>
-        </View>
-
-        {/* Pagination */}
-        {imageCount > 1 && (
-          <View style={styles.paginationDots}>
-            {images.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  activeImageIndex === index &&
-                  styles.activeDot,
-                ]}
-              />
-            ))}
+        {images.length > 1 && (
+          <View style={styles.carouselIndicator}>
+            <Text style={styles.carouselIndicatorText}>
+              {activeImageIndex + 1}/{images.length}
+            </Text>
           </View>
         )}
       </View>
@@ -354,1118 +312,1090 @@ export const JobDetailScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    <SafeAreaView style={styles.safeContainer}>
+      {/* Custom Header */}
+      <View style={styles.customHeader}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color={HomeTheme.colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>Chi tiết công việc</Text>
+        <View style={styles.headerPlaceholder} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={AppColors.brand.primary}
-            colors={[AppColors.brand.primary]}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {renderCarousel()}
 
-        <View style={styles.body}>
-          <Card style={styles.premiumCard} variant="glass">
-            <View style={styles.categoryRow}>
-              {category && (
-                <View style={[styles.categoryBadge, { backgroundColor: categoryTheme.soft }]}>
-                  <Ionicons name={category.icon as any} size={14} color={categoryTheme.primary} />
-                  <Text style={[styles.categoryBadgeText, { color: categoryTheme.primary }]}>{category.name}</Text>
-                </View>
-              )}
-              <Badge
-                label={getStatusLabel(task.status)}
-                variant={
-                  task.status === 'OPEN' ? 'info' :
-                    task.status === 'IN_PROGRESS' ? 'warning' :
-                      task.status === 'COMPLETED' ? 'success' : 'error'
-                }
-              />
-            </View>
-
-            <Text style={styles.title}>{task.title}</Text>
-            <Text style={styles.description}>{task.description}</Text>
-
-            <View style={styles.premiumDivider} />
-
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="cash-outline" size={20} color={categoryTheme.primary} />
-                <View style={styles.metaContent}>
-                  <Text style={styles.metaLabel}>Ngân sách</Text>
-                  <Text style={styles.metaValue}>
-                    {formatCurrency(task.budgetMin)} - {formatCurrency(task.budgetMax)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={20} color={AppColors.brand.primary} />
-                <View style={styles.metaContent}>
-                  <Text style={styles.metaLabel}>Hạn chót</Text>
-                  <CountdownTimer deadlineEnd={task.deadlineEnd} status={task.status} size="md" />
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.premiumDivider} />
-
-            <View style={styles.detailsList}>
-              <View style={styles.detailRow}>
-                <View style={styles.detailLeft}>
-                  <Ionicons name="calendar-outline" size={16} color={AppColors.text.muted} />
-                  <Text style={styles.detailLabel}>Ngày đăng</Text>
-                </View>
-                <Text style={styles.detailValue}>{formatDate(task.createdAt)}</Text>
-              </View>
-
-              {task.locations && task.locations.length > 0 && (
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLeft}>
-                    <Ionicons name="location-outline" size={16} color={AppColors.text.muted} />
-                    <Text style={styles.detailLabel}>Địa điểm</Text>
-                  </View>
-                  <Text style={styles.detailValue} numberOfLines={2}>
-                    {task.locations[0].address}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Card>
-
-          <Card style={styles.posterCard} variant="glass">
-            <Text style={styles.cardSectionTitle}>Khách hàng đăng việc</Text>
-            <View style={styles.posterInfoRow}>
-              <UserAvatar name={task.posterName || 'N/A'} size={44} avatarUrl={task.poster?.avatarUrl} />
-              <View style={styles.posterDetails}>
-                <Text style={styles.posterNameText}>{task.posterName || 'N/A'}</Text>
-                <Text style={styles.posterRoleText}>Chủ dự án</Text>
-              </View>
-              {!isPoster && (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('ChatDetail', {
-                    otherUserId: task.posterId,
-                    otherUserName: task.posterName || 'N/A',
-                    otherUserAvatar: task.poster?.avatarUrl
-                  })}
-                  style={[styles.premiumChatButton, { backgroundColor: categoryTheme.primary }]}
-                  activeOpacity={0.7}
+        <View style={styles.mainContainer}>
+          {/* Main Info Box */}
+          <View style={styles.infoBox}>
+            <View style={styles.tagRow}>
+              <View
+                style={[
+                  styles.postTypeBadge,
+                  task.postType === 'SERVICE_OFFER' ? styles.serviceBadgeBg : styles.recruitmentBadgeBg,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.postTypeBadgeText,
+                    task.postType === 'SERVICE_OFFER' ? styles.serviceBadgeText : styles.recruitmentBadgeText,
+                  ]}
                 >
-                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.premiumChatButtonText}>Trò chuyện</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </Card>
-
-          {isPoster && task.status === 'OPEN' && (
-            <Card style={styles.hirerSectionCard} variant="glass">
-              <View style={styles.premiumSectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitleText}>Danh sách đề xuất</Text>
-                  <Text style={styles.sectionSubtitleText}>Ứng viên quan tâm ({applications.length})</Text>
-                </View>
-                <Button
-                  title="Tự động ghép"
-                  onPress={handleAutoMatch}
-                  variant="secondary"
-                  size="sm"
-                  style={styles.autoMatchBtn}
-                />
-              </View>
-
-              {applications.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="people-outline" size={32} color={AppColors.text.disabled} />
-                  <Text style={styles.emptyText}>Chưa có ứng viên ứng tuyển</Text>
-                </View>
-              ) : (
-                <Button
-                  title="Xem chi tiết ứng viên"
-                  onPress={() => navigation.navigate('ApplicantList' as any, { taskId: task.id })}
-                  variant="primary"
-                  size="md"
-                  style={styles.viewApplicantsBtn}
-                />
-              )}
-            </Card>
-          )}
-
-          {/* ──────────────────────────────────────────────
-               WORKER APPLY SECTION
-               Chỉ hiện cho người dùng KHÔNG phải chủ bài đăng
-               và task đang OPEN
-          ────────────────────────────────────────────── */}
-
-          {/* 1. Người dùng chưa apply + đang kiểm tra availability */}
-          {!isPoster && isWorker && task.status === 'OPEN' && !hasApplied && workerHasActiveJob === null && (
-            <Card style={styles.applyCard} variant="glass">
-              <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
-                <Ionicons name="hourglass-outline" size={28} color={AppColors.text.muted} />
-                <Text style={styles.applyInstruction}>Đang kiểm tra trạng thái của bạn...</Text>
-              </View>
-            </Card>
-          )}
-
-          {/* 2. Worker đang bận job khác – không được apply */}
-          {!isPoster && isWorker && task.status === 'OPEN' && !hasApplied && workerHasActiveJob === true && (
-            <Card style={styles.workerBusyCard} variant="glass">
-              <View style={styles.workerBusyHeader}>
-                <View style={styles.workerBusyIcon}>
-                  <Ionicons name="lock-closed" size={22} color={AppColors.status.warning} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.workerBusyTitle}>Bạn đang nhận việc khác</Text>
-                  <Text style={styles.workerBusyDesc}>
-                    Hoàn thành công việc hiện tại trước khi ứng tuyển thêm.
-                  </Text>
-                </View>
-              </View>
-              <Button
-                title="Xem công việc của tôi"
-                onPress={() => navigation.navigate('Activity' as any)}
-                variant="secondary"
-                size="sm"
-                style={{ marginTop: 14 }}
-              />
-            </Card>
-          )}
-
-          {/* 3. Worker rảnh + chưa apply → show apply form */}
-          {!isPoster && isWorker && task.status === 'OPEN' && !hasApplied && workerHasActiveJob === false && (
-            <Card style={styles.applyCard} variant="glass">
-              <Text style={styles.sectionTitleText}>Gửi báo giá ứng tuyển</Text>
-              <Text style={styles.applyInstruction}>
-                Đề xuất chi phí từ {formatCurrency(task.budgetMin)} đến {formatCurrency(task.budgetMax)}.
-              </Text>
-
-              <View style={styles.bidInputWrapper}>
-                <Text style={styles.currencyPrefix}>VND</Text>
-                <TextInput
-                  style={styles.premiumBidInput}
-                  placeholder="Nhập số tiền đề xuất"
-                  placeholderTextColor={AppColors.text.disabled}
-                  value={bidPrice}
-                  onChangeText={setBidPrice}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <Button
-                title="Gửi đề xuất ngay"
-                onPress={handleApply}
-                loading={submitting}
-                size="lg"
-                style={styles.applySubmitBtn}
-              />
-            </Card>
-          )}
-
-          {/* 4. Đã apply rồi → show status card + nút hủy nếu còn PENDING */}
-          {hasApplied && (
-            <Card style={styles.appliedStatusCard} variant="glass">
-              <View style={styles.appliedHeader}>
-                <Ionicons
-                  name={userApplication.status === 'ACCEPTED' ? 'checkmark-done-circle' : 'checkmark-circle'}
-                  size={24}
-                  color={userApplication.status === 'ACCEPTED' ? AppColors.status.success : AppColors.brand.primary}
-                />
-                <Text style={styles.appliedHeaderTitle}>
-                  {userApplication.status === 'ACCEPTED' ? 'Đề xuất được chấp nhận!' : 'Đã nộp báo giá ứng tuyển'}
+                  {task.postType === 'SERVICE_OFFER' ? 'Thuê tôi' : 'Tuyển người'}
                 </Text>
               </View>
-              <View style={styles.appliedContentRow}>
-                <View style={styles.appliedContentItem}>
-                  <Text style={styles.appliedLabel}>Giá đề xuất</Text>
-                  <Text style={styles.appliedValue}>{formatCurrency(userApplication.bidPrice)}</Text>
-                </View>
-                <View style={styles.appliedContentItem}>
-                  <Text style={styles.appliedLabel}>Trạng thái</Text>
-                  <Text style={[
-                    styles.appliedValue,
-                    {
-                      color: userApplication.status === 'ACCEPTED'
-                        ? AppColors.status.success
-                        : userApplication.status === 'REJECTED' || userApplication.status === 'CANCELLED'
-                          ? AppColors.status.error
-                          : AppColors.brand.primary,
-                    },
-                  ]}>
-                    {userApplication.status === 'ACCEPTED' ? 'Được chấp nhận'
-                      : userApplication.status === 'REJECTED' ? 'Bị từ chối'
-                      : userApplication.status === 'CANCELLED' ? 'Đã hủy'
-                      : 'Đang chờ duyệt'}
-                  </Text>
-                </View>
-              </View>
 
-              {/* Chỉ cho hủy khi đơn còn PENDING và task vẫn OPEN */}
-              {userApplication.status === 'PENDING' && task.status === 'OPEN' && (
-                <Button
-                  title="Hủy đề xuất"
-                  onPress={handleWithdraw}
-                  loading={withdrawing}
-                  variant="secondary"
-                  size="sm"
-                  style={styles.withdrawBtn}
-                />
-              )}
-            </Card>
-          )}
-
-          {/* 5. Task đang IN_PROGRESS */}
-          {task.status === 'IN_PROGRESS' && (
-            <Card style={styles.inProgressCard}>
-              <View style={styles.inProgressHeader}>
-                <Ionicons name="flash-outline" size={24} color={AppColors.status.warning} />
-                <Text style={styles.inProgressTitle}>Dự án đang triển khai</Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusBadgeText}>{getStatusLabel(task.status)}</Text>
               </View>
-              <Text style={styles.inProgressDesc}>
-                Yêu cầu đã được giao cho cộng tác viên và đang được xử lý. Bạn có thể theo dõi tiến độ trong phần công việc của tôi.
+            </View>
+
+            <Text style={styles.taskTitle}>{task.title}</Text>
+            
+            <View style={styles.priceContainer}>
+              <Ionicons name="cash" size={22} color={HomeTheme.colors.primary} />
+              <Text style={styles.priceText}>
+                {task.budgetMin === task.budgetMax
+                  ? formatCurrency(task.budgetMin)
+                  : `${formatCurrency(task.budgetMin)} - ${formatCurrency(task.budgetMax)}`}
               </Text>
-            </Card>
+              {task.salaryUnit && (
+                <Text style={styles.salaryUnitText}>
+                  {task.salaryUnit === 'PER_JOB' ? ' /việc' :
+                   task.salaryUnit === 'PER_HOUR' ? ' /giờ' :
+                   task.salaryUnit === 'PER_DAY' ? ' /ngày' :
+                   task.salaryUnit === 'PER_MONTH' ? ' /tháng' : ''}
+                </Text>
+              )}
+            </View>
+
+            <Text style={styles.taskDescription}>{task.description}</Text>
+          </View>
+
+          {/* Grid Summary */}
+          <View style={styles.gridSummary}>
+            <View style={styles.gridCard}>
+              <Ionicons name="calendar-outline" size={20} color={HomeTheme.colors.primary} />
+              <View style={styles.gridCardInfo}>
+                <Text style={styles.gridCardLabel}>Hạn nhận hồ sơ</Text>
+                <Text style={styles.gridCardValue}>{deadlineText}</Text>
+              </View>
+            </View>
+
+            <View style={styles.gridCard}>
+              <Ionicons name="location-outline" size={20} color={HomeTheme.colors.primary} />
+              <View style={styles.gridCardInfo}>
+                <Text style={styles.gridCardLabel}>Hình thức làm việc</Text>
+                <Text style={styles.gridCardValue} numberOfLines={1}>
+                  {WORK_MODES.find(m => m.value === task.workMode)?.label || 'Onsite'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.gridCard}>
+              <Ionicons name="construct-outline" size={20} color={HomeTheme.colors.primary} />
+              <View style={styles.gridCardInfo}>
+                <Text style={styles.gridCardLabel}>Lĩnh vực cụ thể</Text>
+                <Text style={styles.gridCardValue}>{subcategoryName}</Text>
+              </View>
+            </View>
+
+            <View style={styles.gridCard}>
+              <Ionicons name="wallet-outline" size={20} color={HomeTheme.colors.primary} />
+              <View style={styles.gridCardInfo}>
+                <Text style={styles.gridCardLabel}>Ngân sách tối đa</Text>
+                <Text style={styles.gridCardValue} numberOfLines={1}>{formatCurrency(task.budgetMax)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Requirements Section (Table format) */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>
+              {task.postType === 'SERVICE_OFFER' ? 'Thông tin người cung cấp' : 'Yêu cầu ứng viên'}
+            </Text>
+            <View style={styles.table}>
+              <View style={styles.tableRow}>
+                <Text style={styles.tableLabel}>Kinh nghiệm</Text>
+                <Text style={styles.tableValue}>
+                  {EXPERIENCE_LEVELS.find(l => l.value === task.experienceLevel)?.label || 'Không yêu cầu'}
+                </Text>
+              </View>
+              <View style={styles.tableRow}>
+                <Text style={styles.tableLabel}>Bằng cấp</Text>
+                <Text style={styles.tableValue}>
+                  {EDUCATION_LEVELS.find(l => l.value === task.educationLevel)?.label || 'Không yêu cầu'}
+                </Text>
+              </View>
+              {task.postType !== 'SERVICE_OFFER' && (
+                <>
+                  <View style={styles.tableRow}>
+                    <Text style={styles.tableLabel}>Giới tính</Text>
+                    <Text style={styles.tableValue}>
+                      {GENDER_REQUIREMENTS.find(g => g.value === task.genderRequirement)?.label || 'Không yêu cầu'}
+                    </Text>
+                  </View>
+                  <View style={styles.tableRow}>
+                    <Text style={styles.tableLabel}>Độ tuổi</Text>
+                    <Text style={styles.tableValue}>
+                      {task.minAge && task.maxAge ? `${task.minAge} - ${task.maxAge} tuổi` : 'Không yêu cầu'}
+                    </Text>
+                  </View>
+                  <View style={styles.tableRow}>
+                    <Text style={styles.tableLabel}>Chiều cao</Text>
+                    <Text style={styles.tableValue}>
+                      {task.minHeightCm && task.maxHeightCm ? `${task.minHeightCm} - ${task.maxHeightCm} cm` : 'Không yêu cầu'}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* Owner details card */}
+          <View style={styles.ownerCard}>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+              onPress={() => {
+                if (task.posterId) {
+                  navigation.navigate('PublicProfile', { userId: task.posterId });
+                }
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel={`Xem trang cá nhân của ${task.posterName || 'Nhà tuyển dụng'}`}
+              accessibilityRole="button"
+            >
+              <View style={styles.ownerAvatarWrapper}>
+                <UserAvatar
+                  name={task.posterName || 'N/A'}
+                  avatarUrl={task.poster?.avatarUrl}
+                  size={44}
+                />
+              </View>
+              <View style={styles.ownerInfo}>
+                <Text style={styles.ownerName}>{task.posterName || 'Nhà tuyển dụng'}</Text>
+                <Text style={styles.ownerRole}>Người đăng bài</Text>
+              </View>
+            </TouchableOpacity>
+            {!isPoster && (
+              <TouchableOpacity
+                style={styles.chatActionBtn}
+                onPress={() => {
+                  navigation.navigate('ChatDetail', {
+                    otherUserId: task.posterId,
+                    otherUserName: task.posterName || 'Chủ bài đăng',
+                    otherUserAvatar: task.poster?.avatarUrl || null,
+                  });
+                }}
+              >
+                <Ionicons name="chatbubble-ellipses" size={18} color="#FFFFFF" />
+                <Text style={styles.chatActionText}>Nhắn tin</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Owner recruitment statistics and details */}
+          {isPoster && task.postType !== 'SERVICE_OFFER' && (
+            <View style={styles.managementCard}>
+              <Text style={styles.managementTitle}>Thông tin tuyển dụng</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>{applications.length}</Text>
+                  <Text style={styles.statLabel}>Ứng viên đã nộp</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>{task.peopleNeeded || 1}</Text>
+                  <Text style={styles.statLabel}>Chỉ tiêu cần tuyển</Text>
+                </View>
+              </View>
+            </View>
           )}
 
-          {/* 6. Thông tin người làm dự án dành cho chủ bài đăng (Hirer) hoặc chính cộng tác viên đó (Worker) */}
-          {(isPoster || user?.id === task.assignedWorker?.id) && (task.status === 'IN_PROGRESS' || task.status === 'COMPLETED') && task.assignedWorker && (
-            <LinearGradient
-              colors={['rgba(34, 197, 94, 0.12)', 'rgba(9, 14, 23, 0.98)']}
-              style={styles.assignedWorkerCard}
-            >
-              <View style={styles.workerCardHeader}>
-                <View style={styles.workerBadge}>
-                  <Ionicons name="shield-checkmark" size={14} color={AppColors.status.success} />
-                  <Text style={styles.workerBadgeText}>
-                    {user?.id === task.assignedWorker.id ? 'BẠN LÀ NGƯỜI THỰC HIỆN' : 'CỘNG TÁC VIÊN ĐÃ CHỌN'}
-                  </Text>
-                </View>
-                <View style={styles.workerStatusTag}>
-                  <View style={styles.workerStatusDot} />
-                  <Text style={styles.workerStatusText}>Đang làm việc</Text>
-                </View>
-              </View>
-
-              <View style={styles.workerInfoRow}>
-                <UserAvatar 
-                  name={task.assignedWorker.name || 'N/A'} 
-                  size={52} 
-                  avatarUrl={task.assignedWorker.avatarUrl} 
-                />
-                <View style={styles.workerDetails}>
-                  <View style={styles.workerNameContainer}>
-                    <Text style={styles.workerNameText}>{task.assignedWorker.name || 'N/A'}</Text>
-                    <Ionicons name="checkmark-circle" size={15} color={AppColors.status.info} />
+          {/* Active Workers Management List (For Posters) */}
+          {isPoster && activeWorkers.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Ứng viên đang làm việc</Text>
+              <View style={styles.activeWorkersList}>
+                {activeWorkers.map((workerApp) => (
+                  <View key={workerApp.id} style={styles.workerMgmtCard}>
+                    <View style={styles.workerMgmtHeader}>
+                      <UserAvatar
+                        name={workerApp.taskerName || 'N/A'}
+                        avatarUrl={workerApp.taskerAvatar}
+                        size={36}
+                      />
+                      <View style={styles.workerMgmtInfo}>
+                        <Text style={styles.workerMgmtName}>{workerApp.taskerName}</Text>
+                        <Text
+                          style={[
+                            styles.workerMgmtStatus,
+                            {
+                              color:
+                                workerApp.assignmentStatus === 'COMPLETED' ? HomeTheme.colors.success :
+                                workerApp.assignmentStatus === 'IN_PROGRESS' ? '#1E3A8A' : '#D97706',
+                            },
+                          ]}
+                        >
+                          {workerApp.assignmentStatus === 'COMPLETED'
+                            ? 'Đã hoàn thành'
+                            : workerApp.assignmentStatus === 'IN_PROGRESS'
+                            ? 'Đang làm việc'
+                            : 'Chờ bạn xác nhận'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.workerMgmtActions}>
+                      {workerApp.assignmentStatus === 'IN_PROGRESS' && (
+                        <TouchableOpacity
+                          style={[styles.mgmtBtn, styles.mgmtBtnComplete]}
+                          onPress={async () => {
+                            Alert.alert(
+                              'Hoàn tất công việc',
+                              `Bạn xác nhận ứng viên ${workerApp.taskerName} đã hoàn thành công việc?`,
+                              [
+                                { text: 'Quay lại', style: 'cancel' },
+                                {
+                                  text: 'Hoàn tất',
+                                  onPress: async () => {
+                                    try {
+                                      if (workerApp.assignmentId) {
+                                        await applicationService.completeAssignment(workerApp.assignmentId);
+                                        Alert.alert('Thành công', 'Đã đánh dấu hoàn thành công việc.');
+                                        loadTaskDetail();
+                                      }
+                                    } catch (err: any) {
+                                      Alert.alert('Lỗi', err.message || 'Xác nhận hoàn thành thất bại.');
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.mgmtBtnText}>Hoàn tất</Text>
+                        </TouchableOpacity>
+                      )}
+                      {workerApp.assignmentStatus !== 'COMPLETED' && (
+                        <TouchableOpacity
+                          style={[styles.mgmtBtn, styles.mgmtBtnCancel]}
+                          onPress={async () => {
+                            Alert.alert(
+                              'Hủy giao việc',
+                              `Bạn có chắc chắn muốn hủy giao việc cho ứng viên ${workerApp.taskerName}?`,
+                              [
+                                { text: 'Quay lại', style: 'cancel' },
+                                {
+                                  text: 'Hủy giao việc',
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    try {
+                                      if (workerApp.assignmentId) {
+                                        await applicationService.cancelAssignment(workerApp.assignmentId);
+                                        Alert.alert('Thành công', 'Đã hủy giao việc cho ứng viên.');
+                                        loadTaskDetail();
+                                      }
+                                    } catch (err: any) {
+                                      Alert.alert('Lỗi', err.message || 'Hủy giao việc thất bại.');
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="close-circle-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.mgmtBtnText}>Hủy</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
-                  <Text style={styles.workerPhoneText}>
-                    {task.assignedWorker.phone ? `📞 ${task.assignedWorker.phone}` : 'Chưa cập nhật SĐT'}
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* User Application Status Card (For Workers) */}
+          {!isPoster && userApplication && (
+            <View style={styles.appStatusCardWrapper}>
+              <View
+                style={[
+                  styles.appStatusCard,
+                  userApplication.status === 'ACCEPTED' ? styles.appStatusAccepted :
+                  userApplication.status === 'REJECTED' ? styles.appStatusRejected : styles.appStatusPending,
+                ]}
+              >
+                <View style={styles.appStatusHeader}>
+                  <Ionicons
+                    name={
+                      userApplication.assignmentStatus === 'IN_PROGRESS' ? 'play-circle' :
+                      userApplication.assignmentStatus === 'COMPLETED' ? 'checkmark-circle' :
+                      userApplication.assignmentStatus === 'CANCELLED' ? 'close-circle' :
+                      userApplication.status === 'ACCEPTED' ? 'checkmark-circle' : 'time-outline'
+                    }
+                    size={20}
+                    color={
+                      userApplication.assignmentStatus === 'IN_PROGRESS' ? '#1E3A8A' :
+                      userApplication.assignmentStatus === 'COMPLETED' ? HomeTheme.colors.success :
+                      userApplication.assignmentStatus === 'CANCELLED' ? HomeTheme.colors.error :
+                      userApplication.status === 'ACCEPTED' ? HomeTheme.colors.success :
+                      userApplication.status === 'REJECTED' ? HomeTheme.colors.error : HomeTheme.colors.primary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.appStatusTitle,
+                      {
+                        color:
+                          userApplication.assignmentStatus === 'IN_PROGRESS' ? '#1E3A8A' :
+                          userApplication.assignmentStatus === 'COMPLETED' ? HomeTheme.colors.success :
+                          userApplication.assignmentStatus === 'CANCELLED' ? HomeTheme.colors.error :
+                          userApplication.status === 'ACCEPTED' ? HomeTheme.colors.success :
+                          userApplication.status === 'REJECTED' ? HomeTheme.colors.error : HomeTheme.colors.primary,
+                      },
+                    ]}
+                  >
+                    Trạng thái đơn: {
+                      userApplication.assignmentStatus === 'IN_PROGRESS' ? 'Đang làm việc' :
+                      userApplication.assignmentStatus === 'COMPLETED' ? 'Đã hoàn tất công việc' :
+                      userApplication.assignmentStatus === 'CANCELLED' ? 'Đã hủy công việc' :
+                      userApplication.status === 'ACCEPTED' ? 'Được duyệt (Chờ bạn xác nhận)' :
+                      userApplication.status === 'REJECTED' ? 'Bị từ chối' : 'Đang chờ phản hồi'
+                    }
                   </Text>
                 </View>
-
-                <TouchableOpacity
-                  onPress={() => {
-                    const chatUserId = user?.id === task.assignedWorker?.id ? task.posterId : task.assignedWorker?.id;
-                    const chatUserName = user?.id === task.assignedWorker?.id ? task.posterName || 'Chủ dự án' : task.assignedWorker?.name || 'N/A';
-                    const chatUserAvatar = user?.id === task.assignedWorker?.id ? task.poster?.avatarUrl : task.assignedWorker?.avatarUrl;
-                    
-                    navigation.navigate('ChatDetail', {
-                      otherUserId: chatUserId,
-                      otherUserName: chatUserName,
-                      otherUserAvatar: chatUserAvatar
-                    });
-                  }}
-                  style={[styles.premiumChatButton, { backgroundColor: AppColors.brand.primary }]}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.premiumChatButtonText}>Trò chuyện</Text>
-                </TouchableOpacity>
+                {userApplication.message && (
+                  <Text style={styles.appStatusMsg}>Lời nhắn của bạn: "{userApplication.message}"</Text>
+                )}
               </View>
 
-              <View style={styles.premiumDivider} />
-
-              <View style={styles.workerBidDetails}>
-                <View style={styles.bidDetailItem}>
-                  <Text style={styles.bidDetailLabel}>Báo giá đã chốt</Text>
-                  <Text style={styles.bidDetailValue}>
-                    {task.assignedWorker.bidPrice ? formatCurrency(task.assignedWorker.bidPrice) : 'Thỏa thuận'}
+              {userApplication.status === 'ACCEPTED' && userApplication.assignmentStatus === 'ASSIGNED' && (
+                <View style={styles.acceptDeclineBanner}>
+                  <Text style={styles.acceptDeclineText}>
+                    Người đăng đã duyệt hồ sơ của bạn. Hãy xác nhận đồng ý nhận việc hoặc từ chối công việc này:
                   </Text>
+                  <View style={styles.acceptDeclineActions}>
+                    <TouchableOpacity
+                      style={[styles.smallBtn, styles.btnAccept]}
+                      onPress={async () => {
+                        try {
+                          if (userApplication.assignmentId) {
+                            await applicationService.acceptAssignment(userApplication.assignmentId);
+                            Alert.alert('Thành công', 'Bạn đã đồng ý nhận công việc!');
+                            loadTaskDetail();
+                          }
+                        } catch (err: any) {
+                          Alert.alert('Lỗi', err.response?.data?.message || err.message || 'Xác nhận nhận việc thất bại.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="checkmark-sharp" size={16} color="#FFFFFF" />
+                      <Text style={styles.smallBtnText}>Chấp nhận</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.smallBtn, styles.btnDecline]}
+                      onPress={async () => {
+                        Alert.alert(
+                          'Từ chối nhận việc',
+                          'Bạn có chắc chắn muốn từ chối công việc này?',
+                          [
+                            { text: 'Quay lại', style: 'cancel' },
+                            {
+                              text: 'Từ chối',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  if (userApplication.assignmentId) {
+                                    await applicationService.declineAssignment(userApplication.assignmentId);
+                                    Alert.alert('Thành công', 'Đã từ chối công việc.');
+                                    loadTaskDetail();
+                                  }
+                                } catch (err: any) {
+                                  Alert.alert('Lỗi', err.message || 'Từ chối nhận việc thất bại.');
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="close-sharp" size={16} color="#FFFFFF" />
+                      <Text style={styles.smallBtnText}>Từ chối</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.bidDetailItem}>
-                  <Text style={styles.bidDetailLabel}>Thời gian dự kiến</Text>
-                  <Text style={styles.bidDetailValue}>
-                    {task.assignedWorker.estimatedTime || 'Chưa rõ'}
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient>
+              )}
+            </View>
           )}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+
+      {/* Sticky Bottom Actions Bar */}
+      <View style={styles.bottomBar}>
+        {isPoster ? (
+          task.postType === 'SERVICE_OFFER' ? (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnOutline, { flex: 1 }]}
+                onPress={() => navigation.navigate('MainTabs', { screen: 'PostJob', params: { taskId: task.id } })}
+              >
+                <Text style={styles.btnOutlineText}>Chỉnh sửa</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnDanger, { flex: 1 }]}
+                onPress={handleDeleteTask}
+              >
+                <Text style={styles.btnDangerText}>Xóa bài</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.actionRow}>
+              {task.status === 'OPEN' ? (
+                <>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnOutline]}
+                    onPress={() => navigation.navigate('MainTabs', { screen: 'PostJob', params: { taskId: task.id } })}
+                  >
+                    <Text style={styles.btnOutlineText}>Chỉnh sửa</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary, { flex: 2 }]}
+                    onPress={() => navigation.navigate('ApplicantList', { taskId: task.id })}
+                  >
+                    <Text style={styles.btnPrimaryText}>Xem ứng viên ({applications.length})</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnDangerIcon]}
+                    onPress={() => setShowCloseModal(true)}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="lock-closed" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.lockedIndicator, { flex: 1 }]}>
+                    <Ionicons name="lock-closed" size={16} color={HomeTheme.colors.textSecondary} />
+                    <Text style={styles.lockedText}>Tuyển dụng đã đóng</Text>
+                  </View>
+                  <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={handleDeleteTask}>
+                    <Text style={styles.btnDangerText}>Xóa bài</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )
+        ) : (
+          task.postType === 'SERVICE_OFFER' ? (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { flex: 1 }]}
+                onPress={() => {
+                  navigation.navigate('ChatDetail', {
+                    otherUserId: task.posterId,
+                    otherUserName: task.posterName || 'Chủ bài đăng',
+                    otherUserAvatar: task.poster?.avatarUrl,
+                  });
+                }}
+              >
+                <Ionicons name="chatbubble-ellipses" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.btnPrimaryText}>Nhắn tin trao đổi</Text>
+              </TouchableOpacity>
+
+              {task.contactPhone ? (
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnOutline, { marginLeft: 10, flex: 0.6 }]}
+                  onPress={() => {
+                    Linking.openURL(`tel:${task.contactPhone}`);
+                  }}
+                >
+                  <Ionicons name="call" size={18} color={HomeTheme.colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.btnOutlineText}>Gọi điện</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.actionRow}>
+              {task.status === 'OPEN' ? (
+                userApplication ? (
+                  userApplication.status === 'PENDING' ? (
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnDanger, { flex: 1 }]}
+                      onPress={handleWithdraw}
+                    >
+                      <Text style={styles.btnDangerText}>Hủy ứng tuyển</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.lockedIndicator, { flex: 1 }]}>
+                      <Text style={styles.lockedText}>Không thể thay đổi đơn ứng tuyển</Text>
+                    </View>
+                  )
+                ) : workerHasActiveJob ? (
+                  <View style={[styles.lockedIndicator, { flex: 1, backgroundColor: '#FFFBEB' }]}>
+                    <Ionicons name="warning-outline" size={16} color="#B45309" />
+                    <Text style={[styles.lockedText, { color: '#B45309', fontSize: 12 }]}>
+                      Đã đạt giới hạn 3 việc đang làm
+                    </Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary, { flex: 1 }]}
+                    onPress={() => setShowApplyModal(true)}
+                  >
+                    <Text style={styles.btnPrimaryText}>Ứng tuyển ngay</Text>
+                  </TouchableOpacity>
+                )
+              ) : (
+                <View style={[styles.lockedIndicator, { flex: 1 }]}>
+                  <Ionicons name="ellipse" size={8} color={HomeTheme.colors.textSecondary} style={{ marginRight: 4 }} />
+                  <Text style={styles.lockedText}>
+                    {task.status === 'CLOSED' ? 'Đã đóng tuyển dụng' :
+                     task.status === 'EXPIRED' ? 'Đã hết hạn ứng tuyển' : 'Công việc đang triển khai'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )
+        )}
+      </View>
+
+      {/* Confirmation Modals */}
+      <ApplyConfirmationModal
+        visible={showApplyModal}
+        onClose={() => setShowApplyModal(false)}
+        onConfirm={handleApplyConfirm}
+        taskTitle={task.title}
+        budgetMax={task.budgetMax}
+        salaryUnit={task.salaryUnit || 'PER_JOB'}
+        posterName={task.posterName || 'N/A'}
+      />
+
+      <CloseRecruitmentModal
+        visible={showCloseModal}
+        onClose={() => setShowCloseModal(false)}
+        onConfirm={handleCloseConfirm}
+      />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeContainer: {
     flex: 1,
-    backgroundColor: AppColors.background.primary,
+    backgroundColor: HomeTheme.colors.page,
   },
-
+  customHeader: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: HomeTheme.colors.border,
+  },
+  backBtn: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: HomeTheme.colors.text,
+    textAlign: 'center',
+    flex: 1,
+  },
+  headerPlaceholder: {
+    width: 32,
+  },
   scrollContent: {
-    paddingBottom: 48,
+    paddingBottom: 100,
   },
-
-  /* ==============================
-     HERO IMAGE
-  ============================== */
-
-  carouselContainer: {
-    width: SCREEN_WIDTH,
+  fallbackHeader: {
+    height: HERO_HEIGHT,
+    backgroundColor: HomeTheme.colors.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    borderBottomWidth: 1,
+    borderBottomColor: HomeTheme.colors.border,
+  },
+  fallbackCircle: {
+    position: 'absolute',
+    width: HERO_HEIGHT * 0.8,
+    height: HERO_HEIGHT * 0.8,
+    borderRadius: (HERO_HEIGHT * 0.8) / 2,
+    backgroundColor: 'rgba(255, 107, 53, 0.05)',
+  },
+  fallbackText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '700',
+    color: HomeTheme.colors.primary,
+  },
+  carouselWrapper: {
     height: HERO_HEIGHT,
     position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: '#101828',
+    backgroundColor: '#000000',
   },
-
   carouselImage: {
     width: SCREEN_WIDTH,
     height: HERO_HEIGHT,
+    resizeMode: 'cover',
   },
-
-  imageOverlayTop: {
+  carouselIndicator: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 85,
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-
-  imageOverlayBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 110,
-    backgroundColor: 'rgba(0, 0, 0, 0.20)',
-  },
-
-  imageCounter: {
-    position: 'absolute',
-    top: 18,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: 'rgba(16, 24, 40, 0.62)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-  },
-
-  imageCounterText: {
+  carouselIndicatorText: {
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
-
-  paginationDots: {
-    position: 'absolute',
-    bottom: 58,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  mainContainer: {
+    padding: 16,
+    gap: 16,
   },
-
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.48)',
-  },
-
-  activeDot: {
-    width: 24,
+  infoBox: {
     backgroundColor: '#FFFFFF',
-  },
-
-  /* ==============================
-     FALLBACK KHI KHÔNG CÓ ẢNH
-  ============================== */
-
-  fallbackBanner: {
-    width: SCREEN_WIDTH,
-    height: HERO_HEIGHT,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-
-  fallbackDecorationLarge: {
-    position: 'absolute',
-    top: -80,
-    right: -70,
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-
-  fallbackDecorationSmall: {
-    position: 'absolute',
-    bottom: -45,
-    left: -45,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-  },
-
-  fallbackOverlay: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.10)',
-  },
-
-  fallbackIcon: {
-    width: 82,
-    height: 82,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderRadius: HomeTheme.radius.medium,
+    padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: HomeTheme.colors.border,
   },
-
-  fallbackCategoryText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-
-  fallbackSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.75)',
-  },
-
-  /* ==============================
-     MAIN CONTENT
-  ============================== */
-
-  body: {
-    position: 'relative',
-    marginTop: -38,
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    backgroundColor: AppColors.background.primary,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-  },
-
-  /* ==============================
-     MAIN JOB CARD
-  ============================== */
-
-  premiumCard: {
-    padding: 20,
-    marginBottom: 16,
-    borderRadius: 24,
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
-  },
-
-  categoryRow: {
+  tagRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-
-  categoryBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
+    marginBottom: 12,
   },
-
-  categoryBadgeText: {
+  postTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  postTypeBadgeText: {
+    fontWeight: '700',
     fontSize: 12,
-    fontWeight: '800',
   },
-
-  title: {
-    fontSize: 24,
-    lineHeight: 32,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-    color: AppColors.text.primary,
+  recruitmentBadgeBg: {
+    backgroundColor: '#FFF1EB',
+  },
+  recruitmentBadgeText: {
+    color: '#FF6B35',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  serviceBadgeBg: {
+    backgroundColor: '#E6F4EA',
+  },
+  serviceBadgeText: {
+    color: '#137333',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  statusBadge: {
+    backgroundColor: '#F2F4F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    color: HomeTheme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  taskTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: HomeTheme.colors.text,
+    lineHeight: 28,
     marginBottom: 10,
   },
-
-  description: {
-    fontSize: 15,
-    lineHeight: 24,
-    fontWeight: '400',
-    color: AppColors.text.secondary,
-    marginBottom: 0,
-  },
-
-  premiumDivider: {
-    height: 1,
-    marginVertical: 18,
-    backgroundColor: AppColors.border.subtle,
-  },
-
-  /* ==============================
-     BUDGET AND DEADLINE
-  ============================== */
-
-  metaRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-
-  metaItem: {
-    flex: 1,
-    minHeight: 100,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 17,
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
-  },
-
-  metaContent: {
-    width: '100%',
-    marginTop: 9,
-  },
-
-  metaLabel: {
-    marginBottom: 5,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-    color: AppColors.text.muted,
-  },
-
-  metaValue: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '800',
-    color: AppColors.text.primary,
-  },
-
-  /* ==============================
-     DATE AND LOCATION
-  ============================== */
-
-  detailsList: {
-    gap: 11,
-  },
-
-  detailRow: {
-    minHeight: 55,
+  priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-    borderRadius: 15,
-    backgroundColor: AppColors.surface.glass,
+    backgroundColor: '#FFF7F0',
+    padding: 12,
+    borderRadius: HomeTheme.radius.small,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: AppColors.border.subtle,
+    borderColor: '#FFD7B5',
   },
-
-  detailLeft: {
+  priceText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: HomeTheme.colors.primary,
+    marginLeft: 6,
+  },
+  salaryUnitText: {
+    fontSize: 13,
+    color: HomeTheme.colors.textSecondary,
+  },
+  taskDescription: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: HomeTheme.colors.textSecondary,
+  },
+  gridSummary: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  gridCard: {
+    width: (SCREEN_WIDTH - 42) / 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: HomeTheme.radius.small,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-
-  detailLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: AppColors.text.muted,
+  gridCardInfo: {
+    flex: 1,
   },
-
-  detailValue: {
-    maxWidth: '58%',
+  gridCardLabel: {
+    fontSize: 11,
+    color: HomeTheme.colors.textSecondary,
+    marginBottom: 2,
+  },
+  gridCardValue: {
     fontSize: 13,
-    lineHeight: 18,
     fontWeight: '700',
-    textAlign: 'right',
-    color: AppColors.text.primary,
+    color: HomeTheme.colors.text,
   },
-
-  /* ==============================
-     POSTER CARD
-  ============================== */
-
-  posterCard: {
-    padding: 18,
-    marginBottom: 16,
-    borderRadius: 22,
-    backgroundColor: AppColors.surface.glass,
+  sectionContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: HomeTheme.radius.medium,
+    padding: 16,
     borderWidth: 1,
-    borderColor: AppColors.border.subtle,
+    borderColor: HomeTheme.colors.border,
   },
-
-  cardSectionTitle: {
-    marginBottom: 15,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
-    color: AppColors.text.muted,
-  },
-
-  posterInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: AppColors.border.subtle,
-  },
-
-  posterDetails: {
-    flex: 1,
-    marginLeft: 13,
-  },
-
-  posterNameText: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: AppColors.text.primary,
-  },
-
-  posterRoleText: {
-    marginTop: 3,
-    fontSize: 12,
-    fontWeight: '500',
-    color: AppColors.text.muted,
-  },
-
-  premiumChatButton: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-
-    elevation: 4,
-  },
-
-  premiumChatButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* ==============================
-     APPLICANTS
-  ============================== */
-
-  hirerSectionCard: {
-    padding: 18,
-    marginBottom: 16,
-    borderRadius: 22,
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
-  },
-
-  premiumSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 18,
-  },
-
-  sectionTitleText: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: AppColors.text.primary,
-  },
-
-  sectionSubtitleText: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: '500',
-    color: AppColors.text.muted,
-  },
-
-  autoMatchBtn: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-  },
-
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 28,
-    borderRadius: 18,
-    backgroundColor: AppColors.background.secondary,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
-    borderStyle: 'dashed',
-    gap: 9,
-  },
-
-  emptyText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: AppColors.text.muted,
-  },
-
-  viewApplicantsBtn: {
-    width: '100%',
-  },
-
-  /* ==============================
-     APPLY CARD
-  ============================== */
-
-  applyCard: {
-    padding: 19,
-    marginBottom: 16,
-    borderRadius: 23,
-    backgroundColor: AppColors.surface.glass,
-    borderWidth: 1,
-    borderColor: AppColors.border.subtle,
-  },
-
-  applyInstruction: {
-    marginTop: 7,
-    marginBottom: 18,
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: AppColors.text.muted,
-  },
-
-  bidInputWrapper: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: AppColors.background.secondary,
-    borderWidth: 1.5,
-    borderColor: AppColors.border.normal,
-  },
-
-  currencyPrefix: {
-    marginRight: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 9,
-    overflow: 'hidden',
-    fontSize: 11,
-    fontWeight: '800',
-    color: AppColors.text.muted,
-    backgroundColor: AppColors.background.elevated,
-  },
-
-  premiumBidInput: {
-    flex: 1,
-    paddingVertical: 15,
-    fontSize: 17,
-    fontWeight: '800',
-    color: AppColors.text.primary,
-  },
-
-  applySubmitBtn: {
-    width: '100%',
-  },
-
-  /* ==============================
-     APPLIED STATUS
-  ============================== */
-
-  appliedStatusCard: {
-    padding: 18,
-    marginBottom: 16,
-    borderRadius: 22,
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.3)',
-  },
-
-  appliedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    marginBottom: 15,
-  },
-
-  appliedHeaderTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#22C55E',
-  },
-
-  appliedContentRow: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 14,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-
-  appliedContentItem: {
-    flex: 1,
-  },
-
-  appliedLabel: {
-    marginBottom: 5,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: '#22C55E',
-  },
-
-  appliedValue: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#22C55E',
-  },
-
-  /* ==============================
-     IN PROGRESS STATUS
-  ============================== */
-
-  inProgressCard: {
-    padding: 18,
-    marginBottom: 16,
-    borderRadius: 22,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-  },
-
-  inProgressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    marginBottom: 10,
-  },
-
-  inProgressTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#F59E0B',
-  },
-
-  inProgressDesc: {
-    paddingLeft: 33,
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: '#F59E0B',
-  },
-
-  /* ==============================
-     WORKER BUSY CARD
-  ============================== */
-
-  workerBusyCard: {
-    padding: 18,
-    marginBottom: 16,
-    borderRadius: 22,
-    backgroundColor: 'rgba(245, 158, 11, 0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.28)',
-  },
-
-  workerBusyHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-
-  workerBusyIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    flexShrink: 0,
-  },
-
-  workerBusyTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#F59E0B',
-    marginBottom: 4,
-  },
-
-  workerBusyDesc: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '500',
-    color: AppColors.text.muted,
-  },
-
-  /* ==============================
-     WITHDRAW BUTTON
-  ============================== */
-
-  withdrawBtn: {
-    marginTop: 14,
-    alignSelf: 'flex-start',
-  },
-
-  /* ==============================
-     ASSIGNED WORKER CARD
-  ============================== */
-  assignedWorkerCard: {
-    padding: 18,
-    marginBottom: 16,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: 'rgba(34, 197, 94, 0.25)',
-  },
-
-  workerCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    color: HomeTheme.colors.text,
     marginBottom: 14,
   },
-
-  workerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  table: {
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    borderRadius: HomeTheme.radius.small,
+    overflow: 'hidden',
   },
-
-  workerBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    color: '#22C55E',
-  },
-
-  workerStatusTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
-  },
-
-  workerStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: AppColors.status.success,
-  },
-
-  workerStatusText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: AppColors.status.success,
-  },
-
-  workerInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-
-  workerDetails: {
-    flex: 1,
-    marginLeft: 13,
-  },
-
-  workerNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-
-  workerNameText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: AppColors.text.primary,
-  },
-
-  workerPhoneText: {
-    marginTop: 3,
-    fontSize: 12,
-    fontWeight: '500',
-    color: AppColors.text.muted,
-  },
-
-  workerBidDetails: {
+  tableRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: HomeTheme.colors.border,
+    backgroundColor: '#FFFFFF',
+  },
+  tableLabel: {
+    fontSize: 13,
+    color: HomeTheme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  tableValue: {
+    fontSize: 13,
+    color: HomeTheme.colors.text,
+    fontWeight: '700',
+    textAlign: 'right',
+    maxWidth: '60%',
+  },
+  ownerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: HomeTheme.radius.medium,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ownerAvatarWrapper: {
+    marginRight: 12,
+  },
+  ownerAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F2F4F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+  },
+  ownerInfo: {
+    flex: 1,
+  },
+  ownerName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: HomeTheme.colors.text,
+  },
+  ownerRole: {
+    fontSize: 12,
+    color: HomeTheme.colors.textSecondary,
+    marginTop: 2,
+  },
+  chatActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: HomeTheme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  chatActionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  managementCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: HomeTheme.radius.medium,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+  },
+  managementTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: HomeTheme.colors.text,
+    marginBottom: 12,
+  },
+  statsRow: {
+    flexDirection: 'row',
     gap: 12,
   },
-
-  bidDetailItem: {
+  statBox: {
     flex: 1,
+    backgroundColor: HomeTheme.colors.page,
+    borderRadius: HomeTheme.radius.small,
     padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: AppColors.border.subtle,
+    borderColor: HomeTheme.colors.border,
   },
-
-  bidDetailLabel: {
-    marginBottom: 4,
-    fontSize: 10,
+  statNum: {
+    fontSize: 20,
     fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: AppColors.text.muted,
+    color: HomeTheme.colors.primary,
+    marginBottom: 4,
   },
-
-  bidDetailValue: {
+  statLabel: {
+    fontSize: 11,
+    color: HomeTheme.colors.textSecondary,
+  },
+  appStatusCard: {
+    borderRadius: HomeTheme.radius.medium,
+    padding: 14,
+    borderWidth: 1,
+  },
+  appStatusPending: {
+    backgroundColor: '#FFF7F0',
+    borderColor: '#FFD7B5',
+  },
+  appStatusAccepted: {
+    backgroundColor: '#E6F4EA',
+    borderColor: '#A8DAB5',
+  },
+  appStatusRejected: {
+    backgroundColor: '#FCE8E6',
+    borderColor: '#F1B0B0',
+  },
+  appStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  appStatusTitle: {
     fontSize: 14,
-    fontWeight: '900',
-    color: AppColors.text.primary,
+    fontWeight: '700',
   },
-});
+  appStatusMsg: {
+    fontSize: 13,
+    color: HomeTheme.colors.textSecondary,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: HomeTheme.colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  btn: {
+    height: 48,
+    borderRadius: HomeTheme.radius.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  btnPrimary: {
+    backgroundColor: HomeTheme.colors.primary,
+  },
+  btnPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  btnOutline: {
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+  },
+  btnOutlineText: {
+    color: HomeTheme.colors.text,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  btnDanger: {
+    backgroundColor: '#EF4444',
+  },
+  btnDangerText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  btnDangerIcon: {
+    width: 48,
+    backgroundColor: '#EF4444',
+  },
+  lockedIndicator: {
+    height: 48,
+    borderRadius: HomeTheme.radius.small,
+    backgroundColor: HomeTheme.colors.page,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  lockedText: {
+    color: HomeTheme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  appStatusCardWrapper: {
+    gap: 10,
+  },
+  acceptDeclineBanner: {
+    backgroundColor: '#FFF7F0',
+    borderColor: '#FFD7B5',
+    borderWidth: 1,
+    borderRadius: HomeTheme.radius.medium,
+    padding: 14,
+  },
+  acceptDeclineText: {
+    fontSize: 13,
+    color: HomeTheme.colors.text,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  acceptDeclineActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  smallBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  btnAccept: {
+    backgroundColor: '#10B981',
+  },
+  btnDecline: {
+    backgroundColor: '#EF4444',
+  },
+  smallBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  activeWorkersList: {
+    gap: 10,
+  },
+  workerMgmtCard: {
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    borderRadius: HomeTheme.radius.small,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    gap: 10,
+  },
+  workerMgmtHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  workerMgmtInfo: {
+    flex: 1,
+  },
+  workerMgmtName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: HomeTheme.colors.text,
+  },
+  workerMgmtStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  workerMgmtActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  mgmtBtn: {
+    flex: 1,
+    height: 32,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  mgmtBtnComplete: {
+    backgroundColor: '#1E3A8A',
+  },
+  mgmtBtnCancel: {
+    backgroundColor: '#EF4444',
+  },
+  mgmtBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+});

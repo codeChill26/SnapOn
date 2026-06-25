@@ -25,6 +25,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.snapon.mobile",
+      "versionCode": 1,
       "config": {
         "googleMaps": {
           "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
@@ -32,9 +33,6 @@
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-<<<<<<< Updated upstream
-        "android.permission.ACCESS_FINE_LOCATION"
-=======
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -45,7 +43,6 @@
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
->>>>>>> Stashed changes
       ]
     },
     "plugins": [
@@ -56,6 +53,21 @@
           "locationWhenInUsePermission": "SnapOn needs your location to find nearby tasks."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SnapOn cần quyền chọn ảnh để bạn tải ảnh lên hồ sơ, bài đăng và tin nhắn.",
+          "cameraPermission": "SnapOn cần quyền camera khi bạn chụp ảnh xác minh hoặc cập nhật hồ sơ."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "SnapOn cần quyền thư viện ảnh để chọn và xem ảnh đã gửi.",
+          "savePhotosPermission": "SnapOn cần quyền lưu ảnh để tải ảnh từ tin nhắn về máy."
+        }
+      ],
+      "expo-notifications",
       "expo-asset",
       "@react-native-google-signin/google-signin"
     ],

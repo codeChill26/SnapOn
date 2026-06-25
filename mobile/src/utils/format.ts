@@ -1,3 +1,5 @@
+import Config from '../constants/config';
+
 export const formatCurrency = (amount: number | string | undefined | null): string => {
   const numericAmount = Number(amount);
   return new Intl.NumberFormat('vi-VN', {
@@ -114,4 +116,15 @@ export const getStatusLabel = (status: string): string => {
 export const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
+};
+
+export const normalizeImageUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  const apiBase = Config.API_BASE_URL;
+  const hostBase = apiBase.replace(/\/api$/, '');
+  return `${hostBase}${cleanPath}`;
 };

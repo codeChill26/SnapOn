@@ -48,7 +48,15 @@ const assignmentController = {
       await assignedTaskModel.updateStatus(id, 'IN_PROGRESS', client);
 
       // 5. Update task to IN_PROGRESS if we have met or exceeded the hiring quota (people_needed)
+<<<<<<< Updated upstream
+<<<<<<< HEAD
       const task = await taskModel.findById(assignment.task_id);
+=======
+      const task = await taskModel.findBaseById(assignment.task_id, client);
+>>>>>>> 87e4b5f29e584af243811f5cf20eea8339a7ec41
+=======
+      const task = await taskModel.findById(assignment.task_id);
+>>>>>>> Stashed changes
       if (task && task.status === TASK_STATUS.OPEN) {
         const activeAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
         const inProgressCount = activeAssignments.filter(a => a.status === 'IN_PROGRESS').length;
@@ -161,7 +169,15 @@ const assignmentController = {
       }
 
       // 2. Fetch task
+<<<<<<< Updated upstream
+<<<<<<< HEAD
       const task = await taskModel.findById(assignment.task_id);
+=======
+      const task = await taskModel.findBaseById(assignment.task_id, client);
+>>>>>>> 87e4b5f29e584af243811f5cf20eea8339a7ec41
+=======
+      const task = await taskModel.findById(assignment.task_id);
+>>>>>>> Stashed changes
       if (!task) {
         await client.query('ROLLBACK');
         return error(res, 'Không tìm thấy công việc tương ứng.', 404);
@@ -233,7 +249,15 @@ const assignmentController = {
       }
 
       // 2. Fetch task
+<<<<<<< Updated upstream
+<<<<<<< HEAD
       const task = await taskModel.findById(assignment.task_id);
+=======
+      const task = await taskModel.findBaseById(assignment.task_id, client);
+>>>>>>> 87e4b5f29e584af243811f5cf20eea8339a7ec41
+=======
+      const task = await taskModel.findById(assignment.task_id);
+>>>>>>> Stashed changes
       if (!task) {
         await client.query('ROLLBACK');
         return error(res, 'Không tìm thấy công việc tương ứng.', 404);

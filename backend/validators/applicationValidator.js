@@ -12,7 +12,7 @@ const applicationValidator = {
       .isUUID().withMessage('Task ID must be a valid UUID.'),
 
     body('bid_price')
-      .notEmpty().withMessage('Bid price is required.')
+      .optional()
       .isFloat({ min: 0.01 }).withMessage('Bid price must be a positive number greater than 0.'),
 
     body('estimated_time')

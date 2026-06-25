@@ -7,34 +7,42 @@ datasource db {
 }
 
 model User {
-  id                    String             @id @default(uuid()) @db.Uuid
-  firebaseUid           String?            @unique @map("firebase_uid")
-  fullName              String             @map("full_name")
-  email                 String             @unique
-  phone                 String?
-  avatarUrl             String?            @map("avatar_url")
-  status                UserStatus         @default(ACTIVE)
-  isVerified            Boolean            @default(false) @map("is_verified")
-  createdAt             DateTime           @default(now()) @map("created_at")
-  role                  String?            @default("hirer") @db.VarChar(20)
-  assignedTasks         AssignedTask[]     @relation("AssignedTasker")
-  conversationsAsUser1  Conversation[]     @relation("User1Conversations")
-  conversationsAsUser2  Conversation[]     @relation("User2Conversations")
-  escrowsAsPoster       Escrow[]           @relation("EscrowPoster")
-  escrowsAsTasker       Escrow[]           @relation("EscrowTasker")
-  sentMessages          Message[]          @relation("SentMessages")
-  payments              Payment[]
-  reportsMade           Report[]           @relation("Reporter")
-  reportsReceived       Report[]           @relation("TargetUser")
-  reviewsReceived       Review[]           @relation("Reviewee")
-  reviewsGiven          Review[]           @relation("Reviewer")
-  taskApplications      TaskApplication[]  @relation("TaskerApplications")
-  taskerProfile         TaskerProfile?
-  postedTasks           Task[]             @relation("TaskPoster")
-  reviewedVerifications UserVerification[] @relation("ReviewedVerifications")
-  verifications         UserVerification[] @relation("UserVerifications")
-  wallet                Wallet?
-  withdrawRequests      WithdrawRequest[]
+  id                              String             @id @default(uuid()) @db.Uuid
+  firebaseUid                     String?            @unique @map("firebase_uid")
+  fullName                        String             @map("full_name")
+  email                           String             @unique
+  phone                           String?
+  avatarUrl                       String?            @map("avatar_url")
+  status                          UserStatus         @default(ACTIVE)
+  isVerified                      Boolean            @default(false) @map("is_verified")
+  createdAt                       DateTime           @default(now()) @map("created_at")
+  role                            String?            @default("USER") @db.VarChar(50)
+  bio                             String?
+  headline                        String?            @db.VarChar(255)
+  skills                          Json?              @default("[]")
+  cover_url                       String?
+  assignedTasks                   AssignedTask[]     @relation("AssignedTasker")
+  conversationsAsUser1            Conversation[]     @relation("User1Conversations")
+  conversationsAsUser2            Conversation[]     @relation("User2Conversations")
+  escrowsAsPoster                 Escrow[]           @relation("EscrowPoster")
+  escrowsAsTasker                 Escrow[]           @relation("EscrowTasker")
+  sentMessages                    Message[]          @relation("SentMessages")
+  pushTokens                      PushToken[]
+  payments                        Payment[]
+  reportsMade                     Report[]           @relation("Reporter")
+  reportsReceived                 Report[]           @relation("TargetUser")
+  reviewsReceived                 Review[]           @relation("Reviewee")
+  reviewsGiven                    Review[]           @relation("Reviewer")
+  savedTasks                      SavedTask[]
+  taskApplications                TaskApplication[]  @relation("TaskerApplications")
+  taskerProfile                   TaskerProfile?
+  tasks_tasks_closed_by_idTousers Task[]             @relation("tasks_closed_by_idTousers")
+  postedTasks                     Task[]             @relation("TaskPoster")
+  reviewedVerifications           UserVerification[] @relation("ReviewedVerifications")
+  verifications                   UserVerification[] @relation("UserVerifications")
+  wallet                          Wallet?
+  withdrawRequests                WithdrawRequest[]
+  refreshTokens                   RefreshToken[]
 
   @@map("users")
 }
@@ -105,33 +113,73 @@ model Skill {
 }
 
 model Task {
-  id             String              @id @default(uuid()) @db.Uuid
-  posterId       String              @map("poster_id") @db.Uuid
-  categoryId     String?             @map("category_id") @db.Uuid
-  title          String
-  description    String?
-  taskType       TaskType            @map("task_type")
-  status         TaskStatus          @default(OPEN)
-  budgetMin      Decimal?            @map("budget_min") @db.Decimal(12, 2)
-  budgetMax      Decimal?            @map("budget_max") @db.Decimal(12, 2)
-  finalPrice     Decimal?            @map("final_price") @db.Decimal(12, 2)
-  deadlineStart  DateTime?           @map("deadline_start")
-  deadlineEnd    DateTime?           @map("deadline_end")
-  allowInsurance Boolean             @default(false) @map("allow_insurance")
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  images         String[]            @default([])
-  assignedTask   AssignedTask?
-  escrow         Escrow?
-  reports        Report[]
-  reviews        Review[]
-  applications   TaskApplication[]
-  locations      TaskLocation[]
-  requiredSkills TaskRequiredSkill[]
-  category       Category?           @relation(fields: [categoryId], references: [id])
-  poster         User                @relation("TaskPoster", fields: [posterId], references: [id], onDelete: Cascade)
+  id                              String              @id @default(uuid()) @db.Uuid
+  posterId                        String              @map("poster_id") @db.Uuid
+  categoryId                      String?             @map("category_id") @db.Uuid
+  title                           String
+  description                     String?
+  taskType                        TaskType            @map("task_type")
+  status                          TaskStatus          @default(OPEN)
+  budgetMin                       Decimal?            @map("budget_min") @db.Decimal(12, 2)
+  budgetMax                       Decimal?            @map("budget_max") @db.Decimal(12, 2)
+  finalPrice                      Decimal?            @map("final_price") @db.Decimal(12, 2)
+  deadlineStart                   DateTime?           @map("deadline_start")
+  deadlineEnd                     DateTime?           @map("deadline_end")
+  allowInsurance                  Boolean             @default(false) @map("allow_insurance")
+  createdAt                       DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  images                          String[]            @default([])
+  postType                        String              @default("RECRUITMENT") @map("post_type") @db.VarChar(20)
+  workMode                        String              @default("ONSITE") @map("work_mode") @db.VarChar(20)
+  salaryUnit                      String              @default("PER_JOB") @map("salary_unit") @db.VarChar(20)
+  employmentType                  String              @default("ONE_TIME") @map("employment_type") @db.VarChar(20)
+  peopleNeeded                    Int?                @default(1) @map("people_needed")
+  contactPhone                    String?             @map("contact_phone") @db.VarChar(20)
+  startDate                       DateTime?           @map("start_date") @db.Timestamp(6)
+  experienceLevel                 String?             @default("NO_REQUIREMENT") @map("experience_level") @db.VarChar(50)
+  educationLevel                  String?             @default("NO_REQUIREMENT") @map("education_level") @db.VarChar(50)
+  genderRequirement               String?             @default("NO_REQUIREMENT") @map("gender_requirement") @db.VarChar(30)
+  minAge                          Int?                @map("min_age")
+  maxAge                          Int?                @map("max_age")
+  minHeightCm                     Int?                @map("min_height_cm")
+  maxHeightCm                     Int?                @map("max_height_cm")
+  hashtags                        String[]            @default([])
+  application_deadline            DateTime?           @db.Timestamp(6)
+  closed_at                       DateTime?           @db.Timestamp(6)
+  closed_by_id                    String?             @db.Uuid
+  closed_reason                   String?
+  assignedTask                    AssignedTask[]
+  escrow                          Escrow?
+  reports                         Report[]
+  reviews                         Review[]
+  savedBy                         SavedTask[]
+  applications                    TaskApplication[]
+  locations                       TaskLocation[]
+  requiredSkills                  TaskRequiredSkill[]
+  category                        Category?           @relation(fields: [categoryId], references: [id])
+  users_tasks_closed_by_idTousers User?               @relation("tasks_closed_by_idTousers", fields: [closed_by_id], references: [id], onUpdate: NoAction)
+  poster                          User                @relation("TaskPoster", fields: [posterId], references: [id], onDelete: Cascade)
 
+  @@index([application_deadline], map: "idx_tasks_application_deadline")
+  @@index([createdAt], map: "idx_tasks_created_at")
+  @@index([postType], map: "idx_tasks_post_type")
+  @@index([posterId], map: "idx_tasks_poster_id")
+  @@index([workMode], map: "idx_tasks_work_mode")
   @@map("tasks")
+}
+
+model SavedTask {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  taskId    String   @map("task_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId])
+  @@index([taskId], map: "idx_saved_tasks_task_id")
+  @@index([userId, createdAt], map: "idx_saved_tasks_user_created_at")
+  @@map("saved_tasks")
 }
 
 model TaskRequiredSkill {
@@ -170,12 +218,15 @@ model TaskApplication {
   tasker        User              @relation("TaskerApplications", fields: [taskerId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, taskerId])
+  @@unique([taskId, taskerId], map: "unique_task_tasker")
+  @@index([taskId], map: "idx_task_applications_task_id")
+  @@index([taskerId], map: "idx_task_applications_tasker_id")
   @@map("task_applications")
 }
 
 model AssignedTask {
   id            String             @id @default(uuid()) @db.Uuid
-  taskId        String             @unique @map("task_id") @db.Uuid
+  taskId        String             @map("task_id") @db.Uuid
   taskerId      String             @map("tasker_id") @db.Uuid
   applicationId String?            @unique @map("application_id") @db.Uuid
   assignedBy    AssignedBy         @map("assigned_by")
@@ -184,6 +235,7 @@ model AssignedTask {
   task          Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
   tasker        User               @relation("AssignedTasker", fields: [taskerId], references: [id], onDelete: Cascade)
 
+  @@unique([taskId, taskerId], map: "idx_assigned_tasks_task_tasker")
   @@map("assigned_tasks")
 }
 
@@ -302,14 +354,16 @@ model Report {
 }
 
 model Conversation {
-  id        String    @id @default(uuid()) @db.Uuid
-  user1Id   String    @map("user1_id") @db.Uuid
-  user2Id   String    @map("user2_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  user1     User      @relation("User1Conversations", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2     User      @relation("User2Conversations", fields: [user2Id], references: [id], onDelete: Cascade)
-  messages  Message[]
+  id              String    @id @default(uuid()) @db.Uuid
+  user1Id         String    @map("user1_id") @db.Uuid
+  user2Id         String    @map("user2_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  user1LastReadAt DateTime? @map("user1_last_read_at")
+  user2LastReadAt DateTime? @map("user2_last_read_at")
+  user1           User      @relation("User1Conversations", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2           User      @relation("User2Conversations", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages        Message[]
 
   @@unique([user1Id, user2Id])
   @@map("conversations")
@@ -319,12 +373,31 @@ model Message {
   id             String       @id @default(uuid()) @db.Uuid
   conversationId String       @map("conversation_id") @db.Uuid
   senderId       String       @map("sender_id") @db.Uuid
-  text           String
+  text           String?
+  type           String       @default("TEXT") @db.VarChar(20)
+  imageUrl       String?      @map("image_url")
+  status         String       @default("SENT") @db.VarChar(20)
+  readAt         DateTime?    @map("read_at")
   createdAt      DateTime     @default(now()) @map("created_at")
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
+  @@index([conversationId], map: "idx_messages_conversation_id")
+  @@index([senderId], map: "idx_messages_sender_id")
   @@map("messages")
+}
+
+model PushToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  platform  String   @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_push_tokens_user_id")
+  @@map("push_tokens")
 }
 
 model banners {
@@ -382,6 +455,8 @@ enum TaskStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  CLOSED
+  EXPIRED
 }
 
 enum ApplicationStatus {
@@ -401,6 +476,8 @@ enum AssignedTaskStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+  ASSIGNED
+  IN_PROGRESS
 }
 
 enum WalletTransactionType {
@@ -457,3 +534,18 @@ enum ReportStatus {
   RESOLVED
   REJECTED
 }
+
+model RefreshToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  token      String   @unique
+  userId     String   @map("user_id") @db.Uuid
+  deviceInfo String?  @map("device_info")
+  ipAddress  String?  @map("ip_address")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
