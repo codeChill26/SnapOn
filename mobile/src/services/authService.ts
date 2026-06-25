@@ -2,11 +2,16 @@ import api from './api';
 import { User } from '../types';
 
 export const authService = {
-  async syncUser(firebaseToken: string): Promise<User> {
+  async syncUser(firebaseToken: string): Promise<{ user: User; accessToken: string; refreshToken: string; wallet: any }> {
     const response = await api.post<any>('/auth/sync-user', {
       firebaseToken,
     });
-    return response.data.user;
+    return {
+      user: response.data.user,
+      accessToken: response.data.accessToken,
+      refreshToken: response.data.refreshToken,
+      wallet: response.data.wallet,
+    };
   },
 
   async getProfile(): Promise<User> {
@@ -46,6 +51,18 @@ export const authService = {
       params: { phone },
     });
     return response.data.user;
+  },
+
+  async tokenLogin(): Promise<{ user: User; wallet: any }> {
+    const response = await api.post<any>('/auth/token-login');
+    return {
+      user: response.data.user,
+      wallet: response.data.wallet,
+    };
+  },
+
+  async logout(refreshToken: string): Promise<void> {
+    await api.post('/auth/logout', { refreshToken });
   },
 
   async verifyAccount(frontImage: string, backImage: string, selfieImage: string): Promise<User> {

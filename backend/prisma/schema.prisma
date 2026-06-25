@@ -42,6 +42,7 @@ model User {
   verifications                   UserVerification[] @relation("UserVerifications")
   wallet                          Wallet?
   withdrawRequests                WithdrawRequest[]
+  refreshTokens                   RefreshToken[]
 
   @@map("users")
 }
@@ -533,3 +534,18 @@ enum ReportStatus {
   RESOLVED
   REJECTED
 }
+
+model RefreshToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  token      String   @unique
+  userId     String   @map("user_id") @db.Uuid
+  deviceInfo String?  @map("device_info")
+  ipAddress  String?  @map("ip_address")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+

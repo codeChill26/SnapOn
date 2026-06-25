@@ -3,6 +3,53 @@ const router = express.Router();
 
 const pool = require('../config/db');
 const verifyFirebaseToken = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const prisma = require('../db/prisma');
+
+const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
+const REFRESH_TOKEN_EXPIRY_DAYS = 30; // 30 days
+
+function generateAccessToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      firebaseUid: user.firebase_uid || user.firebaseUid,
+      fullName: user.full_name || user.fullName,
+      email: user.email,
+      role: user.role || 'USER',
+      status: user.status
+    },
+    process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure',
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
+  );
+}
+
+function generateRefreshToken(user) {
+  return jwt.sign(
+    { id: user.id },
+    process.env.JWT_REFRESH_SECRET || 'snapon_jwt_refresh_secret_key_2026_secure',
+    { expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d` }
+  );
+}
+
+async function saveRefreshToken(userId, token, req) {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
+
+  const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+
+  return await prisma.refreshToken.create({
+    data: {
+      token,
+      userId,
+      deviceInfo,
+      ipAddress,
+      expiresAt
+    }
+  });
+}
+
 
 router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
   const client = await pool.connect();
@@ -24,49 +71,35 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
     const finalAvatar = picture || defaultAvatar;
 
-    // First check if user exists by email to prevent duplicate key violations
-    const checkEmailResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
-    let user;
-    if (checkEmailResult.rows.length > 0) {
-      const updateUserQuery = `
-        UPDATE users 
-        SET firebase_uid = $1,
-            full_name = COALESCE($2, full_name),
-            avatar_url = COALESCE(avatar_url, $3)
-        WHERE email = $4
-        RETURNING *;
-      `;
-      const updateResult = await client.query(updateUserQuery, [
-        uid,
-        name || null,
-        finalAvatar,
-        email
-      ]);
-      user = updateResult.rows[0];
-    } else {
-      const insertUserQuery = `
-        INSERT INTO users (
-          id,
-          firebase_uid,
-          email,
-          full_name,
-          avatar_url,
-          status,
-          is_verified
-        )
-        VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
-        RETURNING *;
-      `;
-      const userResult = await client.query(insertUserQuery, [
-        uid,
+    // 1. Single Upsert query for User - Combines check, insert, and update into one database roundtrip
+    const upsertUserQuery = `
+      INSERT INTO users (
+        id,
+        firebase_uid,
         email,
-        name || null,
-        finalAvatar,
-      ]);
-      user = userResult.rows[0];
-    }
+        full_name,
+        avatar_url,
+        status,
+        is_verified
+      )
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
+      ON CONFLICT (email) DO UPDATE
+      SET firebase_uid = EXCLUDED.firebase_uid,
+          full_name = COALESCE($3, users.full_name),
+          avatar_url = COALESCE(users.avatar_url, $4)
+      RETURNING *;
+    `;
 
-    const createWalletQuery = `
+    const userResult = await client.query(upsertUserQuery, [
+      uid,
+      email,
+      name || null,
+      finalAvatar
+    ]);
+    const user = userResult.rows[0];
+
+    // 2. Single Upsert/Select query for Wallet - Combines insert and select into one database roundtrip
+    const upsertWalletQuery = `
       INSERT INTO wallets (
         id,
         user_id,
@@ -75,18 +108,19 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         locked_balance
       )
       VALUES (gen_random_uuid(), $1, 0, 0, 0)
-      ON CONFLICT (user_id)
-      DO NOTHING;
+      ON CONFLICT (user_id) DO UPDATE
+      SET user_id = EXCLUDED.user_id
+      RETURNING *;
     `;
 
-    await client.query(createWalletQuery, [user.id]);
-
-    const walletResult = await client.query(
-      'SELECT * FROM wallets WHERE user_id = $1',
-      [user.id]
-    );
+    const walletResult = await client.query(upsertWalletQuery, [user.id]);
+    const wallet = walletResult.rows[0];
 
     await client.query('COMMIT');
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    await saveRefreshToken(user.id, refreshToken, req);
 
     return res.status(200).json({
       success: true,
@@ -103,11 +137,17 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         isVerified: user.is_verified,
         createdAt: user.created_at,
       },
-      wallet: walletResult.rows[0],
+      wallet,
+      accessToken,
+      refreshToken,
     });
   } catch (error) {
     console.error('❌ Sync user error:', error);
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      // Ignore rollback errors if connection already failed
+    }
 
     return res.status(500).json({
       success: false,
@@ -145,11 +185,17 @@ router.post('/dev/login', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Your account has been banned.' });
     }
 
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    await saveRefreshToken(user.id, refreshToken, req);
+
     return res.status(200).json({
       success: true,
       message: 'Login successful (dev mode)',
       user,
-      token: user.id,
+      token: accessToken,
+      accessToken,
+      refreshToken,
     });
   } catch (err) {
     console.error('❌ Dev login error:', err);
@@ -196,11 +242,17 @@ router.post('/dev/register', async (req, res) => {
 
     await client.query('COMMIT');
 
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    await saveRefreshToken(user.id, refreshToken, req);
+
     return res.status(201).json({
       success: true,
       message: 'Registration successful (dev mode)',
       user,
-      token: user.id,
+      token: accessToken,
+      accessToken,
+      refreshToken,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -326,11 +378,17 @@ router.post('/verify-otp', async (req, res) => {
       createdAt: user.created_at,
     };
 
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    await saveRefreshToken(user.id, refreshToken, req);
+
     return res.status(200).json({
       success: true,
       message: 'OTP verified successfully',
       user: userResponse,
-      token: user.id
+      token: accessToken,
+      accessToken,
+      refreshToken,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -338,6 +396,153 @@ router.post('/verify-otp', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/auth/token-login
+// Restores session using the Access Token verified by authenticate middleware
+router.post('/token-login', verifyFirebaseToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Fetch fresh user profile
+    const userResult = await pool.query(
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.status === 'BANNED') {
+      return res.status(403).json({ success: false, message: 'Your account has been banned.' });
+    }
+
+    // Fetch wallet
+    const walletResult = await pool.query(
+      'SELECT * FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+
+    // Standardize user object keys to camelCase for mobile
+    const userResponse = {
+      id: user.id,
+      firebaseUid: user.firebase_uid,
+      fullName: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      avatarUrl: user.avatar_url,
+      role: user.role || 'USER',
+      status: user.status,
+      isVerified: user.is_verified,
+      createdAt: user.created_at,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Token login successful',
+      user: userResponse,
+      wallet: walletResult.rows[0] || null,
+    });
+  } catch (err) {
+    console.error('❌ Token login error:', err);
+    return res.status(500).json({ success: false, message: 'Token login failed', error: err.message });
+  }
+});
+
+// POST /api/auth/refresh
+// Rotates the refresh token and issues a new access token
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, message: 'Refresh token is required' });
+    }
+
+    // 1. Verify token cryptographically
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET || 'snapon_jwt_refresh_secret_key_2026_secure'
+      );
+    } catch (err) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+    }
+
+    // 2. Check if token exists in DB and is not expired
+    const tokenRecord = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true }
+    });
+
+    if (!tokenRecord) {
+      return res.status(401).json({ success: false, message: 'Refresh token not found or revoked' });
+    }
+
+    if (new Date() > new Date(tokenRecord.expiresAt)) {
+      // Clean up expired token
+      await prisma.refreshToken.delete({ where: { token: refreshToken } }).catch(() => {});
+      return res.status(401).json({ success: false, message: 'Refresh token has expired' });
+    }
+
+    const user = tokenRecord.user;
+
+    if (user.status === 'BANNED') {
+      return res.status(403).json({ success: false, message: 'Your account has been banned.' });
+    }
+
+    // 3. Generate new tokens (Rotation)
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    // 4. Update DB: delete old, save new in transaction
+    await prisma.$transaction([
+      prisma.refreshToken.delete({ where: { token: refreshToken } }),
+      prisma.refreshToken.create({
+        data: {
+          token: newRefreshToken,
+          userId: user.id,
+          deviceInfo: req.headers['user-agent'] || 'Unknown Device',
+          ipAddress: req.ip || req.headers['x-forwarded-for'] || '127.0.0.1',
+          expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
+        }
+      })
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Tokens refreshed successfully',
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (err) {
+    console.error('❌ Refresh token error:', err);
+    return res.status(500).json({ success: false, message: 'Token refresh failed', error: err.message });
+  }
+});
+
+// POST /api/auth/logout
+// Revokes the refresh token from the database
+router.post('/logout', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      await prisma.refreshToken.delete({
+        where: { token: refreshToken }
+      }).catch(() => {}); // ignore error if already deleted
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (err) {
+    console.error('❌ Logout error:', err);
+    return res.status(500).json({ success: false, message: 'Logout failed', error: err.message });
   }
 });
 

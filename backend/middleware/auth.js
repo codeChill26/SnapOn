@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const pool = require('../config/db');
 const { error } = require('../utils/responseHandler');
+const jwt = require('jsonwebtoken');
 
 /** Look up a user by their database UUID */
 async function findUserById(userId) {
@@ -113,6 +114,18 @@ const authenticate = async (req, res, next) => {
     // DEV MODE
     // =====================
     if (AUTH_MODE === 'dev') {
+      // 1. Try verifying custom Access Token JWT first
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1];
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+          return attachUser(req, decoded, res, next);
+        } catch (e) {
+          // Fall through to regular dev mode fallback if not a valid JWT
+        }
+      }
+
       // For sync-user in dev mode: decode Firebase JWT from body (no verification)
       const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
       if (isSyncUser) {
@@ -164,66 +177,85 @@ const authenticate = async (req, res, next) => {
     }
 
     // =====================
-    // FIREBASE MODE
+    // FIREBASE / CUSTOM JWT MODE
     // =====================
+    const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
+    
+    // For sync-user, we verify the Firebase ID Token
+    if (isSyncUser) {
+      let token = req.body?.firebaseToken;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split('Bearer ')[1];
+      }
+
+      if (!token) {
+        return error(res, 'Access denied. No Firebase token provided.', 401);
+      }
+
+      let decodedToken;
+      if (token && token.startsWith('mock-firebase-token')) {
+        const email = token.split(':')[1] || 'mock-user@example.com';
+        const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
+        const name = email.split('@')[0];
+        decodedToken = {
+          uid,
+          email,
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          picture: 'https://via.placeholder.com/150',
+        };
+      } else {
+        decodedToken = await admin.auth().verifyIdToken(token);
+      }
+
+      req.firebaseUser = decodedToken;
+      return next();
+    }
+
+    // For all other endpoints, verify our custom Access Token JWT
     let token;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split('Bearer ')[1];
-    } else {
-      const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
-      if (isSyncUser) {
-        token = req.body?.firebaseToken;
-      }
     }
 
     if (!token) {
       return error(res, 'Access denied. No token provided.', 401);
     }
 
-    // Verify Firebase ID token
-    let decodedToken;
-    if (token && token.startsWith('mock-firebase-token')) {
-      const email = token.split(':')[1] || 'mock-user@example.com';
-      const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
-      const name = email.split('@')[0];
-      decodedToken = {
-        uid,
-        email,
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        picture: 'https://via.placeholder.com/150',
-      };
-    } else {
-      decodedToken = await admin.auth().verifyIdToken(token);
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+      return attachUser(req, decoded, res, next);
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        return error(res, 'Token expired. Please refresh token.', 401);
+      }
+      // If custom JWT fails, check if it's a legacy Firebase ID Token for backward compatibility during transition
+      try {
+        let decodedFirebaseToken;
+        if (token.startsWith('mock-firebase-token')) {
+          const email = token.split(':')[1] || 'mock-user@example.com';
+          decodedFirebaseToken = { uid: `mock-uid-${email.replace(/[@.]/g, '-')}` };
+        } else {
+          decodedFirebaseToken = await admin.auth().verifyIdToken(token);
+        }
+
+        const result = await pool.query(
+          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE firebase_uid = $1',
+          [decodedFirebaseToken.uid]
+        );
+
+        if (result.rows.length === 0) {
+          return error(res, 'User not found. Please register first.', 404);
+        }
+
+        return attachUser(req, result.rows[0], res, next);
+      } catch (fbErr) {
+        return error(res, 'Invalid or expired token.', 401);
+      }
     }
-
-    req.firebaseUser = decodedToken;
-
-    const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
-    if (isSyncUser) {
-      return next();
-    }
-
-    const result = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE firebase_uid = $1',
-      [decodedToken.uid]
-    );
-
-    if (result.rows.length === 0) {
-      return error(res, 'User not found. Please register first.', 404);
-    }
-
-    return attachUser(req, result.rows[0], res, next);
   } catch (err) {
     console.error('Auth middleware error:', err.message);
-
-    if (err.code === 'auth/id-token-expired') {
-      return error(res, 'Token expired. Please login again.', 401);
-    }
-    if (err.code === 'auth/argument-error' || err.code === 'auth/id-token-revoked') {
-      return error(res, 'Invalid token.', 401);
-    }
-
     return error(res, 'Authentication failed.', 401);
   }
 };
@@ -231,6 +263,21 @@ const authenticate = async (req, res, next) => {
 const verifyTokenForSocket = async (token, xUserId) => {
   // If in dev mode, we can use xUserId
   if (AUTH_MODE === 'dev') {
+    // Try to verify token as JWT first
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+        return {
+          id: decoded.id,
+          firebaseUid: decoded.firebaseUid || decoded.firebase_uid,
+          fullName: decoded.fullName || decoded.full_name,
+          avatarUrl: decoded.avatarUrl || decoded.avatar_url,
+          email: decoded.email,
+          role: decoded.role
+        };
+      } catch (e) {}
+    }
+
     if (!xUserId) {
       throw new Error('DEV MODE: User ID is required.');
     }
@@ -255,48 +302,65 @@ const verifyTokenForSocket = async (token, xUserId) => {
     };
   }
 
-  // Firebase / Mock Token mode
+  // Firebase / Custom JWT mode
   if (!token) {
     throw new Error('No token provided.');
   }
 
-  let decodedToken;
-  if (token.startsWith('mock-firebase-token')) {
-    const email = token.split(':')[1] || 'mock-user@example.com';
-    const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
-    const name = email.split('@')[0];
-    decodedToken = {
-      uid,
-      email,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      picture: 'https://via.placeholder.com/150',
+  // 1. Try custom Access Token JWT first
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+    if (decoded.status === 'BANNED') {
+      throw new Error('User is banned.');
+    }
+    return {
+      id: decoded.id,
+      firebaseUid: decoded.firebaseUid || decoded.firebase_uid,
+      fullName: decoded.fullName || decoded.full_name,
+      avatarUrl: decoded.avatarUrl || decoded.avatar_url,
+      email: decoded.email,
+      role: decoded.role
     };
-  } else {
-    decodedToken = await admin.auth().verifyIdToken(token);
+  } catch (err) {
+    // 2. Fallback to Firebase ID Token validation (legacy support)
+    let decodedToken;
+    if (token.startsWith('mock-firebase-token')) {
+      const email = token.split(':')[1] || 'mock-user@example.com';
+      const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
+      const name = email.split('@')[0];
+      decodedToken = {
+        uid,
+        email,
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        picture: 'https://via.placeholder.com/150',
+      };
+    } else {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    }
+
+    const result = await pool.query(
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE firebase_uid = $1',
+      [decodedToken.uid]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('User not found.');
+    }
+
+    const user = result.rows[0];
+    if (user.status === 'BANNED') {
+      throw new Error('User is banned.');
+    }
+
+    return {
+      id: user.id,
+      firebaseUid: user.firebase_uid,
+      fullName: user.full_name,
+      avatarUrl: user.avatar_url,
+      email: user.email,
+      role: user.role
+    };
   }
-
-  const result = await pool.query(
-    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE firebase_uid = $1',
-    [decodedToken.uid]
-  );
-
-  if (result.rows.length === 0) {
-    throw new Error('User not found.');
-  }
-
-  const user = result.rows[0];
-  if (user.status === 'BANNED') {
-    throw new Error('User is banned.');
-  }
-
-  return {
-    id: user.id,
-    firebaseUid: user.firebase_uid,
-    fullName: user.full_name,
-    avatarUrl: user.avatar_url,
-    email: user.email,
-    role: user.role
-  };
 };
 
 module.exports = authenticate;

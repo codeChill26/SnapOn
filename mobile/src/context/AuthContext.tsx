@@ -80,25 +80,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadStoredAuth = async () => {
     try {
       const storedToken = await storage.getToken();
-      const storedUser = await storage.getUserData();
-      if (storedToken && storedUser) {
+      if (storedToken) {
+        // Auto-login: fetch fresh user data and wallet via tokenLogin
+        const { user: freshUser, wallet } = await authService.tokenLogin();
         setToken(storedToken);
-        setUser(storedUser);
+        setUser(freshUser);
+        if (wallet) {
+          await storage.setWallet(wallet);
+        }
       }
     } catch (error) {
-      console.error('Failed to load stored auth:', error);
+      console.error('Failed to load stored auth or auto-login:', error);
+      // If tokenLogin fails (e.g. refresh token is also expired), the interceptor
+      // will trigger setOnUnauthorized, which logs the user out cleanly.
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = useCallback(async (newToken: string) => {
+  const login = useCallback(async (firebaseToken: string) => {
     try {
-      const userData = await authService.syncUser(newToken);
-      await storage.setToken(newToken);
+      const { user: userData, accessToken, refreshToken, wallet } = await authService.syncUser(firebaseToken);
+      await storage.setToken(accessToken);
+      await storage.setRefreshToken(refreshToken);
       await storage.setUserData(userData);
       await storage.setRole(userData.role);
-      setToken(newToken);
+      if (wallet) {
+        await storage.setWallet(wallet);
+      }
+      setToken(accessToken);
       setUser(userData);
     } catch (error) {
       console.error('Login failed:', error);
@@ -107,9 +117,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(async () => {
-    await storage.clearAll();
-    setToken(null);
-    setUser(null);
+    try {
+      const refreshToken = await storage.getRefreshToken();
+      if (refreshToken) {
+        await authService.logout(refreshToken).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Failed to logout on server:', e);
+    } finally {
+      await storage.clearAll();
+      setToken(null);
+      setUser(null);
+    }
   }, []);
 
   const updateUser = useCallback((updatedUser: User) => {
