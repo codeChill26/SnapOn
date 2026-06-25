@@ -24,7 +24,7 @@ if (connectionString) {
       port: url.port ? parseInt(url.port) : 5432,
       database: url.pathname.replace(/^\//, ''),
       user: url.username,
-      password: decodeURIComponent(url.password),
+      password: url.password ? decodeURIComponent(url.password.replace(/\+/g, '%2B')) : '',
       ssl: ssl,
     };
   } catch (err) {

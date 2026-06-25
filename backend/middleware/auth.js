@@ -131,6 +131,17 @@ const authenticate = async (req, res, next) => {
       if (isSyncUser) {
         const firebaseToken = req.body?.firebaseToken;
         if (firebaseToken) {
+          // Handle mock-firebase-token (used by Google login mock & dev testing)
+          if (firebaseToken.startsWith('mock-firebase-token')) {
+            const email = firebaseToken.split(':')[1] || 'mock-user@example.com';
+            req.firebaseUser = {
+              uid: `mock-uid-${email.replace(/[@.]/g, '-')}`,
+              email,
+              name: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1),
+              picture: 'https://via.placeholder.com/150',
+            };
+            return next();
+          }
           try {
             const payload = JSON.parse(
               Buffer.from(firebaseToken.split('.')[1], 'base64url').toString()

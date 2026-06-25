@@ -17,7 +17,7 @@ const options = {
         description: 'Development server',
       },
       {
-        url: "https://snapon-1.onrender.com",
+        url: "https://snapon.onrender.com",
         description: "Production server",
       },
     ],

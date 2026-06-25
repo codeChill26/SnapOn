@@ -148,7 +148,7 @@ AUTH_MODE=dev
 
 | Variable | Required | Mô tả |
 |----------|----------|-------|
-| `VITE_API_BASE_URL` | ✅ | Backend URL (vd: `https://snapon-1.onrender.com/api`) |
+| `VITE_API_BASE_URL` | ✅ | Backend URL (vd: `https://snapon.onrender.com/api`) |
 | `VITE_AUTH_MODE` | ❌ | `firebase` (default) hoặc `dev` |
 | `VITE_FIREBASE_API_KEY` | ⚠️ Nếu dùng Firebase | Firebase API key |
 | `VITE_FIREBASE_AUTH_DOMAIN` | ⚠️ Nếu dùng Firebase | Firebase auth domain |
