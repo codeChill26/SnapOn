@@ -1,6 +1,6 @@
 
-const LOCAL_API_URL = 'http://192.168.100.206:3000/api';
-const DEPLOYED_API_URL = 'https://snapon.onrender.com/api';
+const LOCAL_API_URL = 'http://192.168.1.3:3000/api';
+const DEPLOYED_API_URL = 'https://snapon-1.onrender.com/api';
 
 const Config = {
   API_BASE_URL: __DEV__ ? LOCAL_API_URL : DEPLOYED_API_URL,

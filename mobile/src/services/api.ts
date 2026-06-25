@@ -54,6 +54,7 @@ api.interceptors.response.use(
     const isRefreshOrAuthRequest =
       originalRequest.url?.includes('/auth/refresh') ||
       originalRequest.url?.includes('/auth/sync-user') ||
+      originalRequest.url?.includes('/auth/token-login') ||
       originalRequest.url?.includes('/auth/dev/login') ||
       originalRequest.url?.includes('/auth/verify-otp');
 

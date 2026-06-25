@@ -1,5 +1,16 @@
+import axios from 'axios';
 import api from './api';
+import Config from '../constants/config';
+import { storage } from '../utils/storage';
 import { User } from '../types';
+
+// Clean axios instance without 401 interceptor — used by tokenLogin to avoid
+// race conditions with the interceptor's auto-logout during session restoration.
+const cleanApi = axios.create({
+  baseURL: Config.API_BASE_URL,
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
+});
 
 export const authService = {
   async syncUser(firebaseToken: string): Promise<{ user: User; accessToken: string; refreshToken: string; wallet: any }> {
@@ -54,7 +65,10 @@ export const authService = {
   },
 
   async tokenLogin(): Promise<{ user: User; wallet: any }> {
-    const response = await api.post<any>('/auth/token-login');
+    const token = await storage.getToken();
+    const response = await cleanApi.post<any>('/auth/token-login', {}, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     return {
       user: response.data.user,
       wallet: response.data.wallet,

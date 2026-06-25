@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { User, UserRole } from '../types';
 import { authService } from '../services/authService';
@@ -24,6 +24,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const loginInProgressRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     loadStoredAuth();
@@ -40,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
+      mountedRef.current = false;
       setOnUnauthorized(() => {});
     };
   }, []);
@@ -80,13 +83,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadStoredAuth = async () => {
     try {
       const storedToken = await storage.getToken();
-      if (storedToken) {
+      if (storedToken && !loginInProgressRef.current) {
         // Auto-login: fetch fresh user data and wallet via tokenLogin
         const { user: freshUser, wallet } = await authService.tokenLogin();
-        setToken(storedToken);
-        setUser(freshUser);
-        if (wallet) {
-          await storage.setWallet(wallet);
+        // Guard: if a manual login happened while we were fetching, don't overwrite
+        if (!loginInProgressRef.current && mountedRef.current) {
+          setToken(storedToken);
+          setUser(freshUser);
+          if (wallet) {
+            await storage.setWallet(wallet);
+          }
         }
       }
     } catch (error) {
@@ -99,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = useCallback(async (firebaseToken: string) => {
+    loginInProgressRef.current = true;
     try {
       const { user: userData, accessToken, refreshToken, wallet } = await authService.syncUser(firebaseToken);
       await storage.setToken(accessToken);
@@ -110,8 +117,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setToken(accessToken);
       setUser(userData);
+      loginInProgressRef.current = false;
     } catch (error) {
       console.error('Login failed:', error);
+      loginInProgressRef.current = false;
       throw error;
     }
   }, []);
