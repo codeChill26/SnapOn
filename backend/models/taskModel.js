@@ -80,11 +80,7 @@ const taskModel = {
       `SELECT t.*, 
               c.name AS category_name, c.slug AS category_slug,
               CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
-              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
-               FROM task_required_skills trs
-               JOIN skills s ON trs.skill_id = s.id
-               WHERE trs.task_id = t.id
-               LIMIT 1) AS subcategory,
+              sub.subcategory,
               u.full_name AS poster_name, u.avatar_url AS poster_avatar,
               EXISTS (
                 SELECT 1 FROM saved_tasks st
@@ -93,6 +89,13 @@ const taskModel = {
        FROM tasks t
        LEFT JOIN categories c ON t.category_id = c.id
        LEFT JOIN users u ON t.poster_id = u.id
+       LEFT JOIN LATERAL (
+         SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS subcategory
+         FROM task_required_skills trs
+         JOIN skills s ON trs.skill_id = s.id
+         WHERE trs.task_id = t.id
+         LIMIT 1
+       ) sub ON true
        WHERE t.id = $1`,
       [id, currentUserId]
     );
@@ -104,55 +107,52 @@ const taskModel = {
     task.status = fromDbTaskStatus(task.status);
     task.task_type = fromDbTaskType(task.task_type);
 
-    // Get required skills
-    const skills = await pool.query(
-      `SELECT s.id, s.name, s.slug
-       FROM task_required_skills trs
-       JOIN skills s ON trs.skill_id = s.id
-       WHERE trs.task_id = $1`,
-      [id]
-    );
-    task.required_skills = skills.rows;
+    // Chạy song song các truy vấn phụ thuộc để lấy thông tin chi tiết task
+    const [skillsResult, locationsResult, appCountResult, assignmentResult] = await Promise.all([
+      pool.query(
+        `SELECT s.id, s.name, s.slug
+         FROM task_required_skills trs
+         JOIN skills s ON trs.skill_id = s.id
+         WHERE trs.task_id = $1`,
+        [id]
+      ),
+      pool.query(
+        `SELECT id, location_type, address, latitude, longitude
+         FROM task_locations
+         WHERE task_id = $1`,
+        [id]
+      ),
+      pool.query(
+        `SELECT COUNT(*) as count FROM task_applications WHERE task_id = $1`,
+        [id]
+      ),
+      pool.query(
+        `SELECT at.id AS assignment_id, at.status AS assignment_status,
+                u.id AS worker_id, u.full_name AS worker_name, u.avatar_url AS worker_avatar, u.phone AS worker_phone,
+                ta.bid_price AS final_bid_price, ta.estimated_time AS final_estimated_time, ta.message AS final_message
+         FROM assigned_tasks at
+         JOIN users u ON at.tasker_id = u.id
+         LEFT JOIN task_applications ta ON at.application_id = ta.id
+         WHERE at.task_id = $1`,
+        [id]
+      )
+    ]);
 
-    // Get locations
-    const locations = await pool.query(
-      `SELECT id, location_type, address, latitude, longitude
-       FROM task_locations
-       WHERE task_id = $1`,
-      [id]
-    );
-    task.locations = locations.rows;
+    task.required_skills = skillsResult.rows;
+    task.locations = locationsResult.rows;
+    task.application_count = parseInt(appCountResult.rows[0].count);
 
-    // Get application count
-    const appCount = await pool.query(
-      `SELECT COUNT(*) as count FROM task_applications WHERE task_id = $1`,
-      [id]
-    );
-    task.application_count = parseInt(appCount.rows[0].count);
-
-    // Get assigned worker info if exists
-    const assignment = await pool.query(
-      `SELECT at.id AS assignment_id, at.status AS assignment_status,
-              u.id AS worker_id, u.full_name AS worker_name, u.avatar_url AS worker_avatar, u.phone AS worker_phone,
-              ta.bid_price AS final_bid_price, ta.estimated_time AS final_estimated_time, ta.message AS final_message
-       FROM assigned_tasks at
-       JOIN users u ON at.tasker_id = u.id
-       LEFT JOIN task_applications ta ON at.application_id = ta.id
-       WHERE at.task_id = $1`,
-      [id]
-    );
-
-    if (assignment.rows.length > 0) {
+    if (assignmentResult.rows.length > 0) {
       task.assigned_worker = {
-        id: assignment.rows[0].worker_id,
-        name: assignment.rows[0].worker_name,
-        avatar_url: assignment.rows[0].worker_avatar,
-        phone: assignment.rows[0].worker_phone,
-        assignment_id: assignment.rows[0].assignment_id,
-        status: assignment.rows[0].assignment_status,
-        bid_price: assignment.rows[0].final_bid_price ? parseFloat(assignment.rows[0].final_bid_price) : null,
-        estimated_time: assignment.rows[0].final_estimated_time,
-        message: assignment.rows[0].final_message,
+        id: assignmentResult.rows[0].worker_id,
+        name: assignmentResult.rows[0].worker_name,
+        avatar_url: assignmentResult.rows[0].worker_avatar,
+        phone: assignmentResult.rows[0].worker_phone,
+        assignment_id: assignmentResult.rows[0].assignment_id,
+        status: assignmentResult.rows[0].assignment_status,
+        bid_price: assignmentResult.rows[0].final_bid_price ? parseFloat(assignmentResult.rows[0].final_bid_price) : null,
+        estimated_time: assignmentResult.rows[0].final_estimated_time,
+        message: assignmentResult.rows[0].final_message,
       };
     } else {
       task.assigned_worker = null;
@@ -223,37 +223,40 @@ const taskModel = {
       paramIndex++;
     }
 
-    // Count total
-    const countResult = await pool.query(
-      `SELECT COUNT(*) as total FROM tasks t ${whereClause}`,
-      params
-    );
+    // Chạy song song truy vấn đếm tổng số lượng và truy vấn lấy dữ liệu tasks để giảm độ trễ
+    const [countResult, result] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*) as total FROM tasks t ${whereClause}`,
+        params
+      ),
+      pool.query(
+        `SELECT t.*, 
+                c.name AS category_name, c.slug AS category_slug,
+                CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+                sub.subcategory,
+                u.full_name AS poster_name, u.avatar_url AS poster_avatar,
+                (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count,
+                EXISTS (
+                  SELECT 1 FROM saved_tasks st
+                  WHERE st.task_id = t.id AND st.user_id = $${paramIndex}
+                ) AS is_saved
+         FROM tasks t
+         LEFT JOIN categories c ON t.category_id = c.id
+         LEFT JOIN users u ON t.poster_id = u.id
+         LEFT JOIN LATERAL (
+           SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS subcategory
+           FROM task_required_skills trs
+           JOIN skills s ON trs.skill_id = s.id
+           WHERE trs.task_id = t.id
+           LIMIT 1
+         ) sub ON true
+         ${whereClause}
+         ORDER BY t.id DESC
+         LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}`,
+        [...params, currentUserId || null, currentLimit, offset]
+      )
+    ]);
     const total = parseInt(countResult.rows[0].total);
-
-    // Get tasks
-    const result = await pool.query(
-      `SELECT t.*, 
-              c.name AS category_name, c.slug AS category_slug,
-              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
-              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
-               FROM task_required_skills trs
-               JOIN skills s ON trs.skill_id = s.id
-               WHERE trs.task_id = t.id
-               LIMIT 1) AS subcategory,
-              u.full_name AS poster_name, u.avatar_url AS poster_avatar,
-              (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count,
-              EXISTS (
-                SELECT 1 FROM saved_tasks st
-                WHERE st.task_id = t.id AND st.user_id = $${paramIndex}
-              ) AS is_saved
-       FROM tasks t
-       LEFT JOIN categories c ON t.category_id = c.id
-       LEFT JOIN users u ON t.poster_id = u.id
-       ${whereClause}
-       ORDER BY t.id DESC
-       LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}`,
-      [...params, currentUserId || null, currentLimit, offset]
-    );
 
     // Map enums for API
     for (const t of result.rows) {
@@ -305,34 +308,39 @@ const taskModel = {
     const currentLimit = Math.min(limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
     const offset = (currentPage - 1) * currentLimit;
 
-    const countResult = await pool.query(
-      'SELECT COUNT(*) as total FROM saved_tasks WHERE user_id = $1',
-      [userId]
-    );
+    // Chạy song song truy vấn đếm tổng số lượng và truy vấn lấy dữ liệu saved tasks
+    const [countResult, result] = await Promise.all([
+      pool.query(
+        'SELECT COUNT(*) as total FROM saved_tasks WHERE user_id = $1',
+        [userId]
+      ),
+      pool.query(
+        `SELECT t.*,
+                c.name AS category_name, c.slug AS category_slug,
+                CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+                sub.subcategory,
+                u.full_name AS poster_name, u.avatar_url AS poster_avatar,
+                (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count,
+                TRUE AS is_saved,
+                st.created_at AS saved_at
+         FROM saved_tasks st
+         JOIN tasks t ON st.task_id = t.id
+         LEFT JOIN categories c ON t.category_id = c.id
+         LEFT JOIN users u ON t.poster_id = u.id
+         LEFT JOIN LATERAL (
+           SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS subcategory
+           FROM task_required_skills trs
+           JOIN skills s ON trs.skill_id = s.id
+           WHERE trs.task_id = t.id
+           LIMIT 1
+         ) sub ON true
+         WHERE st.user_id = $1
+         ORDER BY st.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, currentLimit, offset]
+      )
+    ]);
     const total = parseInt(countResult.rows[0].total);
-
-    const result = await pool.query(
-      `SELECT t.*,
-              c.name AS category_name, c.slug AS category_slug,
-              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
-              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
-               FROM task_required_skills trs
-               JOIN skills s ON trs.skill_id = s.id
-               WHERE trs.task_id = t.id
-               LIMIT 1) AS subcategory,
-              u.full_name AS poster_name, u.avatar_url AS poster_avatar,
-              (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count,
-              TRUE AS is_saved,
-              st.created_at AS saved_at
-       FROM saved_tasks st
-       JOIN tasks t ON st.task_id = t.id
-       LEFT JOIN categories c ON t.category_id = c.id
-       LEFT JOIN users u ON t.poster_id = u.id
-       WHERE st.user_id = $1
-       ORDER BY st.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [userId, currentLimit, offset]
-    );
 
     for (const t of result.rows) {
       t.status = fromDbTaskStatus(t.status);
@@ -358,29 +366,34 @@ const taskModel = {
     const currentLimit = Math.min(limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
     const offset = (currentPage - 1) * currentLimit;
 
-    const countResult = await pool.query(
-      'SELECT COUNT(*) as total FROM tasks WHERE poster_id = $1',
-      [posterId]
-    );
+    // Chạy song song truy vấn đếm tổng số lượng và truy vấn lấy danh sách tasks của poster
+    const [countResult, result] = await Promise.all([
+      pool.query(
+        'SELECT COUNT(*) as total FROM tasks WHERE poster_id = $1',
+        [posterId]
+      ),
+      pool.query(
+        `SELECT t.*, 
+                c.name AS category_name, c.slug AS category_slug,
+                CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
+                sub.subcategory,
+                (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count
+         FROM tasks t
+         LEFT JOIN categories c ON t.category_id = c.id
+         LEFT JOIN LATERAL (
+           SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS subcategory
+           FROM task_required_skills trs
+           JOIN skills s ON trs.skill_id = s.id
+           WHERE trs.task_id = t.id
+           LIMIT 1
+         ) sub ON true
+         WHERE t.poster_id = $1
+         ORDER BY t.id DESC
+         LIMIT $2 OFFSET $3`,
+        [posterId, currentLimit, offset]
+      )
+    ]);
     const total = parseInt(countResult.rows[0].total);
-
-    const result = await pool.query(
-      `SELECT t.*, 
-              c.name AS category_name, c.slug AS category_slug,
-              CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ELSE NULL END AS field,
-              (SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
-               FROM task_required_skills trs
-               JOIN skills s ON trs.skill_id = s.id
-               WHERE trs.task_id = t.id
-               LIMIT 1) AS subcategory,
-              (SELECT COUNT(*) FROM task_applications ta WHERE ta.task_id = t.id) AS application_count
-       FROM tasks t
-       LEFT JOIN categories c ON t.category_id = c.id
-       WHERE t.poster_id = $1
-       ORDER BY t.id DESC
-       LIMIT $2 OFFSET $3`,
-      [posterId, currentLimit, offset]
-    );
 
     for (const t of result.rows) {
       t.status = fromDbTaskStatus(t.status);

@@ -6,7 +6,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  FlatList,
   Alert,
   Keyboard,
   Platform,
@@ -19,6 +18,8 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { HomeMarketplaceHeader } from '../../components/home/HomeMarketplaceHeader';
 import { HomePostTypeTabs, PostTypeFilter } from '../../components/home/HomeRoleTabs';
@@ -46,6 +47,7 @@ export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeNavProp>();
   const latestRequestRef = useRef(0);
   const didInitialFocusRef = useRef(false);
+  const lastFetchTimeRef = useRef(0);
 
   const { user } = useAuth();
   const { tasks, setTasks, updateTask } = useApp();
@@ -73,11 +75,15 @@ export const HomeScreen: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [savingTaskIds, setSavingTaskIds] = useState<Record<string, boolean>>({});
 
-  // Load dynamic categories on mount
+  // Load dynamic categories on mount with SWR
   useEffect(() => {
     let active = true;
     const fetchCategoriesList = async () => {
-      const data = await categoryService.getCategories();
+      const data = await categoryService.getCategories((updatedCats) => {
+        if (active && updatedCats) {
+          setCategoriesList(updatedCats);
+        }
+      });
       if (active && data) {
         setCategoriesList(data);
       }
@@ -87,6 +93,25 @@ export const HomeScreen: React.FC = () => {
       active = false;
     };
   }, []);
+
+  // Load cached tasks on mount for instant load
+  useEffect(() => {
+    const loadCachedTasks = async () => {
+      try {
+        const cached = await AsyncStorage.getItem('@snapon/cache_tasks');
+        if (cached) {
+          const parsedTasks = JSON.parse(cached);
+          if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+            setTasks(parsedTasks);
+            setLoading(false);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load cached tasks:', e);
+      }
+    };
+    void loadCachedTasks();
+  }, [setTasks]);
 
   // Debouncing search query (450ms)
   useEffect(() => {
@@ -133,7 +158,12 @@ export const HomeScreen: React.FC = () => {
         const result = await taskService.getTasks(params);
 
         if (currentRequestId === latestRequestRef.current) {
-          setTasks(result.data ?? []);
+          const newTasks = result.data ?? [];
+          setTasks(newTasks);
+          // Cập nhật mốc thời gian gọi API thành công gần nhất
+          lastFetchTimeRef.current = Date.now();
+          // Lưu vào bộ nhớ đệm
+          AsyncStorage.setItem('@snapon/cache_tasks', JSON.stringify(newTasks)).catch(() => {});
         }
       } catch (error) {
         if (__DEV__) {
@@ -163,7 +193,11 @@ export const HomeScreen: React.FC = () => {
         didInitialFocusRef.current = true;
         return;
       }
-      void fetchTasks({ showLoading: false });
+      // Chỉ tự động refetch ở background nếu lần fetch cuối cách đây hơn 30 giây
+      const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
+      if (timeSinceLastFetch > 30000) {
+        void fetchTasks({ showLoading: false });
+      }
     }, [fetchTasks])
   );
 
@@ -308,15 +342,51 @@ export const HomeScreen: React.FC = () => {
     return list;
   }, [tasks, activeSort, statusFilter, postTypeFilter]);
 
+  // Nhóm danh sách công việc thành từng dòng 2 cột cho FlashList hiển thị dạng lưới thủ công
+  const taskRows = useMemo(() => {
+    const rows: Task[][] = [];
+    for (let i = 0; i < sortedTasks.length; i += 2) {
+      const row = [sortedTasks[i]];
+      if (sortedTasks[i + 1]) {
+        row.push(sortedTasks[i + 1]);
+      }
+      rows.push(row);
+    }
+    return rows;
+  }, [sortedTasks]);
+
   const renderJobItem = useCallback(
-    ({ item }: { item: Task }) => (
-      <HomeCompactJobCard
-        task={item}
-        onPress={handleJobPress}
-        onToggleSaved={handleToggleSaved}
-        saving={Boolean(savingTaskIds[item.id])}
-      />
-    ),
+    ({ item }: { item: Task[] }) => {
+      const leftTask = item[0];
+      const rightTask = item[1];
+
+      return (
+        <View style={styles.rowContainer}>
+          <View style={styles.columnItem}>
+            {leftTask && (
+              <HomeCompactJobCard
+                task={leftTask}
+                onPress={handleJobPress}
+                onToggleSaved={handleToggleSaved}
+                saving={Boolean(savingTaskIds[leftTask.id])}
+              />
+            )}
+          </View>
+          <View style={styles.columnItem}>
+            {rightTask ? (
+              <HomeCompactJobCard
+                task={rightTask}
+                onPress={handleJobPress}
+                onToggleSaved={handleToggleSaved}
+                saving={Boolean(savingTaskIds[rightTask.id])}
+              />
+            ) : (
+              <View style={styles.emptyColumnPlaceholder} />
+            )}
+          </View>
+        </View>
+      );
+    },
     [handleJobPress, handleToggleSaved, savingTaskIds],
   );
 
@@ -526,15 +596,16 @@ export const HomeScreen: React.FC = () => {
     handleClearCategoryFilter,
   ]);
 
+  const SafeFlashList = FlashList as any;
+
   return (
     <View style={styles.mainContainer}>
-      <FlatList
+      <SafeFlashList
         style={styles.list}
-        data={sortedTasks}
-        keyExtractor={(item) => String(item.id)}
+        data={taskRows}
+        keyExtractor={(item: Task[]) => String(item[0].id)}
         renderItem={renderJobItem}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
+        estimatedItemSize={220}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmptyComponent}
         ListFooterComponent={<View style={styles.listFooter} />}
@@ -542,10 +613,6 @@ export const HomeScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        initialNumToRender={6}
-        maxToRenderPerBatch={8}
-        windowSize={7}
-        removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -579,6 +646,19 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  columnItem: {
+    flex: 1,
+    maxWidth: '48.5%',
+  },
+  emptyColumnPlaceholder: {
+    flex: 1,
   },
   contentContainer: {
     paddingBottom: 24,

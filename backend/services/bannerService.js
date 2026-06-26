@@ -1,6 +1,7 @@
 'use strict';
 
 const bannerModel = require('../models/bannerModel');
+const redis = require('../config/redis');
 
 /**
  * Helper to map database banner row to public DTO
@@ -61,8 +62,26 @@ const bannerService = {
    * Get active home banners for public carousel
    */
   async getActiveHomeBanners() {
+    const cacheKey = 'banners:home_featured';
+
+    // 1. Try to read from Redis cache
+    const cachedBanners = await redis.get(cacheKey);
+    if (cachedBanners) {
+      try {
+        return JSON.parse(cachedBanners);
+      } catch (e) {
+        // Fall back to database on parsing error
+      }
+    }
+
+    // 2. Cache miss: Fetch from Database
     const banners = await bannerModel.findActiveBanners('HOME_FEATURED');
-    return banners.map(mapToBannerDTO);
+    const mappedBanners = banners.map(mapToBannerDTO);
+
+    // 3. Cache in Redis with 10 minutes TTL (600 seconds) for safer invalidation
+    await redis.set(cacheKey, JSON.stringify(mappedBanners), 600).catch(() => {});
+
+    return mappedBanners;
   },
 
   /**
@@ -114,6 +133,10 @@ const bannerService = {
     });
 
     const fullBanner = await bannerModel.findById(banner.id);
+
+    // Invalidate Redis cache on write
+    await redis.del('banners:home_featured').catch(() => {});
+
     return mapToAdminBannerDTO(fullBanner);
   },
 
@@ -153,6 +176,10 @@ const bannerService = {
     });
 
     const fullBanner = await bannerModel.findById(updated.id);
+
+    // Invalidate Redis cache on write
+    await redis.del('banners:home_featured').catch(() => {});
+
     return mapToAdminBannerDTO(fullBanner);
   },
 
@@ -169,6 +196,10 @@ const bannerService = {
 
     const updated = await bannerModel.updateStatus(id, isActive);
     const fullBanner = await bannerModel.findById(updated.id);
+
+    // Invalidate Redis cache on write
+    await redis.del('banners:home_featured').catch(() => {});
+
     return mapToAdminBannerDTO(fullBanner);
   },
 
@@ -184,6 +215,10 @@ const bannerService = {
     }
 
     await bannerModel.delete(id);
+
+    // Invalidate Redis cache on write
+    await redis.del('banners:home_featured').catch(() => {});
+
     return { id };
   },
 };

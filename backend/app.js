@@ -50,6 +50,10 @@ io.on('connection', (socket) => {
   socketHandler(io, socket);
 });
 
+// Khởi động sweeper tự động quét các giao việc quá hạn 15 phút (mỗi 1 phút quét một lần)
+const assignmentExpiryService = require('./services/assignmentExpiryService');
+assignmentExpiryService.startSweeper(io);
+
 // Security & CORS
 app.use(helmet());
 app.use(cors({
@@ -57,8 +61,16 @@ app.use(cors({
   credentials: true
 }));
 
+// Response compression
+var compression = require('compression');
+app.use(compression({ threshold: 1024 }));
+
 // Request parsing
-app.use(logger('dev'));
+if (process.env.NODE_ENV === 'production') {
+  app.use(logger('combined'));
+} else {
+  app.use(logger('dev'));
+}
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: false }));
 app.use(cookieParser());

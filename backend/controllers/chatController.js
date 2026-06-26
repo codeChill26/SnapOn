@@ -36,19 +36,33 @@ const chatController = {
         orderBy: { updatedAt: 'desc' }
       });
 
-      const formatted = await Promise.all(conversations.map(async (c) => {
-        const otherUser = c.user1Id === userId ? c.user2 : c.user1;
-        const lastReadAt = c.user1Id === userId ? c.user1LastReadAt : c.user2LastReadAt;
+      // Lấy số lượng tin nhắn chưa đọc cho toàn bộ hội thoại của user trong 1 câu truy vấn raw SQL duy nhất để tránh N+1 query
+      const unreadCounts = await prisma.$queryRaw`
+        SELECT 
+          c.id AS conversation_id,
+          COUNT(m.id)::int AS unread_count
+        FROM conversations c
+        LEFT JOIN messages m ON m.conversation_id = c.id 
+          AND m.sender_id != ${userId}::uuid
+          AND (
+            (c.user1_id = ${userId}::uuid AND (c.user1_last_read_at IS NULL OR m.created_at > c.user1_last_read_at))
+            OR
+            (c.user2_id = ${userId}::uuid AND (c.user2_last_read_at IS NULL OR m.created_at > c.user2_last_read_at))
+          )
+        WHERE c.user1_id = ${userId}::uuid OR c.user2_id = ${userId}::uuid
+        GROUP BY c.id
+      `;
 
-        const unreadCount = await prisma.message.count({
-          where: {
-            conversationId: c.id,
-            senderId: { not: userId },
-            ...(lastReadAt && {
-              createdAt: { gt: lastReadAt }
-            })
-          }
+      const unreadMap = {};
+      if (Array.isArray(unreadCounts)) {
+        unreadCounts.forEach(row => {
+          unreadMap[row.conversation_id] = row.unread_count || 0;
         });
+      }
+
+      const formatted = conversations.map((c) => {
+        const otherUser = c.user1Id === userId ? c.user2 : c.user1;
+        const unreadCount = unreadMap[c.id] || 0;
 
         return {
           id: c.id,
@@ -57,7 +71,7 @@ const chatController = {
           unreadCount,
           updatedAt: c.updatedAt
         };
-      }));
+      });
 
       return success(res, formatted, 'Conversations retrieved successfully.');
     } catch (err) {

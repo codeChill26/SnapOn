@@ -245,6 +245,15 @@ function httpRequest(method, url, headers = {}, body = null) {
       console.log('✓ Test server stopped.');
     }
     
+    // Disconnect Redis client to prevent process hanging
+    try {
+      const redis = require('../config/redis');
+      await redis.disconnect();
+      console.log('✓ Redis connection closed.');
+    } catch (e) {
+      console.error('⚠️ Cleanup Redis error:', e.message);
+    }
+    
     // Explicit pool end to allow process exit
     await pool.end();
   }

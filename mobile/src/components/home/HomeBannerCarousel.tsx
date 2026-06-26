@@ -7,8 +7,6 @@ import React, {
 } from 'react';
 import {
   AppState,
-  FlatList,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -18,6 +16,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { CATEGORIES } from '../../constants/categories';
@@ -88,7 +88,8 @@ const BannerItem = React.memo<BannerItemProps>(
             <Image
               source={{ uri: item.imageUrl }}
               style={StyleSheet.absoluteFill}
-              resizeMode="cover"
+              contentFit="cover"
+              transition={200}
               onError={() => setImageError(true)}
             />
           ) : (
@@ -166,7 +167,8 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = React.memo(
   const [error, setError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const listRef = useRef<FlatList<HomeBannerLoopItem>>(null);
+  const listRef = useRef<any>(null);
+  const SafeFlashList = FlashList as any;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentIndexRef = useRef(0);
 
@@ -219,21 +221,24 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = React.memo(
 
     const load = async () => {
       try {
-        setLoading(true);
         setError(false);
-        const data = await bannerService.getHomeBanners();
+        // SWR: Sử dụng callback onUpdate để cập nhật ngay khi có cache hoặc API mới
+        const data = await bannerService.getHomeBanners((updatedBanners) => {
+          if (isMounted) {
+            setBanners(updatedBanners);
+            setLoading(false); // Ẩn loading ngay khi có dữ liệu từ cache/API
+          }
+        });
 
-        if (isMounted) {
+        if (isMounted && data.length > 0) {
           setBanners(data);
-          currentIndexRef.current = 0;
-          setActiveIndex(0);
+          setLoading(false);
         }
       } catch (err) {
         console.error('Failed to load home banners:', err);
 
-        if (isMounted) {
+        if (isMounted && banners.length === 0) {
           setError(true);
-          setBanners([]);
         }
       } finally {
         if (isMounted) {
@@ -394,7 +399,7 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = React.memo(
 
   return (
     <View style={styles.container}>
-      <FlatList
+      <SafeFlashList
         ref={listRef}
         horizontal
         data={loopBanners}
@@ -408,10 +413,7 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = React.memo(
         disableIntervalMomentum
         contentContainerStyle={{ paddingHorizontal: horizontalPadding }}
         ItemSeparatorComponent={() => <View style={{ width: CARD_GAP }} />}
-        initialNumToRender={2}
-        maxToRenderPerBatch={3}
-        windowSize={5}
-        removeClippedSubviews={Platform.OS === 'android'}
+        estimatedItemSize={320}
         getItemLayout={getItemLayout}
         onScrollBeginDrag={stopAutoPlay}
         onMomentumScrollEnd={handleMomentumScrollEnd}

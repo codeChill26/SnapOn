@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const { success, error, paginated } = require('../utils/responseHandler');
 const { TASK_STATUS } = require('../utils/constants');
 const { fromDbTaskStatus } = require('../utils/dbEnum');
+const cacheService = require('../services/cacheService');
 
 /**
  * Task Controller — Handles task CRUD operations
@@ -221,19 +222,57 @@ const taskController = {
         }
       }
 
-      const result = await taskModel.findAll({
-        status,
-        categoryId: finalCategoryId,
-        fieldId: finalFieldId,
-        taskType: task_type,
-        search,
-        page: parseInt(page) || undefined,
-        limit: parseInt(limit) || undefined,
-        postType: post_type,
-        workMode: work_mode,
-        salaryUnit: salary_unit,
-        currentUserId: req.user.id,
-      });
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+      const isPage1 = pageNum === 1;
+
+      let result;
+      if (isPage1) {
+        // Tạo key cache duy nhất dựa trên các bộ lọc cho trang 1
+        const cacheKey = `tasks:list:${JSON.stringify({
+          status: status || '',
+          category_id: category_id || '',
+          field_id: field_id || '',
+          task_type: task_type || '',
+          search: search || '',
+          limit: limitNum,
+          post_type: post_type || '',
+          work_mode: work_mode || '',
+          salary_unit: salary_unit || '',
+          currentUserId: req.user.id
+        })}`;
+
+        // Cache danh sách trang 1 trong 30 giây
+        result = await cacheService.getOrFetch(cacheKey, 30, async () => {
+          return await taskModel.findAll({
+            status,
+            categoryId: finalCategoryId,
+            fieldId: finalFieldId,
+            taskType: task_type,
+            search,
+            page: pageNum,
+            limit: limitNum,
+            postType: post_type,
+            workMode: work_mode,
+            salaryUnit: salary_unit,
+            currentUserId: req.user.id,
+          });
+        });
+      } else {
+        result = await taskModel.findAll({
+          status,
+          categoryId: finalCategoryId,
+          fieldId: finalFieldId,
+          taskType: task_type,
+          search,
+          page: pageNum,
+          limit: limitNum,
+          postType: post_type,
+          workMode: work_mode,
+          salaryUnit: salary_unit,
+          currentUserId: req.user.id,
+        });
+      }
 
       return paginated(res, result.tasks, result.pagination, 'Tasks retrieved successfully.');
     } catch (err) {
@@ -270,14 +309,40 @@ const taskController = {
   async getTaskById(req, res) {
     try {
       const { id } = req.params;
+      const userId = req.user ? req.user.id : null;
+      const cacheKey = `tasks:detail:${id}`;
 
-      const task = await taskModel.findById(id, req.user.id);
-      if (!task) {
-        return error(res, 'Task not found.', 404);
+      // Cache thông tin chi tiết task (không chứa trạng thái is_saved của user cụ thể) trong 2 phút
+      const task = await cacheService.getOrFetch(cacheKey, 120, async () => {
+        // Truy vấn với user ID là null để is_saved trong cache luôn là false
+        const fetchedTask = await taskModel.findById(id, null);
+        if (!fetchedTask) {
+          const err = new Error('Task not found.');
+          err.statusCode = 404;
+          throw err;
+        }
+        return fetchedTask;
+      });
+
+      // Tạo một bản sao nông để tránh chỉnh sửa trực tiếp đối tượng trong cache
+      const taskResponse = { ...task };
+
+      // Gán động trạng thái is_saved cho user hiện tại
+      if (userId) {
+        const savedRes = await pool.query(
+          'SELECT 1 FROM saved_tasks WHERE task_id = $1 AND user_id = $2',
+          [id, userId]
+        );
+        taskResponse.is_saved = savedRes.rows.length > 0;
+      } else {
+        taskResponse.is_saved = false;
       }
 
-      return success(res, task, 'Task retrieved successfully.');
+      return success(res, taskResponse, 'Task retrieved successfully.');
     } catch (err) {
+      if (err.message === 'Task not found.') {
+        return error(res, 'Task not found.', 404);
+      }
       console.error('Get task by ID error:', err);
       return error(res, 'Failed to retrieve task.', 500);
     }
@@ -350,6 +415,10 @@ const taskController = {
       } finally {
         client.release();
       }
+
+      // Xóa cache chi tiết task khi trạng thái thay đổi
+      const detailKey = `tasks:detail:${id}`;
+      await cacheService.del(detailKey).catch(() => {});
 
       const updatedTask = await taskModel.findById(id);
       return success(res, updatedTask, `Task status updated to ${status}.`);
@@ -566,6 +635,10 @@ const taskController = {
         }
       }
 
+      // Xóa cache chi tiết task khi dữ liệu thay đổi
+      const detailKey = `tasks:detail:${id}`;
+      await cacheService.del(detailKey).catch(() => {});
+
       const fullUpdatedTask = await taskModel.findById(id);
 
       return success(res, fullUpdatedTask, 'Task updated successfully.');
@@ -597,6 +670,10 @@ const taskController = {
 
       // 3. Perform delete
       await taskModel.delete(id);
+
+      // Xóa cache chi tiết task khi bị xóa
+      const detailKey = `tasks:detail:${id}`;
+      await cacheService.del(detailKey).catch(() => {});
 
       return success(res, null, 'Task deleted successfully.');
     } catch (err) {
@@ -713,6 +790,11 @@ const taskController = {
       }
 
       const updatedTask = await taskModel.closeRecruitment(id, userId, closed_reason || null);
+
+      // Xóa cache chi tiết task khi đóng tuyển dụng
+      const detailKey = `tasks:detail:${id}`;
+      await cacheService.del(detailKey).catch(() => {});
+
       return success(res, updatedTask, 'Recruitment closed successfully.');
     } catch (err) {
       console.error('Close recruitment error:', err);

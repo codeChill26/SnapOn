@@ -109,8 +109,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               { refreshToken }
             );
             const { accessToken: newAccess, refreshToken: newRefresh } = refreshRes.data;
-            await storage.setToken(newAccess);
-            await storage.setRefreshToken(newRefresh);
+            await Promise.all([
+              storage.setToken(newAccess),
+              storage.setRefreshToken(newRefresh)
+            ]);
 
             // Retry with the fresh access token
             const { user: freshUser, wallet } = await authService.tokenLogin();
@@ -137,13 +139,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loginInProgressRef.current = true;
     try {
       const { user: userData, accessToken, refreshToken, wallet } = await authService.syncUser(firebaseToken);
-      await storage.setToken(accessToken);
-      await storage.setRefreshToken(refreshToken);
-      await storage.setUserData(userData);
-      await storage.setRole(userData.role);
-      if (wallet) {
-        await storage.setWallet(wallet);
-      }
+      await Promise.all([
+        storage.setToken(accessToken),
+        storage.setRefreshToken(refreshToken),
+        storage.setUserData(userData),
+        storage.setRole(userData.role),
+        ...(wallet ? [storage.setWallet(wallet)] : [])
+      ]);
       setToken(accessToken);
       setUser(userData);
       loginInProgressRef.current = false;

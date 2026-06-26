@@ -3,10 +3,10 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Task } from '../../types';
@@ -122,7 +122,8 @@ export const HomeCompactJobCard: React.FC<HomeCompactJobCardProps> = React.memo(
           <Image
             source={{ uri: firstImage }}
             style={styles.image}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={200}
             onError={() => setImageError(true)}
           />
         ) : (

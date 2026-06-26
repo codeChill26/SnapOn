@@ -4,6 +4,7 @@ const router = express.Router();
 const verifyFirebaseToken = require("../middleware/auth");
 const pool = require("../config/db");
 const chatController = require("../controllers/chatController");
+const cacheService = require("../services/cacheService");
 
 // GET /api/users/profile
 router.get("/profile", verifyFirebaseToken, async (req, res) => {
@@ -101,6 +102,10 @@ router.put("/profile", verifyFirebaseToken, async (req, res) => {
       }
     }
 
+    // Xóa cache profile công khai của user để đảm bảo tính nhất quán dữ liệu
+    const userKey = `users:profile:${req.user.id}`;
+    await cacheService.del(userKey).catch(() => {});
+
     res.json({
       success: true,
       message: "Profile updated successfully",
@@ -131,77 +136,88 @@ router.put("/profile", verifyFirebaseToken, async (req, res) => {
 router.get("/:userId/profile", verifyFirebaseToken, async (req, res) => {
   const { userId } = req.params;
   try {
-    const userResult = await pool.query(
-      `SELECT id, full_name, avatar_url, cover_url, bio, headline, skills, is_verified, created_at
-       FROM users
-       WHERE id = $1`,
-      [userId]
-    );
+    const userKey = `users:profile:${userId}`;
 
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
+    // Sử dụng cơ chế Cache-Aside với thời gian sống (TTL) 5 phút
+    const profileData = await cacheService.getOrFetch(userKey, 300, async () => {
+      const userResult = await pool.query(
+        `SELECT id, full_name, avatar_url, cover_url, bio, headline, skills, is_verified, created_at
+         FROM users
+         WHERE id = $1`,
+        [userId]
+      );
 
-    const dbUser = userResult.rows[0];
+      if (userResult.rows.length === 0) {
+        const err = new Error("User not found");
+        err.statusCode = 404;
+        throw err;
+      }
 
-    let avgRating = 0;
-    let reviewCount = 0;
-    try {
-      const ratingResult = await pool.query(
+      const dbUser = userResult.rows[0];
+
+      // Chạy song song các truy vấn lấy chỉ số thống kê
+      const ratingPromise = pool.query(
         `SELECT COALESCE(AVG(rating), 0) as avg_rating, COUNT(*) as review_count
          FROM reviews
          WHERE reviewee_id = $1`,
         [userId]
+      ).catch(ratingErr => {
+        console.warn('Reviews table unavailable, defaulting rating stats to 0:', ratingErr.message);
+        return { rows: [{ avg_rating: 0, review_count: 0 }] };
+      });
+
+      const completedPromise = pool.query(
+        `SELECT COUNT(*) as completed_count
+         FROM assigned_tasks
+         WHERE tasker_id = $1 AND status = 'COMPLETED'`,
+        [userId]
       );
-      avgRating = parseFloat(ratingResult.rows[0].avg_rating || 0);
-      reviewCount = parseInt(ratingResult.rows[0].review_count || 0);
-    } catch (ratingErr) {
-      console.warn('Reviews table unavailable, defaulting rating stats to 0:', ratingErr.message);
-    }
 
-    const completedResult = await pool.query(
-      `SELECT COUNT(*) as completed_count
-       FROM assigned_tasks
-       WHERE tasker_id = $1 AND status = 'COMPLETED'`,
-      [userId]
-    );
-    const completedJobsCount = parseInt(completedResult.rows[0].completed_count || 0);
+      const postedPromise = pool.query(
+        `SELECT COUNT(*) as posted_count
+         FROM tasks
+         WHERE poster_id = $1 AND (post_type = 'RECRUITMENT' OR post_type IS NULL) AND status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED')`,
+        [userId]
+      );
 
-    const postedResult = await pool.query(
-      `SELECT COUNT(*) as posted_count
-       FROM tasks
-       WHERE poster_id = $1 AND (post_type = 'RECRUITMENT' OR post_type IS NULL) AND status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED')`,
-      [userId]
-    );
-    const postedJobsCount = parseInt(postedResult.rows[0].posted_count || 0);
+      const servicesPromise = pool.query(
+        `SELECT COUNT(*) as services_count
+         FROM tasks
+         WHERE poster_id = $1 AND post_type = 'SERVICE_OFFER' AND status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED')`,
+        [userId]
+      );
 
-    const servicesResult = await pool.query(
-      `SELECT COUNT(*) as services_count
-       FROM tasks
-       WHERE poster_id = $1 AND post_type = 'SERVICE_OFFER' AND status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED')`,
-      [userId]
-    );
-    const serviceOffersCount = parseInt(servicesResult.rows[0].services_count || 0);
+      const activePromise = pool.query(
+        `SELECT COUNT(*) as active_count
+         FROM tasks
+         WHERE poster_id = $1 AND status = 'OPEN' AND (post_type = 'RECRUITMENT' OR post_type IS NULL)`,
+        [userId]
+      );
 
-    const activeResult = await pool.query(
-      `SELECT COUNT(*) as active_count
-       FROM tasks
-       WHERE poster_id = $1 AND status = 'OPEN' AND (post_type = 'RECRUITMENT' OR post_type IS NULL)`,
-      [userId]
-    );
-    const activePostsCount = parseInt(activeResult.rows[0].active_count || 0);
+      const [ratingResult, completedResult, postedResult, servicesResult, activeResult] = await Promise.all([
+        ratingPromise,
+        completedPromise,
+        postedPromise,
+        servicesPromise,
+        activePromise
+      ]);
 
-    let skillsArray = [];
-    if (dbUser.skills) {
-      skillsArray = typeof dbUser.skills === 'string' ? JSON.parse(dbUser.skills) : dbUser.skills;
-      if (!Array.isArray(skillsArray)) {
-        skillsArray = [];
+      const avgRating = parseFloat(ratingResult.rows[0].avg_rating || 0);
+      const reviewCount = parseInt(ratingResult.rows[0].review_count || 0);
+      const completedJobsCount = parseInt(completedResult.rows[0].completed_count || 0);
+      const postedJobsCount = parseInt(postedResult.rows[0].posted_count || 0);
+      const serviceOffersCount = parseInt(servicesResult.rows[0].services_count || 0);
+      const activePostsCount = parseInt(activeResult.rows[0].active_count || 0);
+
+      let skillsArray = [];
+      if (dbUser.skills) {
+        skillsArray = typeof dbUser.skills === 'string' ? JSON.parse(dbUser.skills) : dbUser.skills;
+        if (!Array.isArray(skillsArray)) {
+          skillsArray = [];
+        }
       }
-    }
 
-    res.json({
-      success: true,
-      data: {
+      return {
         id: dbUser.id,
         fullName: dbUser.full_name,
         avatarUrl: dbUser.avatar_url,
@@ -223,9 +239,17 @@ router.get("/:userId/profile", verifyFirebaseToken, async (req, res) => {
           completed: completedJobsCount,
           rating: parseFloat(avgRating.toFixed(1))
         }
-      }
+      };
+    });
+
+    res.json({
+      success: true,
+      data: profileData
     });
   } catch (error) {
+    if (error.message === "User not found") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
     console.error("Get public profile error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
@@ -238,24 +262,26 @@ router.get("/:userId/profile/posts", verifyFirebaseToken, async (req, res) => {
   const offset = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    const result = await pool.query(
-      `SELECT t.id, t.title, t.description, t.status, t.budget_min, t.budget_max, 
-              t.final_price, t.created_at, t.post_type, t.salary_unit, t.images,
-              c.name as category_name,
-              (SELECT COUNT(*) FROM task_applications WHERE task_id = t.id) as applicant_count
-       FROM tasks t
-       LEFT JOIN categories c ON t.category_id = c.id
-       WHERE t.poster_id = $1 AND t.status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED') AND t.post_type = $2
-       ORDER BY t.created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [userId, type, parseInt(limit), offset]
-    );
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM tasks 
-       WHERE poster_id = $1 AND status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED') AND post_type = $2`,
-      [userId, type]
-    );
+    // Chạy song song truy vấn dữ liệu và truy vấn tổng số bài đăng để giảm thời gian phản hồi
+    const [result, countResult] = await Promise.all([
+      pool.query(
+        `SELECT t.id, t.title, t.description, t.status, t.budget_min, t.budget_max, 
+                t.final_price, t.created_at, t.post_type, t.salary_unit, t.images,
+                c.name as category_name,
+                (SELECT COUNT(*) FROM task_applications WHERE task_id = t.id) as applicant_count
+         FROM tasks t
+         LEFT JOIN categories c ON t.category_id = c.id
+         WHERE t.poster_id = $1 AND t.status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED') AND t.post_type = $2
+         ORDER BY t.created_at DESC
+         LIMIT $3 OFFSET $4`,
+        [userId, type, parseInt(limit), offset]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM tasks 
+         WHERE poster_id = $1 AND status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED') AND post_type = $2`,
+        [userId, type]
+      )
+    ]);
     const total = parseInt(countResult.rows[0].count);
 
     const data = result.rows.map(row => ({
@@ -296,23 +322,25 @@ router.get("/:userId/profile/reviews", verifyFirebaseToken, async (req, res) => 
   const { page = 1, limit = 10 } = req.query;
 
   try {
-    const result = await pool.query(
-      `SELECT r.id, r.rating, r.comment, r.created_at,
-              u.full_name as reviewer_name, u.avatar_url as reviewer_avatar,
-              t.title as task_name
-       FROM reviews r
-       LEFT JOIN users u ON r.reviewer_id = u.id
-       LEFT JOIN tasks t ON r.task_id = t.id
-       WHERE r.reviewee_id = $1
-       ORDER BY r.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [userId, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)]
-    );
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM reviews WHERE reviewee_id = $1`,
-      [userId]
-    );
+    // Chạy song song truy vấn đánh giá và truy vấn tổng số đánh giá
+    const [result, countResult] = await Promise.all([
+      pool.query(
+        `SELECT r.id, r.rating, r.comment, r.created_at,
+                u.full_name as reviewer_name, u.avatar_url as reviewer_avatar,
+                t.title as task_name
+         FROM reviews r
+         LEFT JOIN users u ON r.reviewer_id = u.id
+         LEFT JOIN tasks t ON r.task_id = t.id
+         WHERE r.reviewee_id = $1
+         ORDER BY r.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM reviews WHERE reviewee_id = $1`,
+        [userId]
+      )
+    ]);
     const total = parseInt(countResult.rows[0].count);
 
     const data = result.rows.map(row => ({

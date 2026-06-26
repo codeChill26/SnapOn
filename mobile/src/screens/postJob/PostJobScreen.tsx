@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 import { CategoryPickerModal } from '../../components/categories/CategoryPickerModal';
 import { OptionSelectionModal } from '../../components/common/OptionSelectionModal';
@@ -291,17 +292,49 @@ export const PostJobScreen: React.FC = () => {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
-        quality: 0.6,
-        base64: true,
+        quality: 1.0, // Lấy ảnh chất lượng gốc để tự xử lý qua ImageManipulator tốt hơn
         selectionLimit: 5 - selectedImages.length,
       });
 
       if (!result.canceled) {
-        const newImages = result.assets.map(asset => ({
-          uri: asset.uri,
-          base64: asset.base64 || undefined,
-        }));
-        setSelectedImages(prev => [...prev, ...newImages].slice(0, 5));
+        setLoading(true);
+        try {
+          const compressedImages = await Promise.all(
+            result.assets.map(async (asset) => {
+              const actions: ImageManipulator.Action[] = [];
+              // Giới hạn kích thước tối đa 1024px, giữ nguyên tỷ lệ aspect ratio
+              if (asset.width > 1024 || asset.height > 1024) {
+                if (asset.width > asset.height) {
+                  actions.push({ resize: { width: 1024 } });
+                } else {
+                  actions.push({ resize: { height: 1024 } });
+                }
+              }
+
+              const manipulated = await ImageManipulator.manipulateAsync(
+                asset.uri,
+                actions,
+                {
+                  compress: 0.8, // Nén chất lượng về 80%
+                  format: ImageManipulator.SaveFormat.JPEG,
+                  base64: true,
+                }
+              );
+
+              return {
+                uri: manipulated.uri,
+                base64: manipulated.base64 || undefined,
+              };
+            })
+          );
+
+          setSelectedImages(prev => [...prev, ...compressedImages].slice(0, 5));
+        } catch (manipulateError) {
+          console.error('Lỗi khi nén ảnh với ImageManipulator:', manipulateError);
+          Alert.alert('Lỗi', 'Có lỗi xảy ra trong quá trình tối ưu hóa hình ảnh.');
+        } finally {
+          setLoading(false);
+        }
       }
     } catch (err) {
       console.error('Lỗi khi chọn ảnh:', err);

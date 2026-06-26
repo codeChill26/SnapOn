@@ -32,6 +32,13 @@ const applicationController = {
         return error(res, 'This task is no longer accepting applications.', 400);
       }
 
+      // Kiểm tra xem công việc này đã chọn được người làm chưa (chờ xác nhận ASSIGNED hoặc đang làm IN_PROGRESS)
+      const assignments = await assignedTaskModel.findListByTaskId(taskId);
+      const hasActiveAssignment = assignments.some(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
+      if (hasActiveAssignment) {
+        return error(res, 'Công việc này đã chọn được người làm và không nhận thêm ứng tuyển mới.', 400);
+      }
+
       // 2. Check tasker is not the poster
       if (task.poster_id === taskerId) {
         return error(res, 'You cannot bid on your own task.', 400);
@@ -454,6 +461,10 @@ const applicationController = {
             taskTitle: lockedTask.title,
           });
         }
+
+        // Lên lịch tự động hủy giao việc sau 15 phút nếu ứng viên không xác nhận nhận việc
+        const assignmentExpiryService = require('../services/assignmentExpiryService');
+        assignmentExpiryService.setupExpiryTimer(assignedTask.id, io);
 
         // Fetch complete updated application to return
         const fullApp = await taskApplicationModel.findById(id);

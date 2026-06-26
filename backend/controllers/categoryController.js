@@ -1,9 +1,27 @@
 'use strict';
 
 const prisma = require('../db/prisma');
+const redis = require('../config/redis');
 
 exports.getCategories = async (req, res, next) => {
   try {
+    const cacheKey = 'categories:structured';
+
+    // 1. Try to read from Redis cache
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      try {
+        const categories = JSON.parse(cachedData);
+        return res.json({
+          success: true,
+          data: categories,
+        });
+      } catch (parseErr) {
+        // Fall back to database if JSON parsing fails
+      }
+    }
+
+    // 2. Cache miss: Fetch from PostgreSQL
     const categories = await prisma.category.findMany({
       include: {
         skills: {
@@ -35,7 +53,10 @@ exports.getCategories = async (req, res, next) => {
       })),
     }));
 
-    res.json({
+    // 3. Cache in Redis with 24 hours TTL (86400 seconds)
+    await redis.set(cacheKey, JSON.stringify(structuredCategories), 86400).catch(() => {});
+
+    return res.json({
       success: true,
       data: structuredCategories,
     });

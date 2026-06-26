@@ -9,9 +9,14 @@ const api: AxiosInstance = axios.create({
   },
 });
 
+let cachedBaseURL: string | null = null;
+
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    config.baseURL = await detectBackend();
+    if (!cachedBaseURL) {
+      cachedBaseURL = await detectBackend();
+    }
+    config.baseURL = cachedBaseURL;
     const token = await storage.getToken();
     if (token) {
       config.headers = config.headers || {};
@@ -45,6 +50,20 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest: any = error.config;
+
+    // Chỉ thử lại (retry) với lỗi kết nối mạng hoặc lỗi máy chủ tạm thời (5xx)
+    const isNetworkError = !error.response;
+    const isServerError = error.response && error.response.status >= 500;
+
+    if (originalRequest && (isNetworkError || isServerError)) {
+      originalRequest._retryCount = originalRequest._retryCount || 0;
+      if (originalRequest._retryCount < 2) {
+        originalRequest._retryCount += 1;
+        const delay = originalRequest._retryCount === 1 ? 1000 : 2000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return api(originalRequest);
+      }
+    }
 
     // Guard: If it's not a 401 error or if the request was already retried
     if (error.response?.status !== 401 || originalRequest._retry) {
@@ -91,7 +110,7 @@ api.interceptors.response.use(
       }
 
       // Call refresh token endpoint directly using basic axios to bypass interceptors
-      const baseUrl = await detectBackend();
+      const baseUrl = cachedBaseURL || (cachedBaseURL = await detectBackend());
       const response = await axios.post<any>(
         `${baseUrl}/auth/refresh`,
         { refreshToken }

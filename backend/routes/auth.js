@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const verifyFirebaseToken = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prisma');
+const redis = require('../config/redis');
 
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
 const REFRESH_TOKEN_EXPIRY_DAYS = 30; // 30 days
@@ -32,22 +33,31 @@ function generateRefreshToken(user) {
   );
 }
 
-async function saveRefreshToken(userId, token, req) {
+async function saveRefreshToken(user, token, req) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
 
   const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
   const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
 
-  return await prisma.refreshToken.create({
+  // 1. Save in PostgreSQL (persistent backup)
+  const dbPromise = prisma.refreshToken.create({
     data: {
       token,
-      userId,
+      userId: user.id,
       deviceInfo,
       ipAddress,
       expiresAt
     }
   });
+
+  // 2. Save in Redis Cache with TTL (30 days in seconds)
+  const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+  const redisPromise = redis.set(`refresh_token:${token}`, JSON.stringify(user), ttlSeconds);
+
+  // Run in parallel for maximum speed
+  const [dbToken, _] = await Promise.all([dbPromise, redisPromise]);
+  return dbToken;
 }
 
 
@@ -120,7 +130,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
-    await saveRefreshToken(user.id, refreshToken, req);
+    await saveRefreshToken(user, refreshToken, req);
 
     return res.status(200).json({
       success: true,
@@ -187,7 +197,7 @@ router.post('/dev/login', async (req, res) => {
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
-    await saveRefreshToken(user.id, refreshToken, req);
+    await saveRefreshToken(user, refreshToken, req);
 
     return res.status(200).json({
       success: true,
@@ -244,7 +254,7 @@ router.post('/dev/register', async (req, res) => {
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
-    await saveRefreshToken(user.id, refreshToken, req);
+    await saveRefreshToken(user, refreshToken, req);
 
     return res.status(201).json({
       success: true,
@@ -380,7 +390,7 @@ router.post('/verify-otp', async (req, res) => {
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
-    await saveRefreshToken(user.id, refreshToken, req);
+    await saveRefreshToken(user, refreshToken, req);
 
     return res.status(200).json({
       success: true,
@@ -473,23 +483,45 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
     }
 
-    // 2. Check if token exists in DB and is not expired
-    const tokenRecord = await prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
-      include: { user: true }
-    });
+    // 2. Check Cache first (Redis), fall back to DB if cache miss or Redis is offline
+    const redisKey = `refresh_token:${refreshToken}`;
+    const cachedUserStr = await redis.get(redisKey);
+    let user;
+    let isCacheHit = false;
 
-    if (!tokenRecord) {
-      return res.status(401).json({ success: false, message: 'Refresh token not found or revoked' });
+    if (cachedUserStr) {
+      try {
+        user = JSON.parse(cachedUserStr);
+        isCacheHit = true;
+      } catch (e) {
+        // parsing failed, will fall back to DB
+      }
     }
 
-    if (new Date() > new Date(tokenRecord.expiresAt)) {
-      // Clean up expired token
-      await prisma.refreshToken.delete({ where: { token: refreshToken } }).catch(() => {});
-      return res.status(401).json({ success: false, message: 'Refresh token has expired' });
-    }
+    if (!isCacheHit) {
+      // Cache miss / fallback: check PostgreSQL
+      const tokenRecord = await prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+        include: { user: true }
+      });
 
-    const user = tokenRecord.user;
+      if (!tokenRecord) {
+        return res.status(401).json({ success: false, message: 'Refresh token not found or revoked' });
+      }
+
+      if (new Date() > new Date(tokenRecord.expiresAt)) {
+        // Clean up expired token
+        await prisma.refreshToken.delete({ where: { token: refreshToken } }).catch(() => {});
+        await redis.del(redisKey).catch(() => {});
+        return res.status(401).json({ success: false, message: 'Refresh token has expired' });
+      }
+
+      user = tokenRecord.user;
+
+      // Populate Redis cache back for future requests
+      const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+      await redis.set(redisKey, JSON.stringify(user), ttlSeconds).catch(() => {});
+    }
 
     if (user.status === 'BANNED') {
       return res.status(403).json({ success: false, message: 'Your account has been banned.' });
@@ -499,8 +531,8 @@ router.post('/refresh', async (req, res) => {
     const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken(user);
 
-    // 4. Update DB: delete old, save new in transaction
-    await prisma.$transaction([
+    // 4. Update DB and Redis in parallel
+    const dbPromise = prisma.$transaction([
       prisma.refreshToken.delete({ where: { token: refreshToken } }),
       prisma.refreshToken.create({
         data: {
@@ -512,6 +544,15 @@ router.post('/refresh', async (req, res) => {
         }
       })
     ]);
+
+    const redisPromise = (async () => {
+      await redis.del(redisKey); // Delete old token
+      const newRedisKey = `refresh_token:${newRefreshToken}`;
+      const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+      await redis.set(newRedisKey, JSON.stringify(user), ttlSeconds); // Set new token
+    })();
+
+    await Promise.all([dbPromise, redisPromise]);
 
     return res.status(200).json({
       success: true,
@@ -526,14 +567,18 @@ router.post('/refresh', async (req, res) => {
 });
 
 // POST /api/auth/logout
-// Revokes the refresh token from the database
+// Revokes the refresh token from the database and Redis cache
 router.post('/logout', async (req, res) => {
   try {
     const { refreshToken } = req.body;
     if (refreshToken) {
-      await prisma.refreshToken.delete({
+      const dbPromise = prisma.refreshToken.delete({
         where: { token: refreshToken }
       }).catch(() => {}); // ignore error if already deleted
+
+      const redisPromise = redis.del(`refresh_token:${refreshToken}`);
+
+      await Promise.all([dbPromise, redisPromise]);
     }
 
     return res.status(200).json({
