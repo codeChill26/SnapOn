@@ -12,6 +12,17 @@ import { useAuth } from '../../context/AuthContext';
 
 type RegisterNavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const isValidPhone = (v: string) => /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
+
+interface Errors {
+  name?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  confirmPassword?: string;
+}
+
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<RegisterNavProp>();
   const { login } = useAuth();
@@ -21,45 +32,50 @@ export const RegisterScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
+
+  const clearError = (field: keyof Errors) => {
+    if (errors[field]) setErrors(prev => ({ ...prev, [field]: undefined }));
+  };
+
+  const validate = (): boolean => {
+    const e: Errors = {};
+    if (!name.trim() || name.trim().length < 2) e.name = 'Họ và tên phải có ít nhất 2 ký tự';
+    if (!email.trim()) e.email = 'Vui lòng nhập email';
+    else if (!isValidEmail(email)) e.email = 'Địa chỉ email không hợp lệ';
+    if (phone.trim() && !isValidPhone(phone)) e.phone = 'Số điện thoại không hợp lệ (VD: 0912345678)';
+    if (!password) e.password = 'Vui lòng nhập mật khẩu';
+    else if (password.length < 6) e.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+    if (password !== confirmPassword) e.confirmPassword = 'Mật khẩu xác nhận không khớp';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin');
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
-      return;
-    }
+    if (!validate()) return;
     setLoading(true);
     try {
-      // 1. Register user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-
-      // 2. Set profile displayName in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       if (userCredential.user) {
-        await updateProfile(userCredential.user, {
-          displayName: name,
-        });
+        await updateProfile(userCredential.user, { displayName: name.trim() });
       }
-
-      // 3. Get Firebase ID Token
       const idToken = await userCredential.user.getIdToken();
-
-      // 4. Sync with Backend Postgres Database and log in
       await login(idToken);
-      
       Alert.alert('Thành công', 'Đăng ký tài khoản thành công!');
     } catch (error: any) {
       let errorMsg = error.message;
       if (error.code === 'auth/email-already-in-use') {
         errorMsg = 'Email này đã được đăng ký tài khoản.';
+        setErrors(prev => ({ ...prev, email: errorMsg }));
       } else if (error.code === 'auth/invalid-email') {
         errorMsg = 'Địa chỉ email không hợp lệ.';
+        setErrors(prev => ({ ...prev, email: errorMsg }));
       } else if (error.code === 'auth/weak-password') {
         errorMsg = 'Mật khẩu quá yếu (phải chứa ít nhất 6 ký tự).';
+        setErrors(prev => ({ ...prev, password: errorMsg }));
+      } else {
+        Alert.alert('Đăng ký thất bại', errorMsg);
       }
-      Alert.alert('Đăng ký thất bại', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -82,39 +98,46 @@ export const RegisterScreen: React.FC = () => {
 
         <View style={styles.form}>
           <Input
-            label="Họ và tên"
-            placeholder="Nhập họ và tên"
+            label="Họ và tên *"
+            placeholder="Nhập họ và tên (ít nhất 2 ký tự)"
             value={name}
-            onChangeText={setName}
+            onChangeText={(t) => { setName(t); clearError('name'); }}
+            error={errors.name}
+            autoCapitalize="words"
           />
           <Input
-            label="Email"
+            label="Email *"
             placeholder="Nhập email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => { setEmail(t); clearError('email'); }}
             keyboardType="email-address"
             autoCapitalize="none"
+            error={errors.email}
           />
           <Input
             label="Số điện thoại"
-            placeholder="Nhập số điện thoại"
+            placeholder="VD: 0912345678 (không bắt buộc)"
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(t) => { setPhone(t); clearError('phone'); }}
             keyboardType="phone-pad"
+            maxLength={10}
+            error={errors.phone}
           />
           <Input
-            label="Mật khẩu"
-            placeholder="Nhập mật khẩu"
+            label="Mật khẩu *"
+            placeholder="Ít nhất 6 ký tự"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(t) => { setPassword(t); clearError('password'); if (errors.confirmPassword && t === confirmPassword) clearError('confirmPassword'); }}
             secureTextEntry
+            error={errors.password}
           />
           <Input
-            label="Xác nhận mật khẩu"
+            label="Xác nhận mật khẩu *"
             placeholder="Nhập lại mật khẩu"
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(t) => { setConfirmPassword(t); clearError('confirmPassword'); }}
             secureTextEntry
+            error={errors.confirmPassword}
           />
 
           <Button
@@ -187,4 +210,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

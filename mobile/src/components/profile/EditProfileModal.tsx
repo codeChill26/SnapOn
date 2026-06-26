@@ -33,6 +33,16 @@ interface EditProfileModalProps {
   }) => void;
 }
 
+const isValidPhone = (v: string) => !v.trim() || /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
+
+interface ProfileErrors {
+  fullName?: string;
+  phone?: string;
+  headline?: string;
+  bio?: string;
+  skillText?: string;
+}
+
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   visible,
   onClose,
@@ -58,6 +68,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [headline, setHeadline] = useState(initialHeadline);
   const [skillsText, setSkillsText] = useState('');
   const [skills, setSkills] = useState<string[]>(initialSkills);
+  const [errors, setErrors] = useState<ProfileErrors>({});
 
   // Sync state with props when modal opens
   useEffect(() => {
@@ -70,6 +81,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setHeadline(initialHeadline);
       setSkills(initialSkills);
       setSkillsText('');
+      setErrors({});
     }
   }, [visible, initialName, initialPhone, initialAvatarUrl, initialCoverUrl, initialBio, initialHeadline, initialSkills]);
 
@@ -84,10 +96,22 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
   const handleAddSkill = () => {
     const trimmed = skillsText.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills([...skills, trimmed]);
-      setSkillsText('');
+    if (!trimmed) return;
+    if (trimmed.length > 30) {
+      setErrors(prev => ({ ...prev, skillText: 'Kỹ năng không được quá 30 ký tự' }));
+      return;
     }
+    if (skills.length >= 15) {
+      setErrors(prev => ({ ...prev, skillText: 'Tối đa 15 kỹ năng' }));
+      return;
+    }
+    if (skills.includes(trimmed)) {
+      setErrors(prev => ({ ...prev, skillText: 'Kỹ năng này đã được thêm' }));
+      return;
+    }
+    setSkills([...skills, trimmed]);
+    setSkillsText('');
+    setErrors(prev => ({ ...prev, skillText: undefined }));
   };
 
   const handleRemoveSkill = (skillToRemove: string) => {
@@ -95,15 +119,17 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   };
 
   const handleSavePress = () => {
-    onSave({
-      fullName,
-      phone,
-      avatarUrl,
-      coverUrl,
-      bio,
-      headline,
-      skills,
-    });
+    const e: ProfileErrors = {};
+    if (!fullName.trim() || fullName.trim().length < 2) e.fullName = 'Họ và tên phải có ít nhất 2 ký tự';
+    if (!isValidPhone(phone)) e.phone = 'Số điện thoại không hợp lệ (VD: 0912345678)';
+    if (headline.length > 100) e.headline = `Tiêu đề quá dài (${headline.length}/100 ký tự)`;
+    if (bio.length > 500) e.bio = `Giới thiệu quá dài (${bio.length}/500 ký tự)`;
+    if (Object.keys(e).length > 0) {
+      setErrors(e);
+      return;
+    }
+    setErrors({});
+    onSave({ fullName, phone, avatarUrl, coverUrl, bio, headline, skills });
   };
 
   return (
@@ -145,45 +171,54 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
         {/* Form Fields */}
         <Input
-          label="Họ và tên"
-          placeholder="Nhập họ và tên"
+          label="Họ và tên *"
+          placeholder="Nhập họ và tên (ít nhất 2 ký tự)"
           value={fullName}
-          onChangeText={setFullName}
+          onChangeText={(t) => { setFullName(t); if (errors.fullName) setErrors(p => ({ ...p, fullName: undefined })); }}
+          error={errors.fullName}
+          autoCapitalize="words"
         />
 
         <Input
           label="Số điện thoại"
-          placeholder="Nhập số điện thoại"
+          placeholder="VD: 0912345678"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(t) => { setPhone(t); if (errors.phone) setErrors(p => ({ ...p, phone: undefined })); }}
           keyboardType="phone-pad"
+          maxLength={10}
+          error={errors.phone}
         />
 
         <Input
           label="Headline / Tiêu đề nghề nghiệp"
-          placeholder="Ví dụ: Lập trình viên di động, Thiết kế đồ họa"
+          placeholder="VD: Lập trình viên di động, Thiết kế đồ họa"
           value={headline}
-          onChangeText={setHeadline}
+          onChangeText={(t) => { setHeadline(t); if (errors.headline) setErrors(p => ({ ...p, headline: undefined })); }}
+          maxLength={100}
+          error={errors.headline}
         />
 
         <Input
           label="Giới thiệu bản thân (Bio)"
           placeholder="Viết một đoạn giới thiệu ngắn về kỹ năng, kinh nghiệm..."
           value={bio}
-          onChangeText={setBio}
+          onChangeText={(t) => { setBio(t); if (errors.bio) setErrors(p => ({ ...p, bio: undefined })); }}
           multiline
           numberOfLines={4}
+          maxLength={500}
+          error={errors.bio}
         />
 
         {/* Skills Chips Config */}
-        <Text style={styles.label}>Kỹ năng / Lĩnh vực nổi bật</Text>
+        <Text style={styles.label}>Kỹ năng / Lĩnh vực nổi bật (tối đa 15)</Text>
         <View style={styles.skillsInputRow}>
           <View style={styles.inputWrapper}>
             <Input
-              placeholder="Nhập kỹ năng mới"
+              placeholder="Nhập kỹ năng mới, tối đa 30 ký tự"
               value={skillsText}
-              onChangeText={setSkillsText}
+              onChangeText={(t) => { setSkillsText(t); if (errors.skillText) setErrors(p => ({ ...p, skillText: undefined })); }}
               onSubmitEditing={handleAddSkill}
+              error={errors.skillText}
             />
           </View>
           <TouchableOpacity style={styles.addSkillButton} onPress={handleAddSkill} activeOpacity={0.7}>

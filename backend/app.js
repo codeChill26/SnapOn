@@ -23,6 +23,7 @@ var chatRoutes = require('./routes/chatRoutes');
 var bannerRoutes = require('./routes/bannerRoutes');
 var categoryRoutes = require('./routes/categoryRoutes');
 var assignmentRoutes = require('./routes/assignmentRoutes');
+var adminRoutes = require('./routes/adminRoutes');
 
 
 const http = require('http');
@@ -123,6 +124,7 @@ app.use('/api', categoryRoutes);
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
 app.use('/api/assignments', assignmentRoutes);
+app.use('/api/admin', adminRoutes);
 
 
 // ==========================================

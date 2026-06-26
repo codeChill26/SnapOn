@@ -208,8 +208,13 @@ export const AccountSettingsScreen: React.FC = () => {
   };
 
   const handleSendOtp = () => {
-    if (!verifyPhone.trim()) {
+    const phone = verifyPhone.trim();
+    if (!phone) {
       Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
+      return;
+    }
+    if (!/^(0[3|5|7|8|9])[0-9]{8}$/.test(phone)) {
+      Alert.alert('Số điện thoại không hợp lệ', 'Vui lòng nhập số điện thoại Việt Nam hợp lệ (VD: 0912345678)');
       return;
     }
     setIsOtpSent(true);
@@ -222,11 +227,15 @@ export const AccountSettingsScreen: React.FC = () => {
   };
 
   const handleVerifyOtp = () => {
+    if (otpCode.length !== 6) {
+      Alert.alert('Lỗi', 'Mã OTP phải có đúng 6 chữ số');
+      return;
+    }
     if (otpCode === '123456') {
       setIsPhoneVerified(true);
       Alert.alert('Thành công', 'Xác thực số điện thoại thành công!');
     } else {
-      Alert.alert('Lỗi', 'Mã OTP không chính xác. Vui lòng nhập lại (Mã thử nghiệm: 123456)');
+      Alert.alert('Mã OTP không chính xác', 'Vui lòng kiểm tra lại mã OTP. (Mã thử nghiệm: 123456)');
     }
   };
 

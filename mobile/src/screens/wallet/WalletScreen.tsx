@@ -26,6 +26,7 @@ export const WalletScreen: React.FC = () => {
   const [customAmountText, setCustomAmountText] = useState<string>('100000');
   const [pendingOrderCode, setPendingOrderCode] = useState<number | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
+  const [topupError, setTopupError] = useState<string>('');
 
   useEffect(() => {
     if (route.params?.scrollToHistory && historyY > 0) {
@@ -55,27 +56,40 @@ export const WalletScreen: React.FC = () => {
     }
   };
 
+  const MAX_TOPUP = 50_000_000;
+
   const handlePresetSelect = (amount: number) => {
     setTopupAmount(amount);
     setCustomAmountText(amount.toString());
+    setTopupError('');
   };
 
   const handleCustomAmountChange = (text: string) => {
     const cleanText = text.replace(/[^0-9]/g, '');
     setCustomAmountText(cleanText);
     const num = parseInt(cleanText, 10);
-    if (!isNaN(num)) {
+    if (!isNaN(num) && num > 0) {
       setTopupAmount(num);
+      if (num < 1000) setTopupError('Tối thiểu 1.000đ');
+      else if (num > MAX_TOPUP) setTopupError('Tối đa 50.000.000đ');
+      else setTopupError('');
     } else {
       setTopupAmount(0);
+      if (cleanText) setTopupError('Vui lòng nhập số tiền hợp lệ');
+      else setTopupError('');
     }
   };
 
   const handleTopup = async () => {
-    if (topupAmount < 1000) {
-      Alert.alert('Lỗi', 'Số tiền nạp tối thiểu là 1.000 đ');
+    if (!topupAmount || topupAmount < 1000) {
+      setTopupError('Số tiền nạp tối thiểu là 1.000đ');
       return;
     }
+    if (topupAmount > MAX_TOPUP) {
+      setTopupError('Số tiền nạp tối đa là 50.000.000đ');
+      return;
+    }
+    setTopupError('');
 
     try {
       setCheckingPayment(true);
@@ -212,20 +226,21 @@ export const WalletScreen: React.FC = () => {
 
           <Input
             label="Số tiền nạp tự chọn (đ)"
-            placeholder="Nhập số tiền bạn muốn nạp (tối thiểu 1.000đ)"
+            placeholder="Nhập số tiền (1.000đ – 50.000.000đ)"
             value={customAmountText}
             onChangeText={handleCustomAmountChange}
             keyboardType="numeric"
+            error={topupError || undefined}
           />
 
 
 
           <Button
-            title={topupAmount > 0 ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền'}
+            title={topupAmount >= 1000 && !topupError ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền hợp lệ'}
             onPress={handleTopup}
             size="lg"
             style={styles.topupButton}
-            disabled={topupAmount <= 0}
+            disabled={topupAmount < 1000 || !!topupError}
             loading={checkingPayment && !pendingOrderCode}
           />
         </Card>
