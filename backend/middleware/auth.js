@@ -20,22 +20,22 @@ function attachUser(req, user, res, next) {
 
   req.user = {
     id: user.id,
-    firebaseUid: user.firebase_uid,
-    fullName: user.full_name,
+    firebaseUid: user.firebase_uid || user.firebaseUid,
+    fullName: user.full_name || user.fullName,
     email: user.email,
     phone: user.phone,
-    avatarUrl: user.avatar_url,
+    avatarUrl: user.avatar_url || user.avatarUrl,
     role: user.role,
     status: user.status,
-    isVerified: user.is_verified,
-    createdAt: user.created_at,
+    isVerified: user.is_verified ?? user.isVerified,
+    createdAt: user.created_at || user.createdAt,
   };
 
   req.firebaseUser = {
-    uid: user.firebase_uid,
+    uid: user.firebase_uid || user.firebaseUid,
     email: user.email,
-    name: user.full_name,
-    picture: user.avatar_url,
+    name: user.full_name || user.fullName,
+    picture: user.avatar_url || user.avatarUrl,
   };
 
   return next();
@@ -122,7 +122,14 @@ const authenticate = async (req, res, next) => {
           const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
           return attachUser(req, decoded, res, next);
         } catch (e) {
-          // Fall through to regular dev mode fallback if not a valid JWT
+          if (e.name === 'TokenExpiredError') {
+            return error(res, 'Token expired. Please refresh token.', 401);
+          }
+          // If it looks like a JWT (wrong secret / malformed), reject immediately
+          if (token.startsWith('eyJ')) {
+            return error(res, 'Invalid token.', 401);
+          }
+          // Not a JWT — fall through to x-user-id / UUID-as-bearer dev mode
         }
       }
 
