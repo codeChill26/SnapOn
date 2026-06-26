@@ -81,16 +81,19 @@ const GENDER_REQUIREMENTS = [
   { label: 'Khác', value: 'OTHER' },
 ];
 
-const formatPrice = (text: string) => {
-  const numericVal = text.replace(/[^0-9]/g, '');
-  if (!numericVal) return '';
-  return parseInt(numericVal).toLocaleString('vi-VN') + ' đ';
-};
-
 const getRawPrice = (text: string): number => {
   const numericVal = text.replace(/[^0-9]/g, '');
   return parseInt(numericVal) || 0;
 };
+
+const PRICE_PRESETS = [
+  { label: '50K–100K', min: 50000, max: 100000 },
+  { label: '100K–200K', min: 100000, max: 200000 },
+  { label: '150K–300K', min: 150000, max: 300000 },
+  { label: '200K–400K', min: 200000, max: 400000 },
+  { label: '300K–600K', min: 300000, max: 600000 },
+  { label: '500K–1tr', min: 500000, max: 1000000 },
+];
 
 type SelectedImage = {
   uri: string;
@@ -120,7 +123,9 @@ export const PostJobScreen: React.FC = () => {
   const [subcategoryName, setSubcategoryName] = useState<string | undefined>();
   const [apiCategoryId, setApiCategoryId] = useState<string | undefined>();
   
-  const [priceInput, setPriceInput] = useState('');
+  const [budgetMinInput, setBudgetMinInput] = useState('');
+  const [budgetMaxInput, setBudgetMaxInput] = useState('');
+  const [activePricePreset, setActivePricePreset] = useState<number | null>(null);
   const [salaryUnit, setSalaryUnit] = useState<'PER_JOB' | 'PER_HOUR' | 'PER_DAY' | 'PER_MONTH'>('PER_JOB');
   const [workMode, setWorkMode] = useState<'ONSITE' | 'REMOTE' | 'NEGOTIABLE'>('ONSITE');
   const [employmentType, setEmploymentType] = useState<'ONE_TIME' | 'PART_TIME' | 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'SHIFT' | 'INTERNSHIP' | 'NEGOTIABLE'>('ONE_TIME');
@@ -192,7 +197,9 @@ export const PostJobScreen: React.FC = () => {
         setFieldName(taskData.field?.name || taskData.categoryName);
         setSubcategoryId(taskData.subcategory?.id || taskData.skills?.[0]?.id);
         setSubcategoryName(taskData.subcategory?.name || taskData.skills?.[0]?.name);
-        setPriceInput(formatPrice(String(taskData.budgetMax || taskData.budgetMin || 0)));
+        setBudgetMinInput(String(taskData.budgetMin || 0));
+        setBudgetMaxInput(String(taskData.budgetMax || taskData.budgetMin || 0));
+        setActivePricePreset(null);
         setSalaryUnit((taskData.salaryUnit || 'PER_JOB') as 'PER_JOB' | 'PER_HOUR' | 'PER_DAY' | 'PER_MONTH');
         setWorkMode((taskData.workMode || 'ONSITE') as 'ONSITE' | 'REMOTE' | 'NEGOTIABLE');
         setEmploymentType((taskData.employmentType || 'ONE_TIME') as any);
@@ -249,18 +256,18 @@ export const PostJobScreen: React.FC = () => {
     if (!title.trim() || title.length < 5) return false;
     if (!description.trim() || description.length < 10) return false;
     if (!fieldId || !subcategoryId) return false;
-    if (!priceInput.trim()) return false;
+    const rawMin = getRawPrice(budgetMinInput);
+    const rawMax = getRawPrice(budgetMaxInput);
+    if (rawMin <= 0 || rawMax <= 0) return false;
+    if (rawMin > rawMax) return false;
     if (workMode === 'ONSITE' && !address.trim()) return false;
-    
     if (!contactPhone.trim()) return false;
-    
     if (postType === 'RECRUITMENT') {
       if (peopleNeeded < 1) return false;
       if (!startDate) return false;
     }
-    
     return true;
-  }, [title, description, fieldId, subcategoryId, priceInput, workMode, address, postType, peopleNeeded, contactPhone, startDate]);
+  }, [title, description, fieldId, subcategoryId, budgetMinInput, budgetMaxInput, workMode, address, postType, peopleNeeded, contactPhone, startDate]);
 
   // Toggle Post Type
   const handlePostTypeChange = (type: 'RECRUITMENT' | 'SERVICE_OFFER') => {
@@ -348,13 +355,14 @@ export const PostJobScreen: React.FC = () => {
     }
 
     // 4. Price/Budget checks
-    if (!priceInput.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mức giá / ngân sách.');
+    const rawBudgetMin = getRawPrice(budgetMinInput);
+    const rawBudgetMax = getRawPrice(budgetMaxInput);
+    if (rawBudgetMin <= 0 || rawBudgetMax <= 0) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập khoảng giá tối thiểu và tối đa.');
       return;
     }
-    const rawBudget = getRawPrice(priceInput);
-    if (rawBudget <= 0) {
-      Alert.alert('Thông tin không hợp lệ', 'Mức giá / ngân sách phải lớn hơn 0.');
+    if (rawBudgetMin > rawBudgetMax) {
+      Alert.alert('Thông tin không hợp lệ', 'Giá tối thiểu không được lớn hơn giá tối đa.');
       return;
     }
 
@@ -395,7 +403,8 @@ export const PostJobScreen: React.FC = () => {
       }
       const imageUrls = [...existingImageUrls, ...uploadedImageUrls];
 
-      const budget = getRawPrice(priceInput);
+      const budgetMin = getRawPrice(budgetMinInput);
+      const budgetMax = getRawPrice(budgetMaxInput);
 
       let applicationDeadline: string | null = isEditMode ? (editingTask?.applicationDeadline || null) : null;
       if (postType === 'RECRUITMENT' && selectedDeadlinePreset !== null) {
@@ -407,8 +416,8 @@ export const PostJobScreen: React.FC = () => {
         description,
         category_id: fieldId!,
         task_type: 'ONLINE', // fallback config
-        budget_min: budget,
-        budget_max: budget,
+        budget_min: budgetMin,
+        budget_max: budgetMax,
         deadline_start: new Date().toISOString(),
         deadline_end: new Date(Date.now() + 30 * 86400000).toISOString(),
         application_deadline: applicationDeadline,
@@ -476,7 +485,9 @@ export const PostJobScreen: React.FC = () => {
         setFieldName(undefined);
         setSubcategoryId(undefined);
         setSubcategoryName(undefined);
-        setPriceInput('');
+        setBudgetMinInput('');
+        setBudgetMaxInput('');
+        setActivePricePreset(null);
         setAddress('');
         setPeopleNeeded(1);
         setHashtags([]);
@@ -625,17 +636,85 @@ export const PostJobScreen: React.FC = () => {
             <Text style={styles.counterText}>{title.length}/100</Text>
           </View>
 
-          {/* PRICE INPUT */}
+          {/* PRICE RANGE */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Mức giá (VND) *</Text>
-            <TextInput
-              style={styles.inputBox}
-              placeholder="Nhập mức giá"
-              placeholderTextColor="#94A3B8"
-              value={priceInput}
-              onChangeText={(txt) => setPriceInput(formatPrice(txt))}
-              keyboardType="numeric"
-            />
+            <Text style={styles.sectionLabel}>Khoảng giá (VND) *</Text>
+            <Text style={styles.priceHint}>
+              Người ứng tuyển sẽ đề xuất mức giá họ muốn trong khoảng này
+            </Text>
+
+            {/* Preset chips */}
+            <View style={styles.chipsRow}>
+              {PRICE_PRESETS.map((preset, idx) => {
+                const isActive = activePricePreset === idx;
+                return (
+                  <TouchableOpacity
+                    key={preset.label}
+                    style={[styles.chip, isActive && styles.chipActive]}
+                    onPress={() => {
+                      setActivePricePreset(idx);
+                      setBudgetMinInput(String(preset.min));
+                      setBudgetMaxInput(String(preset.max));
+                    }}
+                  >
+                    <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                      {preset.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Min / Max manual inputs */}
+            <View style={styles.priceRangeRow}>
+              <View style={styles.priceInputCol}>
+                <Text style={styles.priceRangeLabel}>Tối thiểu</Text>
+                <View style={styles.priceInputWrapper}>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="0"
+                    placeholderTextColor="#94A3B8"
+                    value={budgetMinInput ? parseInt(budgetMinInput).toLocaleString('vi-VN') : ''}
+                    onChangeText={(txt) => {
+                      const digits = txt.replace(/[^0-9]/g, '');
+                      setBudgetMinInput(digits);
+                      setActivePricePreset(null);
+                    }}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.priceCurrency}>đ</Text>
+                </View>
+              </View>
+
+              <Text style={styles.priceRangeDash}>–</Text>
+
+              <View style={styles.priceInputCol}>
+                <Text style={styles.priceRangeLabel}>Tối đa</Text>
+                <View style={[
+                  styles.priceInputWrapper,
+                  budgetMinInput && budgetMaxInput && getRawPrice(budgetMinInput) > getRawPrice(budgetMaxInput)
+                    ? styles.priceInputError : null,
+                ]}>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="0"
+                    placeholderTextColor="#94A3B8"
+                    value={budgetMaxInput ? parseInt(budgetMaxInput).toLocaleString('vi-VN') : ''}
+                    onChangeText={(txt) => {
+                      const digits = txt.replace(/[^0-9]/g, '');
+                      setBudgetMaxInput(digits);
+                      setActivePricePreset(null);
+                    }}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.priceCurrency}>đ</Text>
+                </View>
+              </View>
+            </View>
+
+            {budgetMinInput && budgetMaxInput && getRawPrice(budgetMinInput) > getRawPrice(budgetMaxInput) && (
+              <Text style={styles.priceErrorText}>Giá tối thiểu không được lớn hơn giá tối đa</Text>
+            )}
           </View>
 
           {/* CHIPS: SALARY UNIT */}
@@ -1349,5 +1428,64 @@ const styles = StyleSheet.create({
   reqTabTextActive: {
     color: '#FF6B35',
     fontWeight: '700',
+  },
+  priceHint: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 12,
+    lineHeight: 17,
+  },
+  priceRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  priceInputCol: {
+    flex: 1,
+  },
+  priceRangeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+  },
+  priceInputError: {
+    borderColor: '#EF4444',
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  priceCurrency: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginLeft: 4,
+  },
+  priceRangeDash: {
+    fontSize: 20,
+    fontWeight: '300',
+    color: '#94A3B8',
+    marginTop: 22,
+  },
+  priceErrorText: {
+    fontSize: 11,
+    color: '#EF4444',
+    marginTop: 6,
   },
 });

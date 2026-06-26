@@ -8,6 +8,8 @@ interface ProfileStatsRowProps {
   completedCount: number;
   activeTab?: number;
   onStatPress?: (tabIndex: number) => void;
+  isOwnProfile?: boolean;
+  activityCount?: number;
 }
 
 export const ProfileStatsRow: React.FC<ProfileStatsRowProps> = ({
@@ -16,6 +18,8 @@ export const ProfileStatsRow: React.FC<ProfileStatsRowProps> = ({
   completedCount,
   activeTab,
   onStatPress,
+  isOwnProfile = false,
+  activityCount = 0,
 }) => {
   return (
     <View style={styles.container}>
@@ -56,10 +60,25 @@ export const ProfileStatsRow: React.FC<ProfileStatsRowProps> = ({
 
       <View style={styles.divider} />
 
-      <View style={styles.statItem}>
-        <Text style={styles.valueText}>—</Text>
-        <Text style={styles.labelText}>Sắp ra mắt</Text>
-      </View>
+      {isOwnProfile ? (
+        <TouchableOpacity
+          style={[
+            styles.statItem,
+            activeTab === 2 && styles.activeStatItem
+          ]}
+          activeOpacity={onStatPress ? 0.7 : 1}
+          onPress={() => onStatPress && onStatPress(2)}
+          disabled={!onStatPress}
+        >
+          <Text style={[styles.valueText, activeTab === 2 && styles.activeValueText]}>{activityCount}</Text>
+          <Text style={[styles.labelText, activeTab === 2 && styles.activeLabelText]}>Hoạt động</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.statItem}>
+          <Text style={styles.valueText}>—</Text>
+          <Text style={styles.labelText}>Sắp ra mắt</Text>
+        </View>
+      )}
     </View>
   );
 };

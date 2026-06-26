@@ -17,8 +17,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
+import { applicationService } from '../../services/applicationService';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { PublicProfile, Task } from '../../types';
+import { PublicProfile, Task, TaskApplication } from '../../types';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { ProfileStatsRow } from '../../components/profile/ProfileStatsRow';
@@ -29,6 +30,20 @@ type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 48) / 2;
+
+const APP_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  PENDING:   { label: 'Chờ duyệt',      color: '#F59E0B' },
+  ACCEPTED:  { label: 'Được chấp nhận', color: '#10B981' },
+  REJECTED:  { label: 'Bị từ chối',     color: '#EF4444' },
+  WITHDRAWN: { label: 'Đã rút',         color: '#6B7280' },
+};
+
+const ASSIGN_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  ASSIGNED:    { label: 'Chờ xác nhận',   color: '#3B82F6' },
+  IN_PROGRESS: { label: 'Đang thực hiện', color: '#8B5CF6' },
+  COMPLETED:   { label: 'Hoàn thành',     color: '#10B981' },
+  CANCELLED:   { label: 'Đã hủy',         color: '#6B7280' },
+};
 
 // Utility function to chunk 2-column list items to be rendered cleanly inside a single column list
 const chunkArray = <T,>(array: T[], size: number): T[][] => {
@@ -60,6 +75,7 @@ export const ProfileScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [activityCount, setActivityCount] = useState(0);
 
   // Fetch Public Profile and stats
   const fetchProfile = useCallback(async (showIndicator = true) => {
@@ -79,7 +95,7 @@ export const ProfileScreen: React.FC = () => {
     }
   }, [profileUserId]);
 
-  // Fetch List content (posts or reviews) based on active tab
+  // Fetch List content based on active tab
   const fetchListContent = useCallback(async (pageNum = 1, append = false, tabIndex = activeTab) => {
     if (!profileUserId) return;
     if (pageNum === 1 && !append) {
@@ -95,7 +111,6 @@ export const ProfileScreen: React.FC = () => {
           setPage(res.pagination.page);
           setTotalPages(res.pagination.totalPages);
 
-          // Keep counts synchronized with stats row
           if (res.pagination.total !== undefined) {
             setProfileData((prev) => {
               if (!prev) return null;
@@ -107,20 +122,35 @@ export const ProfileScreen: React.FC = () => {
             });
           }
         }
+      } else if (tabIndex === 2 && isOwnProfile) {
+        const apps = await applicationService.getMyApplications();
+        setListData(apps);
+        setActivityCount(apps.length);
+        setPage(1);
+        setTotalPages(1);
       }
     } catch (err) {
       console.error('Fetch profile list content error:', err);
     }
-  }, [profileUserId, activeTab]);
+  }, [profileUserId, activeTab, isOwnProfile]);
 
   // Initial load
   useEffect(() => {
     const initLoad = async () => {
       setLoading(true);
-      await Promise.all([
+      const tasks: Promise<any>[] = [
         fetchProfile(false),
-        fetchListContent(1, false, activeTab)
-      ]);
+        fetchListContent(1, false, activeTab),
+      ];
+      // Pre-load activity count for own profile so stats row shows correct number
+      if (isOwnProfile) {
+        tasks.push(
+          applicationService.getMyApplications()
+            .then((apps) => setActivityCount(apps.length))
+            .catch(() => {})
+        );
+      }
+      await Promise.all(tasks);
       setLoading(false);
       setFirstLoad(false);
     };
@@ -153,13 +183,13 @@ export const ProfileScreen: React.FC = () => {
     setRefreshing(false);
   }, [fetchProfile, fetchListContent, activeTab]);
 
-  // Load more pagination
+  // Load more pagination (no pagination for tab 2 — all apps returned at once)
   const handleLoadMore = useCallback(async () => {
-    if (loadingMore || page >= totalPages) return;
+    if (activeTab === 2 || loadingMore || page >= totalPages) return;
     setLoadingMore(true);
     await fetchListContent(page + 1, true, activeTab);
     setLoadingMore(false);
-  }, [loadingMore, page, totalPages, fetchListContent, activeTab]);
+  }, [activeTab, loadingMore, page, totalPages, fetchListContent]);
 
   // Navigate handlers
   const handleSettingsPress = useCallback(() => {
@@ -248,6 +278,8 @@ export const ProfileScreen: React.FC = () => {
           completedCount={profileData.completedJobsCount}
           activeTab={activeTab}
           onStatPress={setActiveTab}
+          isOwnProfile={isOwnProfile}
+          activityCount={activityCount}
         />
 
         <ProfileTabs
@@ -255,10 +287,12 @@ export const ProfileScreen: React.FC = () => {
           onChangeTab={setActiveTab}
           postedCount={profileData.postedJobsCount}
           servicesCount={profileData.serviceOffersCount}
+          isOwnProfile={isOwnProfile}
+          activityCount={activityCount}
         />
       </View>
     );
-  }, [profileData, isOwnProfile, activeTab, handleSettingsPress, handleMessagePress, handleHirePress]);
+  }, [profileData, isOwnProfile, activeTab, activityCount, handleSettingsPress, handleMessagePress, handleHirePress]);
 
   const renderFooter = useCallback(() => {
     if (loadingMore) {
@@ -286,8 +320,47 @@ export const ProfileScreen: React.FC = () => {
         </View>
       );
     }
+    if (activeTab === 2) {
+      const app: TaskApplication = item;
+      const appStatus = APP_STATUS_CONFIG[app.status] ?? { label: app.status, color: Colors.textSecondary };
+      const assignStatus = app.assignmentStatus ? ASSIGN_STATUS_CONFIG[app.assignmentStatus] : null;
+      return (
+        <TouchableOpacity
+          style={styles.activityCard}
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate('JobDetail', { taskId: app.taskId })}
+        >
+          <View style={styles.activityCardHeader}>
+            <Text style={styles.activityTitle} numberOfLines={2}>
+              {app.taskTitle || 'Công việc không còn tồn tại'}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: appStatus.color + '22' }]}>
+              <Text style={[styles.statusBadgeText, { color: appStatus.color }]}>
+                {appStatus.label}
+              </Text>
+            </View>
+          </View>
+          {assignStatus && (
+            <View style={[styles.assignBadge, { backgroundColor: assignStatus.color + '18' }]}>
+              <Ionicons name="briefcase-outline" size={12} color={assignStatus.color} style={{ marginRight: 4 }} />
+              <Text style={[styles.assignBadgeText, { color: assignStatus.color }]}>
+                {assignStatus.label}
+              </Text>
+            </View>
+          )}
+          <View style={styles.activityCardFooter}>
+            <Text style={styles.activityBidPrice}>
+              {app.bidPrice ? app.bidPrice.toLocaleString('vi-VN') + ' ₫' : 'Chưa đặt giá'}
+            </Text>
+            <Text style={styles.activityDate}>
+              {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : ''}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    }
     return null;
-  }, [activeTab, handlePostPress]);
+  }, [activeTab, handlePostPress, navigation]);
 
   const renderEmptyState = useCallback(() => {
     if (activeTab === 0) {
@@ -306,6 +379,13 @@ export const ProfileScreen: React.FC = () => {
           subtitle={isOwnProfile ? 'Hãy tạo bài đăng cung cấp dịch vụ để đối tác thuê bạn.' : 'Người dùng này chưa có dịch vụ Thuê tôi.'}
           ctaText={isOwnProfile ? 'Đăng tin dịch vụ' : undefined}
           onCtaPress={isOwnProfile ? () => navigation.navigate('MainTabs', { screen: 'PostJob' } as any) : undefined}
+        />
+      );
+    } else if (activeTab === 2) {
+      return (
+        <ProfileEmptyState
+          title="Chưa có hoạt động nào"
+          subtitle="Hãy ứng tuyển công việc để bắt đầu hành trình của bạn."
         />
       );
     }
@@ -414,5 +494,70 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  activityCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+  },
+  activityCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  activityTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    lineHeight: 20,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  assignBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  assignBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  activityCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  activityBidPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  activityDate: {
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
 });

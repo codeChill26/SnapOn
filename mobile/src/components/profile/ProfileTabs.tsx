@@ -7,6 +7,8 @@ interface ProfileTabsProps {
   onChangeTab: (tabIndex: number) => void;
   postedCount?: number;
   servicesCount?: number;
+  isOwnProfile?: boolean;
+  activityCount?: number;
 }
 
 export const ProfileTabs: React.FC<ProfileTabsProps> = ({
@@ -14,10 +16,13 @@ export const ProfileTabs: React.FC<ProfileTabsProps> = ({
   onChangeTab,
   postedCount = 0,
   servicesCount = 0,
+  isOwnProfile = false,
+  activityCount = 0,
 }) => {
   const tabs = [
     { label: 'Bài đăng', count: postedCount },
     { label: 'Thuê tôi', count: servicesCount },
+    ...(isOwnProfile ? [{ label: 'Hoạt động', count: activityCount }] : []),
   ];
 
   return (

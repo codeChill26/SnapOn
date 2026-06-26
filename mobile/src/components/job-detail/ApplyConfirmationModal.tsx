@@ -17,8 +17,9 @@ import { HomeTheme } from '../home/HomeTheme';
 interface ApplyConfirmationModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (message: string) => void;
+  onConfirm: (message: string, bidPrice: number | null) => void;
   taskTitle: string;
+  budgetMin: number;
   budgetMax: number;
   salaryUnit: string;
   posterName: string;
@@ -29,36 +30,65 @@ export const ApplyConfirmationModal: React.FC<ApplyConfirmationModalProps> = ({
   onClose,
   onConfirm,
   taskTitle,
+  budgetMin,
   budgetMax,
   salaryUnit,
   posterName,
 }) => {
   const [message, setMessage] = useState('');
+  const [bidPriceText, setBidPriceText] = useState('');
+  const [bidPriceError, setBidPriceError] = useState('');
+
+  const handleClose = () => {
+    setMessage('');
+    setBidPriceText('');
+    setBidPriceError('');
+    onClose();
+  };
 
   const handleConfirm = () => {
-    onConfirm(message);
+    const rawText = bidPriceText.replace(/[^0-9]/g, '');
+    const bidPrice = rawText ? parseInt(rawText, 10) : null;
+
+    if (bidPrice !== null) {
+      if (bidPrice < budgetMin) {
+        setBidPriceError(`Giá không được thấp hơn mức tối thiểu ${formatPrice(budgetMin)}`);
+        return;
+      }
+      if (bidPrice > budgetMax) {
+        setBidPriceError(`Giá không được vượt quá mức tối đa ${formatPrice(budgetMax)}`);
+        return;
+      }
+    }
+
+    setBidPriceError('');
+    onConfirm(message, bidPrice);
     setMessage('');
+    setBidPriceText('');
   };
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('vi-VN') + ' đ';
+  const handleBidPriceChange = (text: string) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    setBidPriceText(digits);
+    if (bidPriceError) setBidPriceError('');
   };
+
+  const formatPrice = (price: number) => price.toLocaleString('vi-VN') + ' đ';
 
   const getSalaryUnitLabel = (unit: string) => {
     switch (unit) {
-      case 'PER_HOUR':
-        return '/giờ';
-      case 'PER_DAY':
-        return '/ngày';
-      case 'PER_MONTH':
-        return '/tháng';
-      default:
-        return '';
+      case 'PER_HOUR': return '/giờ';
+      case 'PER_DAY': return '/ngày';
+      case 'PER_MONTH': return '/tháng';
+      default: return '';
     }
   };
 
+  const unitLabel = getSalaryUnitLabel(salaryUnit);
+  const isSameRange = budgetMin === budgetMax;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <KeyboardAvoidingView
@@ -69,7 +99,7 @@ export const ApplyConfirmationModal: React.FC<ApplyConfirmationModalProps> = ({
               {/* Header */}
               <View style={styles.header}>
                 <Text style={styles.headerTitle}>Xác nhận ứng tuyển</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
                   <Ionicons name="close" size={22} color={HomeTheme.colors.textSecondary} />
                 </TouchableOpacity>
               </View>
@@ -79,7 +109,7 @@ export const ApplyConfirmationModal: React.FC<ApplyConfirmationModalProps> = ({
                 <Text style={styles.summaryTitle} numberOfLines={2}>
                   {taskTitle}
                 </Text>
-                
+
                 <View style={styles.divider} />
 
                 <View style={styles.infoRow}>
@@ -92,16 +122,54 @@ export const ApplyConfirmationModal: React.FC<ApplyConfirmationModalProps> = ({
                 <View style={styles.infoRow}>
                   <Ionicons name="cash-outline" size={16} color={HomeTheme.colors.primary} />
                   <Text style={styles.infoText}>
-                    Thu nhập tối đa: <Text style={styles.priceText}>{formatPrice(budgetMax)}</Text>
-                    <Text style={styles.unitText}>{getSalaryUnitLabel(salaryUnit)}</Text>
+                    Ngân sách:{' '}
+                    <Text style={styles.priceText}>
+                      {isSameRange
+                        ? `${formatPrice(budgetMax)}`
+                        : `${formatPrice(budgetMin)} – ${formatPrice(budgetMax)}`}
+                    </Text>
+                    {unitLabel ? <Text style={styles.unitText}>{unitLabel}</Text> : null}
                   </Text>
                 </View>
+              </View>
+
+              {/* Bid Price Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  Mức giá bạn muốn đề xuất{unitLabel ? ` (${unitLabel.replace('/', '')})` : ''}
+                  <Text style={styles.optionalText}> (Tuỳ chọn)</Text>
+                </Text>
+                <View style={[styles.priceInputWrapper, bidPriceError ? styles.priceInputError : null]}>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder={
+                      isSameRange
+                        ? `${budgetMax.toLocaleString('vi-VN')}`
+                        : `${budgetMin.toLocaleString('vi-VN')} – ${budgetMax.toLocaleString('vi-VN')}`
+                    }
+                    placeholderTextColor={HomeTheme.colors.textMuted}
+                    value={bidPriceText ? parseInt(bidPriceText, 10).toLocaleString('vi-VN') : ''}
+                    onChangeText={handleBidPriceChange}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.currencyLabel}>đ</Text>
+                </View>
+                {bidPriceError ? (
+                  <Text style={styles.errorText}>{bidPriceError}</Text>
+                ) : (
+                  !isSameRange && (
+                    <Text style={styles.hintText}>
+                      Trong khoảng {formatPrice(budgetMin)} – {formatPrice(budgetMax)}{unitLabel}
+                    </Text>
+                  )
+                )}
               </View>
 
               {/* Message Input */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>
-                  Lời nhắn gửi đến người tuyển dụng (Tùy chọn)
+                  Lời nhắn gửi đến người tuyển dụng
+                  <Text style={styles.optionalText}> (Tuỳ chọn)</Text>
                 </Text>
                 <TextInput
                   style={styles.messageInput}
@@ -110,14 +178,14 @@ export const ApplyConfirmationModal: React.FC<ApplyConfirmationModalProps> = ({
                   value={message}
                   onChangeText={setMessage}
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={3}
                   maxLength={500}
                 />
               </View>
 
               {/* Actions */}
               <View style={styles.actionsContainer}>
-                <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
                   <Text style={styles.cancelButtonText}>Để sau</Text>
                 </TouchableOpacity>
 
@@ -214,13 +282,53 @@ const styles = StyleSheet.create({
     color: HomeTheme.colors.textSecondary,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 13,
     fontWeight: '700',
     color: HomeTheme.colors.text,
     marginBottom: 8,
+  },
+  optionalText: {
+    fontWeight: '400',
+    color: HomeTheme.colors.textSecondary,
+    fontSize: 12,
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: HomeTheme.colors.page,
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+    borderRadius: HomeTheme.radius.small,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  priceInputError: {
+    borderColor: '#EF4444',
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: HomeTheme.colors.text,
+  },
+  currencyLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: HomeTheme.colors.textSecondary,
+    marginLeft: 4,
+  },
+  hintText: {
+    fontSize: 11,
+    color: HomeTheme.colors.textSecondary,
+    marginTop: 4,
+  },
+  errorText: {
+    fontSize: 11,
+    color: '#EF4444',
+    marginTop: 4,
   },
   messageInput: {
     backgroundColor: HomeTheme.colors.page,
@@ -230,7 +338,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     color: HomeTheme.colors.text,
-    minHeight: 80,
+    minHeight: 72,
     textAlignVertical: 'top',
   },
   actionsContainer: {

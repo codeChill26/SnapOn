@@ -113,10 +113,13 @@ const assignmentController = {
       // 3. Update assignment to CANCELLED
       await assignedTaskModel.updateStatus(id, 'CANCELLED', client);
 
-      // 4. Update task application status back to REJECTED or CANCELLED (declined)
+      // 4. Update task application status back to REJECTED (declined)
       if (assignment.application_id) {
         await taskApplicationModel.updateStatus(assignment.application_id, APPLICATION_STATUS.REJECTED, client);
       }
+
+      // 5. Refund escrow so poster's funds are unlocked and they can accept another worker
+      await escrowService.refundForTask(assignment.task_id, client);
 
       await client.query('COMMIT');
 
@@ -256,12 +259,13 @@ const assignmentController = {
       // Check if all non-cancelled assignments of this task are completed/cancelled
       const allAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
       const activeOrAssigned = allAssignments.filter(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
-      
-      // If there are no more active assignments, and the task status is IN_PROGRESS, return task to OPEN
-      if (activeOrAssigned.length === 0 && task.status === TASK_STATUS.IN_PROGRESS) {
-        await taskModel.updateStatus(task.id, TASK_STATUS.OPEN, client);
-        // Refund escrow: locked_balance → available_balance
+
+      if (activeOrAssigned.length === 0) {
+        // Refund escrow regardless of task status (covers OPEN/ASSIGNED and IN_PROGRESS cases)
         await escrowService.refundForTask(task.id, client);
+        if (task.status === TASK_STATUS.IN_PROGRESS) {
+          await taskModel.updateStatus(task.id, TASK_STATUS.OPEN, client);
+        }
       }
 
       await client.query('COMMIT');

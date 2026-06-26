@@ -162,8 +162,9 @@ const walletService = {
     // Generate unique orderCode
     const orderCode = Math.floor(Date.now() % 1000000000) + Math.floor(Math.random() * 1000);
 
-    const cancelUrl = `http://192.168.100.206:3000/api/wallet/topup/payos/cancel`;
-    const returnUrl = `http://192.168.100.206:3000/api/wallet/topup/payos/success`;
+    const backendBase = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const cancelUrl = `${backendBase}/api/wallet/topup/payos/cancel`;
+    const returnUrl = `${backendBase}/api/wallet/topup/payos/success`;
 
     const paymentData = {
       orderCode,

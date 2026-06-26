@@ -178,11 +178,12 @@ export const JobDetailScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleApplyConfirm = async (message: string) => {
+  const handleApplyConfirm = async (message: string, bidPrice: number | null) => {
     setShowApplyModal(false);
     setSubmittingApply(true);
     try {
       await applicationService.createApplication(route.params.taskId, {
+        bid_price: bidPrice ?? undefined,
         estimated_time: 'Thương lượng',
         message: message || '',
       });
@@ -871,6 +872,7 @@ export const JobDetailScreen: React.FC = () => {
         onClose={() => setShowApplyModal(false)}
         onConfirm={handleApplyConfirm}
         taskTitle={task.title}
+        budgetMin={task.budgetMin}
         budgetMax={task.budgetMax}
         salaryUnit={task.salaryUnit || 'PER_JOB'}
         posterName={task.posterName || 'N/A'}
