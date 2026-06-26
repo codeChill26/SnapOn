@@ -1,8 +1,13 @@
 
-const LOCAL_API_URL = 'http://192.168.1.5:3000/api';
+// IP máy tính trên WiFi — đặt trong mobile/.env (EXPO_PUBLIC_LOCAL_IP=192.168.x.x)
+// App sẽ tự thử local trước, fallback sang deployed nếu không kết nối được.
+const LOCAL_IP = process.env.EXPO_PUBLIC_LOCAL_IP ?? '192.168.1.5';
+
+const LOCAL_API_URL = `http://${LOCAL_IP}:3000/api`;
 const DEPLOYED_API_URL = 'https://snapon.onrender.com/api';
 
 const Config = {
+  // Giá trị khởi tạo — backendDetector sẽ cập nhật sau khi auto-detect
   API_BASE_URL: __DEV__ ? LOCAL_API_URL : DEPLOYED_API_URL,
   LOCAL_API_URL,
   DEPLOYED_API_URL,

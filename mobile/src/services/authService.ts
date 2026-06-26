@@ -3,13 +3,18 @@ import api from './api';
 import Config from '../constants/config';
 import { storage } from '../utils/storage';
 import { User } from '../types';
+import { detectBackend } from '../utils/backendDetector';
 
 // Clean axios instance without 401 interceptor — used by tokenLogin to avoid
 // race conditions with the interceptor's auto-logout during session restoration.
 const cleanApi = axios.create({
-  baseURL: Config.API_BASE_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
+});
+
+cleanApi.interceptors.request.use(async (config) => {
+  config.baseURL = await detectBackend();
+  return config;
 });
 
 export const authService = {

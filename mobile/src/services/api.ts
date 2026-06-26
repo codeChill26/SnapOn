@@ -1,9 +1,8 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'axios';
-import Config from '../constants/config';
 import { storage } from '../utils/storage';
+import { detectBackend } from '../utils/backendDetector';
 
 const api: AxiosInstance = axios.create({
-  baseURL: Config.API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -12,6 +11,7 @@ const api: AxiosInstance = axios.create({
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    config.baseURL = await detectBackend();
     const token = await storage.getToken();
     if (token) {
       config.headers = config.headers || {};
@@ -91,8 +91,9 @@ api.interceptors.response.use(
       }
 
       // Call refresh token endpoint directly using basic axios to bypass interceptors
+      const baseUrl = await detectBackend();
       const response = await axios.post<any>(
-        `${Config.API_BASE_URL}/auth/refresh`,
+        `${baseUrl}/auth/refresh`,
         { refreshToken }
       );
 

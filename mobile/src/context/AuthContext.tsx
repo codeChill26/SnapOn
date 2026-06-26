@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import axios from 'axios';
 import { Alert } from 'react-native';
 import { User, UserRole } from '../types';
 import { authService } from '../services/authService';
@@ -6,6 +7,7 @@ import { storage } from '../utils/storage';
 import { socketService } from '../services/socketService';
 import { setOnUnauthorized } from '../services/api';
 import { notificationService } from '../services/notificationService';
+import { detectBackend } from '../utils/backendDetector';
 
 interface AuthContextType {
   user: User | null;
@@ -83,22 +85,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadStoredAuth = async () => {
     try {
       const storedToken = await storage.getToken();
-      if (storedToken && !loginInProgressRef.current) {
-        // Auto-login: fetch fresh user data and wallet via tokenLogin
+      if (!storedToken || loginInProgressRef.current) return;
+
+      try {
         const { user: freshUser, wallet } = await authService.tokenLogin();
-        // Guard: if a manual login happened while we were fetching, don't overwrite
         if (!loginInProgressRef.current && mountedRef.current) {
           setToken(storedToken);
           setUser(freshUser);
-          if (wallet) {
-            await storage.setWallet(wallet);
+          if (wallet) await storage.setWallet(wallet);
+        }
+      } catch (err: any) {
+        // Access token expired — try refreshing with the stored refresh token
+        if (err?.response?.status === 401) {
+          const refreshToken = await storage.getRefreshToken();
+          if (!refreshToken) {
+            await storage.clearAll();
+            return;
           }
+          try {
+            const baseUrl = await detectBackend();
+            const refreshRes = await axios.post<any>(
+              `${baseUrl}/auth/refresh`,
+              { refreshToken }
+            );
+            const { accessToken: newAccess, refreshToken: newRefresh } = refreshRes.data;
+            await storage.setToken(newAccess);
+            await storage.setRefreshToken(newRefresh);
+
+            // Retry with the fresh access token
+            const { user: freshUser, wallet } = await authService.tokenLogin();
+            if (!loginInProgressRef.current && mountedRef.current) {
+              setToken(newAccess);
+              setUser(freshUser);
+              if (wallet) await storage.setWallet(wallet);
+            }
+          } catch {
+            // Refresh token also expired or invalid — force re-login
+            await storage.clearAll();
+          }
+        } else {
+          // Network error or server error — keep stored token, just fail silently
+          console.error('Failed to load stored auth or auto-login:', err);
         }
       }
-    } catch (error) {
-      console.error('Failed to load stored auth or auto-login:', error);
-      // If tokenLogin fails (e.g. refresh token is also expired), the interceptor
-      // will trigger setOnUnauthorized, which logs the user out cleanly.
     } finally {
       setIsLoading(false);
     }
