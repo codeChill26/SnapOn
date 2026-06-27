@@ -183,17 +183,18 @@ const resendVerification = async (req, res) => {
       }
     });
 
-    try {
-      await emailService.sendVerificationEmail(user.email, user.fullName || user.full_name, token);
+    const mailResult = await emailService.sendVerificationEmail(user.email, user.fullName || user.full_name, token);
+    if (mailResult.success) {
       return response.success(res, buildDebugOtpPayload(token), 'Mã xác thực mới đã được gửi vào email của bạn');
-    } catch (mailError) {
-      const debugPayload = buildDebugOtpPayload(token, mailError.message);
-      if (debugPayload) {
-        console.warn('[EMAIL SERVICE] Returning debug OTP because EMAIL_DEBUG_OTP=true');
-        return response.success(res, debugPayload, 'Không gửi được email, trả OTP debug để test');
-      }
-      throw mailError;
     }
+
+    const debugPayload = buildDebugOtpPayload(token, mailResult.message);
+    if (debugPayload) {
+      console.warn('[EMAIL SERVICE] Returning debug OTP because EMAIL_DEBUG_OTP=true');
+      return response.success(res, debugPayload, 'Không gửi được email, trả OTP debug để test');
+    }
+
+    return response.error(res, mailResult.message || 'Không thể gửi email xác thực lúc này. Vui lòng thử lại sau.', 500);
   } catch (error) {
     console.error('❌ Resend verification error:', error);
     return response.error(res, 'Gửi lại mã xác thực thất bại: ' + error.message, 500);

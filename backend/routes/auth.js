@@ -17,6 +17,18 @@ function buildDebugOtpPayload(token) {
   return { debugOtp: token };
 }
 
+function sendVerificationEmailInBackground(email, fullName, token, context) {
+  sendVerificationEmail(email, fullName, token)
+    .then((result) => {
+      if (!result.success) {
+        console.error(`[EMAIL SERVICE] ${context} failed: ${result.message}`);
+      }
+    })
+    .catch((err) => {
+      console.error(`[EMAIL SERVICE] ${context} unexpected failure:`, err);
+    });
+}
+
 function generateAccessToken(user) {
   return jwt.sign(
     {
@@ -150,9 +162,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         }
       });
       
-      sendVerificationEmail(user.email, user.full_name, token).catch(err => {
-        console.error('❌ Failed to send verification email during sync-user:', err);
-      });
+      sendVerificationEmailInBackground(user.email, user.full_name, token, 'sync-user verification email');
       if (isEmailDebugOtpEnabled()) {
         console.log(`[EMAIL DEBUG] Verification OTP for ${user.email}: ${token}`);
       }
@@ -300,9 +310,7 @@ router.post('/dev/register', async (req, res) => {
       }
     });
 
-    sendVerificationEmail(user.email, user.full_name, token).catch(err => {
-      console.error('❌ Failed to send verification email during dev register:', err);
-    });
+    sendVerificationEmailInBackground(user.email, user.full_name, token, 'dev-register verification email');
     if (isEmailDebugOtpEnabled()) {
       console.log(`[EMAIL DEBUG] Verification OTP for ${user.email}: ${token}`);
     }
