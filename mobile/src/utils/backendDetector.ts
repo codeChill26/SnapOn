@@ -53,11 +53,11 @@ export function detectBackend(): Promise<string> {
  * Gọi hàm này càng sớm càng tốt (App.tsx useEffect).
  */
 export function warmUpBackend(): void {
-  axios
-    .get(`${Config.DEPLOYED_API_URL}/health`, {
+  detectBackend()
+    .then((baseUrl) => axios.get(`${baseUrl}/health`, {
       timeout: 60000,
       validateStatus: () => true,
-    })
+    }))
     .then(() => console.log('[Backend] ☀️ Warm-up done'))
     .catch(() => {});
 }
