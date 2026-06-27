@@ -1,4 +1,9 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Render/runtime may resolve Gmail SMTP to IPv6 first, while the container has no
+// IPv6 route. Prefer IPv4 so smtp.gmail.com connects to an A record.
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
