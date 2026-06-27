@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CategoryPickerModal } from '../../components/categories/CategoryPickerModal';
 import { OptionSelectionModal } from '../../components/common/OptionSelectionModal';
@@ -25,11 +26,12 @@ import { DatePickerModal } from '../../components/common/DatePickerModal';
 
 import { taskService } from '../../services/taskService';
 import { categoryService } from '../../services/categoryService';
-import { JobField } from '../../constants/jobCategories';
+import { JobField, JobSubcategory } from '../../constants/jobCategories';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { AppColors } from '../../theme';
+import { useTheme } from '../../theme';
 import { Task } from '../../types';
+import { showToast } from '../../utils/toast';
 
 const WORK_MODES = [
   { label: 'Tại chỗ (Onsite)', value: 'ONSITE' },
@@ -102,6 +104,7 @@ type SelectedImage = {
 };
 
 export const PostJobScreen: React.FC = () => {
+  const theme = useTheme();
   const { addTask, updateTask } = useApp();
   const { user } = useAuth();
   const navigation = useNavigation<any>();
@@ -148,8 +151,6 @@ export const PostJobScreen: React.FC = () => {
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [categoriesList, setCategoriesList] = useState<JobField[]>([]);
-
-  // Deadline presets: 1, 3, 7, 14, 30 days or Unlimited (null)
   const [selectedDeadlinePreset, setSelectedDeadlinePreset] = useState<number | null>(null);
 
   const DEADLINE_PRESETS = [
@@ -160,6 +161,219 @@ export const PostJobScreen: React.FC = () => {
     { label: '30 ngày', value: 30 },
     { label: 'Không giới hạn', value: null },
   ];
+
+  // Inline validation logic
+  const validationErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+
+    if (title.trim() && title.length < 5) {
+      errors.title = 'Tiêu đề bài đăng phải có ít nhất 5 ký tự.';
+    }
+    if (description.trim() && description.length < 10) {
+      errors.description = 'Mô tả công việc phải có ít nhất 10 ký tự.';
+    }
+    const rawMin = getRawPrice(budgetMinInput);
+    const rawMax = getRawPrice(budgetMaxInput);
+    if (budgetMinInput && rawMin <= 0) {
+      errors.budget = 'Giá tối thiểu phải lớn hơn 0đ.';
+    } else if (budgetMaxInput && rawMax <= 0) {
+      errors.budget = 'Giá tối đa phải lớn hơn 0đ.';
+    } else if (budgetMinInput && budgetMaxInput && rawMin > rawMax) {
+      errors.budget = 'Giá tối thiểu không được lớn hơn giá tối đa.';
+    }
+    if (workMode === 'ONSITE' && !address.trim()) {
+      errors.address = 'Địa chỉ là bắt buộc khi làm việc tại chỗ.';
+    }
+    if (!contactPhone.trim()) {
+      errors.contactPhone = 'Số điện thoại liên hệ là bắt buộc.';
+    }
+    if (postType === 'RECRUITMENT') {
+      if (peopleNeeded < 1) {
+        errors.peopleNeeded = 'Cần tuyển ít nhất 1 người.';
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (startDate && startDate.getTime() < today.getTime()) {
+        errors.startDate = 'Ngày bắt đầu không được ở quá khứ.';
+      }
+    }
+
+    return errors;
+  }, [title, description, budgetMinInput, budgetMaxInput, workMode, address, postType, peopleNeeded, startDate, contactPhone]);
+
+  const isFormValid = useMemo(() => {
+    if (!title.trim() || title.length < 5) return false;
+    if (!description.trim() || description.length < 10) return false;
+    if (!fieldId || !subcategoryId) return false;
+    const rawMin = getRawPrice(budgetMinInput);
+    const rawMax = getRawPrice(budgetMaxInput);
+    if (rawMin <= 0 || rawMax <= 0 || rawMin > rawMax) return false;
+    if (workMode === 'ONSITE' && !address.trim()) return false;
+    if (!contactPhone.trim()) return false;
+    if (postType === 'RECRUITMENT') {
+      if (peopleNeeded < 1) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (startDate && startDate.getTime() < today.getTime()) return false;
+    }
+    return Object.keys(validationErrors).length === 0;
+  }, [title, description, fieldId, subcategoryId, budgetMinInput, budgetMaxInput, workMode, address, postType, peopleNeeded, contactPhone, startDate, validationErrors]);
+
+  // Load draft on mount / when postType changes
+  useEffect(() => {
+    if (isEditMode) return;
+
+    const loadDraft = async () => {
+      try {
+        const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+        const draftStr = await AsyncStorage.getItem(key);
+        if (draftStr) {
+          const draft = JSON.parse(draftStr);
+          setTitle(draft.title || '');
+          setDescription(draft.description || '');
+          setFieldId(draft.fieldId || undefined);
+          setFieldName(draft.fieldName || undefined);
+          setSubcategoryId(draft.subcategoryId || undefined);
+          setSubcategoryName(draft.subcategoryName || undefined);
+          setBudgetMinInput(draft.budgetMinInput || '');
+          setBudgetMaxInput(draft.budgetMaxInput || '');
+          setSalaryUnit(draft.salaryUnit || 'PER_JOB');
+          setWorkMode(draft.workMode || 'ONSITE');
+          setEmploymentType(draft.employmentType || 'ONE_TIME');
+          setAddress(draft.address || '');
+          setPeopleNeeded(draft.peopleNeeded || 1);
+          setContactPhone(draft.contactPhone || user?.phone || '');
+          setExperienceLevel(draft.experienceLevel || 'NO_REQUIREMENT');
+          setEducationLevel(draft.educationLevel || 'NO_REQUIREMENT');
+          setGenderRequirement(draft.genderRequirement || 'NO_REQUIREMENT');
+          setMinAge(draft.minAge ?? null);
+          setMaxAge(draft.maxAge ?? null);
+          setMinHeightCm(draft.minHeightCm ?? null);
+          setMaxHeightCm(draft.maxHeightCm ?? null);
+          setHashtags(draft.hashtags || []);
+          if (draft.startDate) {
+            setStartDate(new Date(draft.startDate));
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load draft:', e);
+      }
+    };
+    void loadDraft();
+  }, [postType, isEditMode, user]);
+
+  // Save draft periodically
+  useEffect(() => {
+    if (isEditMode) return;
+
+    const draft = {
+      title,
+      description,
+      fieldId,
+      fieldName,
+      subcategoryId,
+      subcategoryName,
+      budgetMinInput,
+      budgetMaxInput,
+      salaryUnit,
+      workMode,
+      employmentType,
+      address,
+      peopleNeeded,
+      contactPhone,
+      startDate: startDate.toISOString(),
+      experienceLevel,
+      educationLevel,
+      genderRequirement,
+      minAge,
+      maxAge,
+      minHeightCm,
+      maxHeightCm,
+      hashtags,
+    };
+
+    const timer = setTimeout(() => {
+      const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+      AsyncStorage.setItem(key, JSON.stringify(draft)).catch((e) => {
+        console.warn('Failed to save draft:', e);
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [
+    title,
+    description,
+    fieldId,
+    fieldName,
+    subcategoryId,
+    subcategoryName,
+    budgetMinInput,
+    budgetMaxInput,
+    salaryUnit,
+    workMode,
+    employmentType,
+    address,
+    peopleNeeded,
+    contactPhone,
+    startDate,
+    experienceLevel,
+    educationLevel,
+    genderRequirement,
+    minAge,
+    maxAge,
+    minHeightCm,
+    maxHeightCm,
+    hashtags,
+    postType,
+    isEditMode,
+  ]);
+
+  const handleDiscardDraft = async () => {
+    Alert.alert(
+      'Hủy bản nháp',
+      'Bạn có chắc chắn muốn xóa toàn bộ bản nháp và làm lại từ đầu?',
+      [
+        { text: 'Quay lại', style: 'cancel' },
+        {
+          text: 'Xóa bản nháp',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+              await AsyncStorage.removeItem(key);
+              
+              // Reset form states
+              setTitle('');
+              setDescription('');
+              setFieldId(undefined);
+              setFieldName(undefined);
+              setSubcategoryId(undefined);
+              setSubcategoryName(undefined);
+              setBudgetMinInput('');
+              setBudgetMaxInput('');
+              setActivePricePreset(null);
+              setAddress('');
+              setPeopleNeeded(1);
+              setHashtags([]);
+              setSelectedImages([]);
+              setExperienceLevel('NO_REQUIREMENT');
+              setEducationLevel('NO_REQUIREMENT');
+              setGenderRequirement('NO_REQUIREMENT');
+              setMinAge(null);
+              setMaxAge(null);
+              setMinHeightCm(null);
+              setMaxHeightCm(null);
+              setSelectedDeadlinePreset(null);
+              setStartDate(new Date());
+              showToast.success('Thành công', 'Đã hủy bản nháp.');
+            } catch (e) {
+              showToast.error('Lỗi', 'Không thể hủy bản nháp.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Load dynamic categories on mount
   useEffect(() => {
@@ -201,8 +415,8 @@ export const PostJobScreen: React.FC = () => {
         setBudgetMinInput(String(taskData.budgetMin || 0));
         setBudgetMaxInput(String(taskData.budgetMax || taskData.budgetMin || 0));
         setActivePricePreset(null);
-        setSalaryUnit((taskData.salaryUnit || 'PER_JOB') as 'PER_JOB' | 'PER_HOUR' | 'PER_DAY' | 'PER_MONTH');
-        setWorkMode((taskData.workMode || 'ONSITE') as 'ONSITE' | 'REMOTE' | 'NEGOTIABLE');
+        setSalaryUnit((taskData.salaryUnit || 'PER_JOB') as any);
+        setWorkMode((taskData.workMode || 'ONSITE') as any);
         setEmploymentType((taskData.employmentType || 'ONE_TIME') as any);
         setAddress(taskData.locations?.[0]?.address || '');
         setPeopleNeeded(taskData.peopleNeeded || 1);
@@ -220,7 +434,7 @@ export const PostJobScreen: React.FC = () => {
         setSelectedDeadlinePreset(null);
       } catch (error) {
         console.error('Load task for edit error:', error);
-        Alert.alert('Không tải được bài viết', 'Vui lòng thử lại sau ít phút.');
+        showToast.error('Không tải được bài viết', 'Vui lòng thử lại sau ít phút.');
         navigation.goBack();
       } finally {
         if (active) setLoading(false);
@@ -232,7 +446,7 @@ export const PostJobScreen: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [editingTaskId, navigation, user?.phone]);
+  }, [editingTaskId, navigation, user]);
 
   // Modal Visibility States
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -252,39 +466,18 @@ export const PostJobScreen: React.FC = () => {
     }
   }, [editingTaskId, route.params?.initialPostType]);
 
-  // Form Validation
-  const isFormValid = useMemo(() => {
-    if (!title.trim() || title.length < 5) return false;
-    if (!description.trim() || description.length < 10) return false;
-    if (!fieldId || !subcategoryId) return false;
-    const rawMin = getRawPrice(budgetMinInput);
-    const rawMax = getRawPrice(budgetMaxInput);
-    if (rawMin <= 0 || rawMax <= 0) return false;
-    if (rawMin > rawMax) return false;
-    if (workMode === 'ONSITE' && !address.trim()) return false;
-    if (!contactPhone.trim()) return false;
-    if (postType === 'RECRUITMENT') {
-      if (peopleNeeded < 1) return false;
-      if (!startDate) return false;
-    }
-    return true;
-  }, [title, description, fieldId, subcategoryId, budgetMinInput, budgetMaxInput, workMode, address, postType, peopleNeeded, contactPhone, startDate]);
-
-  // Toggle Post Type
   const handlePostTypeChange = (type: 'RECRUITMENT' | 'SERVICE_OFFER') => {
     if (type === postType) return;
     setPostType(type);
   };
 
-  // Stepper Handlers
-  const increasePeople = () => setPeopleNeeded(prev => prev + 1);
-  const decreasePeople = () => setPeopleNeeded(prev => Math.max(1, prev - 1));
+  const increasePeople = () => setPeopleNeeded((prev) => prev + 1);
+  const decreasePeople = () => setPeopleNeeded((prev) => Math.max(1, prev - 1));
 
-  // Pick Images
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Quyền truy cập', 'Chúng tôi cần quyền truy cập thư viện ảnh của bạn để chọn ảnh!');
+      showToast.error('Quyền truy cập', 'Chúng tôi cần quyền truy cập ảnh của bạn!');
       return;
     }
 
@@ -292,7 +485,7 @@ export const PostJobScreen: React.FC = () => {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
-        quality: 1.0, // Lấy ảnh chất lượng gốc để tự xử lý qua ImageManipulator tốt hơn
+        quality: 1.0,
         selectionLimit: 5 - selectedImages.length,
       });
 
@@ -302,7 +495,6 @@ export const PostJobScreen: React.FC = () => {
           const compressedImages = await Promise.all(
             result.assets.map(async (asset) => {
               const actions: ImageManipulator.Action[] = [];
-              // Giới hạn kích thước tối đa 1024px, giữ nguyên tỷ lệ aspect ratio
               if (asset.width > 1024 || asset.height > 1024) {
                 if (asset.width > asset.height) {
                   actions.push({ resize: { width: 1024 } });
@@ -315,7 +507,7 @@ export const PostJobScreen: React.FC = () => {
                 asset.uri,
                 actions,
                 {
-                  compress: 0.8, // Nén chất lượng về 80%
+                  compress: 0.8,
                   format: ImageManipulator.SaveFormat.JPEG,
                   base64: true,
                 }
@@ -328,109 +520,46 @@ export const PostJobScreen: React.FC = () => {
             })
           );
 
-          setSelectedImages(prev => [...prev, ...compressedImages].slice(0, 5));
+          setSelectedImages((prev) => [...prev, ...compressedImages].slice(0, 5));
         } catch (manipulateError) {
-          console.error('Lỗi khi nén ảnh với ImageManipulator:', manipulateError);
-          Alert.alert('Lỗi', 'Có lỗi xảy ra trong quá trình tối ưu hóa hình ảnh.');
+          console.error('Compress image error:', manipulateError);
+          showToast.error('Lỗi', 'Có lỗi khi tối ưu hình ảnh.');
         } finally {
           setLoading(false);
         }
       }
     } catch (err) {
-      console.error('Lỗi khi chọn ảnh:', err);
-      Alert.alert('Lỗi', 'Không thể chọn ảnh, vui lòng thử lại');
+      console.error('Pick image error:', err);
+      showToast.error('Lỗi', 'Không thể chọn ảnh');
     }
   };
 
   const removeImage = (index: number) => {
-    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Hashtags Handlers
   const addHashtag = () => {
     const cleaned = hashtagInput.replace(/^#+/, '').trim().toLowerCase();
     if (cleaned && !hashtags.includes(cleaned)) {
-      setHashtags(prev => [...prev, cleaned]);
+      setHashtags((prev) => [...prev, cleaned]);
       setHashtagInput('');
     }
   };
 
   const removeHashtag = (tag: string) => {
-    setHashtags(prev => prev.filter(t => t !== tag));
+    setHashtags((prev) => prev.filter((t) => t !== tag));
   };
 
-  // Submit Handler
   const handleSubmit = async () => {
-    // 1. Title checks
-    if (!title.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề bài viết.');
-      return;
-    }
-    if (title.trim().length < 5) {
-      Alert.alert('Thông tin không hợp lệ', 'Tiêu đề bài viết phải có ít nhất 5 ký tự.');
-      return;
-    }
-
-    // 2. Category checks
-    if (!fieldId || !subcategoryId) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn lĩnh vực công việc cụ thể.');
-      return;
-    }
-
-    // 3. Description checks
-    if (!description.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mô tả công việc.');
-      return;
-    }
-    if (description.trim().length < 10) {
-      Alert.alert('Thông tin không hợp lệ', 'Mô tả công việc phải có ít nhất 10 ký tự.');
-      return;
-    }
-
-    // 4. Price/Budget checks
-    const rawBudgetMin = getRawPrice(budgetMinInput);
-    const rawBudgetMax = getRawPrice(budgetMaxInput);
-    if (rawBudgetMin <= 0 || rawBudgetMax <= 0) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập khoảng giá tối thiểu và tối đa.');
-      return;
-    }
-    if (rawBudgetMin > rawBudgetMax) {
-      Alert.alert('Thông tin không hợp lệ', 'Giá tối thiểu không được lớn hơn giá tối đa.');
-      return;
-    }
-
-    // 5. Address check for ONSITE
-    if (workMode === 'ONSITE' && !address.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ cụ thể cho hình thức làm việc tại chỗ.');
-      return;
-    }
-
-    // 6. Contact Phone check
-    if (!contactPhone.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại liên hệ.');
-      return;
-    }
-
-    // 7. Recruitment specific checks
-    if (postType === 'RECRUITMENT') {
-      if (peopleNeeded < 1) {
-        Alert.alert('Thông tin không hợp lệ', 'Số lượng người tuyển cần ít nhất là 1 người.');
-        return;
-      }
-      if (!startDate) {
-        Alert.alert('Thiếu thông tin', 'Vui lòng chọn ngày bắt đầu công việc.');
-        return;
-      }
-    }
+    if (!isFormValid) return;
 
     setLoading(true);
-
     try {
       const existingImageUrls = selectedImages
         .filter((img) => !img.base64)
         .map((img) => img.uri);
       let uploadedImageUrls: string[] = [];
-      const base64s = selectedImages.map(img => img.base64).filter((b): b is string => !!b);
+      const base64s = selectedImages.map((img) => img.base64).filter((b): b is string => !!b);
       if (base64s.length > 0) {
         uploadedImageUrls = await taskService.uploadTaskImages(base64s);
       }
@@ -439,7 +568,9 @@ export const PostJobScreen: React.FC = () => {
       const budgetMin = getRawPrice(budgetMinInput);
       const budgetMax = getRawPrice(budgetMaxInput);
 
-      let applicationDeadline: string | null = isEditMode ? (editingTask?.applicationDeadline || null) : null;
+      let applicationDeadline: string | null = isEditMode
+        ? editingTask?.applicationDeadline || null
+        : null;
       if (postType === 'RECRUITMENT' && selectedDeadlinePreset !== null) {
         applicationDeadline = new Date(Date.now() + selectedDeadlinePreset * 86400000).toISOString();
       }
@@ -448,7 +579,7 @@ export const PostJobScreen: React.FC = () => {
         title,
         description,
         category_id: fieldId!,
-        task_type: 'ONLINE', // fallback config
+        task_type: 'ONLINE',
         budget_min: budgetMin,
         budget_max: budgetMax,
         deadline_start: new Date().toISOString(),
@@ -456,7 +587,6 @@ export const PostJobScreen: React.FC = () => {
         application_deadline: applicationDeadline,
         skill_ids: [subcategoryId!],
         images: imageUrls,
-        
         post_type: postType,
         work_mode: workMode,
         salary_unit: salaryUnit,
@@ -464,7 +594,6 @@ export const PostJobScreen: React.FC = () => {
         people_needed: postType === 'RECRUITMENT' ? peopleNeeded : null,
         contact_phone: contactPhone.trim() || null,
         start_date: postType === 'RECRUITMENT' ? startDate.toISOString() : null,
-        
         experience_level: experienceLevel,
         education_level: educationLevel,
         gender_requirement: postType === 'RECRUITMENT' ? genderRequirement : 'NO_REQUIREMENT',
@@ -473,20 +602,25 @@ export const PostJobScreen: React.FC = () => {
         min_height_cm: postType === 'RECRUITMENT' ? minHeightCm : null,
         max_height_cm: postType === 'RECRUITMENT' ? maxHeightCm : null,
         hashtags: hashtags,
-        
-        location: workMode !== 'REMOTE' && address.trim() 
-          ? {
-              location_type: 'TASK_LOCATION',
-              address: address.trim(),
-              latitude: 10.7769,
-              longitude: 106.7009,
+        location:
+          workMode !== 'REMOTE' && address.trim()
+            ? {
+                location_type: 'TASK_LOCATION',
+                address: address.trim(),
+                latitude: 10.7769,
+                longitude: 106.7009,
               }
-          : undefined,
+            : undefined,
       };
 
-      const savedTask = isEditMode && editingTaskId
-        ? await taskService.updateTask(editingTaskId, payload)
-        : await taskService.createTask(payload);
+      const savedTask =
+        isEditMode && editingTaskId
+          ? await taskService.updateTask(editingTaskId, payload)
+          : await taskService.createTask(payload);
+
+      // Clear draft on successful submit
+      const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+      await AsyncStorage.removeItem(key);
 
       if (isEditMode) {
         updateTask(savedTask.id, savedTask);
@@ -495,202 +629,299 @@ export const PostJobScreen: React.FC = () => {
         addTask(savedTask);
       }
 
-      Alert.alert('Thành công', isEditMode ? 'Bài đăng đã được cập nhật thành công!' : 'Bài đăng của bạn đã được đăng thành công!', [
-        {
-          text: 'Xem chi tiết',
-          onPress: () => {
-            navigation.navigate('JobDetail', { taskId: savedTask.id });
-          }
-        },
-        {
-          text: 'Trang chủ',
-          onPress: () => {
-            navigation.navigate('Home');
-          }
-        }
-      ]);
-
-      if (!isEditMode) {
-        // Reset form states after creating a new post only.
-        setTitle('');
-        setDescription('');
-        setFieldId(undefined);
-        setFieldName(undefined);
-        setSubcategoryId(undefined);
-        setSubcategoryName(undefined);
-        setBudgetMinInput('');
-        setBudgetMaxInput('');
-        setActivePricePreset(null);
-        setAddress('');
-        setPeopleNeeded(1);
-        setHashtags([]);
-        setSelectedImages([]);
-        setExperienceLevel('NO_REQUIREMENT');
-        setEducationLevel('NO_REQUIREMENT');
-        setGenderRequirement('NO_REQUIREMENT');
-        setMinAge(null);
-        setMaxAge(null);
-        setMinHeightCm(null);
-        setMaxHeightCm(null);
-        setSelectedDeadlinePreset(null);
-      }
+      showToast.success('Thành công', isEditMode ? 'Bài đăng đã cập nhật!' : 'Đã đăng bài thành công!');
+      navigation.navigate('JobDetail', { taskId: savedTask.id });
     } catch (err: any) {
       console.error('Submit task error:', err);
       const msg = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi lưu bài.';
-      Alert.alert(isEditMode ? 'Lỗi cập nhật bài' : 'Lỗi đăng bài', msg);
+      showToast.error(isEditMode ? 'Lỗi cập nhật' : 'Lỗi đăng bài', msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedWorkModeLabel = WORK_MODES.find(m => m.value === workMode)?.label || 'Chọn hình thức';
-  const selectedExpLabel = EXPERIENCE_LEVELS.find(m => m.value === experienceLevel)?.label || 'Không yêu cầu';
-  const selectedEduLabel = EDUCATION_LEVELS.find(m => m.value === educationLevel)?.label || 'Không yêu cầu';
-  const selectedGenderLabel = GENDER_REQUIREMENTS.find(m => m.value === genderRequirement)?.label || 'Không yêu cầu';
-  const selectedEmpLabel = EMPLOYMENT_TYPES.find(m => m.value === employmentType)?.label || 'Chọn loại công việc';
+  const selectedWorkModeLabel = WORK_MODES.find((m) => m.value === workMode)?.label || 'Chọn hình thức';
+  const selectedExpLabel = EXPERIENCE_LEVELS.find((m) => m.value === experienceLevel)?.label || 'Không yêu cầu';
+  const selectedEduLabel = EDUCATION_LEVELS.find((m) => m.value === educationLevel)?.label || 'Không yêu cầu';
+  const selectedGenderLabel = GENDER_REQUIREMENTS.find((m) => m.value === genderRequirement)?.label || 'Không yêu cầu';
+  const selectedEmpLabel = EMPLOYMENT_TYPES.find((m) => m.value === employmentType)?.label || 'Chọn loại';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background.secondary }]}>
       {/* HEADER */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.colors.background.secondary,
+            borderBottomColor: theme.colors.border.subtle,
+            paddingHorizontal: theme.spacing.lg,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
           accessibilityLabel="Đóng màn hình đăng bài"
+          accessibilityHint="Quay lại trang trước đó"
         >
-          <Ionicons name="close" size={24} color="#0F172A" />
+          <Ionicons name="close" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEditMode ? 'Chỉnh sửa bài' : 'Đăng bài mới'}</Text>
-        <TouchableOpacity
-          style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitBtnText}>{isEditMode ? 'Cập nhật' : 'Đăng bài'}</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>
+          {isEditMode ? 'Chỉnh sửa bài' : 'Đăng bài mới'}
+        </Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          {!isEditMode && (
+            <TouchableOpacity
+              onPress={handleDiscardDraft}
+              accessibilityRole="button"
+              accessibilityLabel="Hủy bản nháp"
+              accessibilityHint="Xóa toàn bộ tiến trình và làm lại từ đầu"
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: theme.spacing.sm }}
+            >
+              <Text style={{ color: theme.colors.status.error, fontWeight: '700', fontSize: 13 }}>Hủy nháp</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.submitBtn,
+              { backgroundColor: theme.colors.brand.primary },
+              (loading || !isFormValid) && [styles.submitBtnDisabled, { backgroundColor: theme.colors.border.subtle }],
+            ]}
+            onPress={handleSubmit}
+            disabled={loading || !isFormValid}
+            accessibilityRole="button"
+            accessibilityLabel={isEditMode ? 'Cập nhật bài viết' : 'Đăng bài viết mới'}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={[styles.submitBtnText, isFormValid && { color: '#FFFFFF' }]}>
+                {isEditMode ? 'Cập nhật' : 'Đăng bài'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContent}
+          style={[styles.container, { backgroundColor: theme.colors.background.primary }]}
+          contentContainerStyle={[styles.scrollContent, { padding: theme.spacing.lg }]}
           keyboardShouldPersistTaps="handled"
         >
           {/* POST TYPE SELECTOR */}
-          <View style={styles.postTypeContainer}>
+          <View
+            style={[
+              styles.postTypeContainer,
+              {
+                backgroundColor: theme.colors.background.secondary,
+                borderColor: theme.colors.border.subtle,
+                borderRadius: theme.radius.medium,
+                padding: theme.spacing.xs,
+                marginBottom: theme.spacing.lg,
+              },
+            ]}
+          >
             <TouchableOpacity
-              style={[styles.postTypeTab, postType === 'RECRUITMENT' && styles.postTypeTabActive]}
+              style={[
+                styles.postTypeTab,
+                postType === 'RECRUITMENT' && [styles.postTypeTabActive, { backgroundColor: theme.colors.brand.primary }],
+              ]}
               onPress={() => handlePostTypeChange('RECRUITMENT')}
               accessibilityState={{ selected: postType === 'RECRUITMENT' }}
+              accessibilityRole="button"
+              accessibilityLabel="Đăng tuyển dụng tìm người"
             >
-              <Text style={[styles.postTypeTabText, postType === 'RECRUITMENT' && styles.postTypeTabTextActive]}>
+              <Text
+                style={[
+                  styles.postTypeTabText,
+                  { color: theme.colors.text.secondary },
+                  postType === 'RECRUITMENT' && styles.postTypeTabTextActive,
+                ]}
+              >
                 Đăng tuyển dụng
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.postTypeTab, postType === 'SERVICE_OFFER' && styles.postTypeTabActive]}
+              style={[
+                styles.postTypeTab,
+                postType === 'SERVICE_OFFER' && [styles.postTypeTabActive, { backgroundColor: theme.colors.brand.primary }],
+              ]}
               onPress={() => handlePostTypeChange('SERVICE_OFFER')}
               accessibilityState={{ selected: postType === 'SERVICE_OFFER' }}
+              accessibilityRole="button"
+              accessibilityLabel="Đăng bài dịch vụ thuê tôi"
             >
-              <Text style={[styles.postTypeTabText, postType === 'SERVICE_OFFER' && styles.postTypeTabTextActive]}>
+              <Text
+                style={[
+                  styles.postTypeTabText,
+                  { color: theme.colors.text.secondary },
+                  postType === 'SERVICE_OFFER' && styles.postTypeTabTextActive,
+                ]}
+              >
                 Đăng bài Thuê tôi
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* GRID: LĨNH VỰC & ĐỊA ĐIỂM */}
-          <View style={styles.rowGrid}>
+          <View style={[styles.rowGrid, { marginBottom: theme.spacing.lg, gap: theme.spacing.md }]}>
             <TouchableOpacity
               style={styles.gridColumn}
               onPress={() => setCategoryModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Chọn công việc cụ thể"
             >
-              <Text style={styles.gridLabel}>Công việc *</Text>
-              <View style={styles.gridSelectorBox}>
-                <Text style={styles.gridSelectorText} numberOfLines={1}>
+              <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Công việc *</Text>
+              <View
+                style={[
+                  styles.gridSelectorBox,
+                  {
+                    backgroundColor: theme.colors.background.secondary,
+                    borderColor: theme.colors.border.subtle,
+                    borderRadius: theme.radius.small,
+                    paddingHorizontal: theme.spacing.md,
+                  },
+                ]}
+              >
+                <Text style={[styles.gridSelectorText, { color: theme.colors.text.primary }]} numberOfLines={1}>
                   {subcategoryName || 'Chọn công việc'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color="#64748B" />
+                <Ionicons name="chevron-down" size={16} color={theme.colors.text.secondary} />
               </View>
             </TouchableOpacity>
 
             <View style={styles.gridColumn}>
-              <Text style={styles.gridLabel}>Địa điểm {workMode === 'ONSITE' ? '*' : ''}</Text>
+              <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>
+                Địa điểm {workMode === 'ONSITE' ? '*' : ''}
+              </Text>
               <TextInput
-                style={styles.gridInputBox}
-                placeholder={workMode === 'REMOTE' ? 'Làm từ xa' : 'Nhập địa điểm'}
-                placeholderTextColor="#94A3B8"
+                style={[
+                  styles.gridInputBox,
+                  {
+                    backgroundColor: theme.colors.background.secondary,
+                    borderColor: validationErrors.address ? theme.colors.status.error : theme.colors.border.subtle,
+                    borderRadius: theme.radius.small,
+                    color: theme.colors.text.primary,
+                    paddingHorizontal: theme.spacing.md,
+                  },
+                  workMode === 'REMOTE' && styles.disabledSelectorBox,
+                ]}
+                placeholder={workMode === 'REMOTE' ? 'Làm từ xa (Remote)' : 'Nhập địa điểm'}
+                placeholderTextColor={theme.colors.text.muted}
                 value={address}
                 onChangeText={setAddress}
                 editable={workMode !== 'REMOTE'}
+                accessibilityLabel="Ô nhập địa điểm làm việc"
               />
+              {validationErrors.address ? (
+                <Text style={styles.inlineErrorText}>{validationErrors.address}</Text>
+              ) : null}
             </View>
           </View>
 
           {/* IMAGE PICKER */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Hình ảnh minh họa (Tối đa 5 ảnh)</Text>
+          <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary, marginBottom: theme.spacing.xs }]}>
+              Hình ảnh minh họa (Tối đa 5 ảnh)
+            </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
               {selectedImages.map((img, index) => (
-                <View key={index} style={styles.imageContainer}>
-                  <Image source={{ uri: img.uri }} style={styles.imagePreview} />
-                  <TouchableOpacity style={styles.removeImageButton} onPress={() => removeImage(index)}>
-                    <Ionicons name="close-circle" size={20} color={AppColors.status.error} />
+                <View key={index} style={[styles.imageContainer, { marginRight: theme.spacing.sm }]}>
+                  <Image source={{ uri: img.uri }} style={[styles.imagePreview, { borderRadius: theme.radius.small }]} />
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={() => removeImage(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Xóa ảnh thứ ${index + 1}`}
+                  >
+                    <Ionicons name="close-circle" size={20} color={theme.colors.status.error} />
                   </TouchableOpacity>
                 </View>
               ))}
               {selectedImages.length < 5 && (
-                <TouchableOpacity style={styles.uploadPlaceholder} onPress={pickImages}>
-                  <Ionicons name="camera-outline" size={28} color="#64748B" />
-                  <Text style={styles.uploadPlaceholderText}>Thêm ảnh</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.uploadPlaceholder,
+                    {
+                      borderColor: theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                    },
+                  ]}
+                  onPress={pickImages}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải ảnh lên minh họa"
+                >
+                  <Ionicons name="camera-outline" size={28} color={theme.colors.text.secondary} />
+                  <Text style={{ color: theme.colors.text.secondary, fontSize: 11, marginTop: 4 }}>Thêm ảnh</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
           </View>
 
           {/* TITLE */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Tiêu đề bài viết *</Text>
+          <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Tiêu đề bài viết *</Text>
             <TextInput
-              style={styles.inputBox}
-              placeholder={postType === 'RECRUITMENT' ? 'Nhập tiêu đề tuyển dụng' : 'Nhập tên dịch vụ bạn cung cấp'}
-              placeholderTextColor="#94A3B8"
+              style={[
+                styles.inputBox,
+                {
+                  backgroundColor: theme.colors.background.secondary,
+                  borderColor: validationErrors.title ? theme.colors.status.error : theme.colors.border.subtle,
+                  borderRadius: theme.radius.small,
+                  color: theme.colors.text.primary,
+                  paddingHorizontal: theme.spacing.md,
+                },
+              ]}
+              placeholder={
+                postType === 'RECRUITMENT' ? 'Ví dụ: Cần thợ sửa ống nước gấp nước rò rỉ' : 'Ví dụ: Dịch vụ dọn nhà chuyên nghiệp'
+              }
+              placeholderTextColor={theme.colors.text.muted}
               value={title}
               onChangeText={setTitle}
               maxLength={100}
+              accessibilityLabel="Ô nhập tiêu đề bài viết"
             />
-            <Text style={styles.counterText}>{title.length}/100</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+              <Text style={styles.inlineErrorText}>{validationErrors.title || ''}</Text>
+              <Text style={[styles.counterText, { color: theme.colors.text.secondary }]}>{title.length}/100</Text>
+            </View>
           </View>
 
           {/* PRICE RANGE */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Khoảng giá (VND) *</Text>
-            <Text style={styles.priceHint}>
-              Người ứng tuyển sẽ đề xuất mức giá họ muốn trong khoảng này
+          <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Khoảng ngân sách (VND) *</Text>
+            <Text style={[styles.priceHint, { color: theme.colors.text.secondary }]}>
+              Người ứng tuyển sẽ đề xuất mức giá họ mong muốn nằm trong khoảng này
             </Text>
 
-            {/* Preset chips */}
-            <View style={styles.chipsRow}>
+            <View style={[styles.chipsRow, { gap: theme.spacing.xs }]}>
               {PRICE_PRESETS.map((preset, idx) => {
                 const isActive = activePricePreset === idx;
                 return (
                   <TouchableOpacity
                     key={preset.label}
-                    style={[styles.chip, isActive && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: theme.colors.background.secondary,
+                        borderColor: theme.colors.border.subtle,
+                      },
+                      isActive && { backgroundColor: theme.colors.brand.primarySoft, borderColor: theme.colors.brand.primary },
+                    ]}
                     onPress={() => {
                       setActivePricePreset(idx);
                       setBudgetMinInput(String(preset.min));
                       setBudgetMaxInput(String(preset.max));
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Chọn khoảng giá nhanh ${preset.label}`}
                   >
-                    <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                    <Text style={[styles.chipText, { color: theme.colors.text.secondary }, isActive && { color: theme.colors.brand.primaryDark, fontWeight: '700' }]}>
                       {preset.label}
                     </Text>
                   </TouchableOpacity>
@@ -698,15 +929,23 @@ export const PostJobScreen: React.FC = () => {
               })}
             </View>
 
-            {/* Min / Max manual inputs */}
-            <View style={styles.priceRangeRow}>
+            <View style={[styles.priceRangeRow, { gap: theme.spacing.sm, marginTop: theme.spacing.md }]}>
               <View style={styles.priceInputCol}>
-                <Text style={styles.priceRangeLabel}>Tối thiểu</Text>
-                <View style={styles.priceInputWrapper}>
+                <Text style={[styles.priceRangeLabel, { color: theme.colors.text.secondary }]}>Tối thiểu</Text>
+                <View
+                  style={[
+                    styles.priceInputWrapper,
+                    {
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: validationErrors.budget ? theme.colors.status.error : theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                    },
+                  ]}
+                >
                   <TextInput
-                    style={styles.priceInput}
+                    style={[styles.priceInput, { color: theme.colors.text.primary }]}
                     placeholder="0"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={theme.colors.text.muted}
                     value={budgetMinInput ? parseInt(budgetMinInput).toLocaleString('vi-VN') : ''}
                     onChangeText={(txt) => {
                       const digits = txt.replace(/[^0-9]/g, '');
@@ -714,24 +953,30 @@ export const PostJobScreen: React.FC = () => {
                       setActivePricePreset(null);
                     }}
                     keyboardType="numeric"
+                    accessibilityLabel="Ngân sách tối thiểu"
                   />
-                  <Text style={styles.priceCurrency}>đ</Text>
+                  <Text style={[styles.priceCurrency, { color: theme.colors.text.muted }]}>đ</Text>
                 </View>
               </View>
 
-              <Text style={styles.priceRangeDash}>–</Text>
+              <Text style={[styles.priceRangeDash, { color: theme.colors.text.muted, marginTop: 22 }]}>–</Text>
 
               <View style={styles.priceInputCol}>
-                <Text style={styles.priceRangeLabel}>Tối đa</Text>
-                <View style={[
-                  styles.priceInputWrapper,
-                  budgetMinInput && budgetMaxInput && getRawPrice(budgetMinInput) > getRawPrice(budgetMaxInput)
-                    ? styles.priceInputError : null,
-                ]}>
+                <Text style={[styles.priceRangeLabel, { color: theme.colors.text.secondary }]}>Tối đa</Text>
+                <View
+                  style={[
+                    styles.priceInputWrapper,
+                    {
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: validationErrors.budget ? theme.colors.status.error : theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                    },
+                  ]}
+                >
                   <TextInput
-                    style={styles.priceInput}
+                    style={[styles.priceInput, { color: theme.colors.text.primary }]}
                     placeholder="0"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={theme.colors.text.muted}
                     value={budgetMaxInput ? parseInt(budgetMaxInput).toLocaleString('vi-VN') : ''}
                     onChangeText={(txt) => {
                       const digits = txt.replace(/[^0-9]/g, '');
@@ -739,31 +984,40 @@ export const PostJobScreen: React.FC = () => {
                       setActivePricePreset(null);
                     }}
                     keyboardType="numeric"
+                    accessibilityLabel="Ngân sách tối đa"
                   />
-                  <Text style={styles.priceCurrency}>đ</Text>
+                  <Text style={[styles.priceCurrency, { color: theme.colors.text.muted }]}>đ</Text>
                 </View>
               </View>
             </View>
-
-            {budgetMinInput && budgetMaxInput && getRawPrice(budgetMinInput) > getRawPrice(budgetMaxInput) && (
-              <Text style={styles.priceErrorText}>Giá tối thiểu không được lớn hơn giá tối đa</Text>
-            )}
+            {validationErrors.budget ? (
+              <Text style={styles.inlineErrorText}>{validationErrors.budget}</Text>
+            ) : null}
           </View>
 
           {/* CHIPS: SALARY UNIT */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Đơn vị giá *</Text>
-            <View style={styles.chipsRow}>
-              {SALARY_UNITS.map(unit => {
+          <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Đơn vị thanh toán *</Text>
+            <View style={[styles.chipsRow, { gap: theme.spacing.xs }]}>
+              {SALARY_UNITS.map((unit) => {
                 const isSelected = salaryUnit === unit.value;
                 return (
                   <TouchableOpacity
                     key={unit.value}
-                    style={[styles.chip, isSelected && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: theme.colors.background.secondary,
+                        borderColor: theme.colors.border.subtle,
+                      },
+                      isSelected && { backgroundColor: theme.colors.brand.primarySoft, borderColor: theme.colors.brand.primary },
+                    ]}
                     onPress={() => setSalaryUnit(unit.value as any)}
                     accessibilityState={{ selected: isSelected }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Đơn vị ${unit.label}`}
                   >
-                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    <Text style={[styles.chipText, { color: theme.colors.text.secondary }, isSelected && { color: theme.colors.brand.primaryDark, fontWeight: '700' }]}>
                       {unit.label}
                     </Text>
                   </TouchableOpacity>
@@ -774,48 +1028,79 @@ export const PostJobScreen: React.FC = () => {
 
           {/* CONDITIONAL: PEOPLE NEEDED & CONTACT (RECRUITMENT ONLY) */}
           {postType === 'RECRUITMENT' && (
-            <View style={styles.rowGrid}>
+            <View style={[styles.rowGrid, { marginBottom: theme.spacing.lg, gap: theme.spacing.md }]}>
               <View style={styles.gridColumn}>
-                <Text style={styles.gridLabel}>Số người tuyển *</Text>
-                <View style={styles.stepperContainer}>
-                  <TouchableOpacity style={styles.stepperBtnItem} onPress={decreasePeople}>
-                    <Ionicons name="remove" size={16} color="#0F172A" />
+                <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Số người tuyển *</Text>
+                <View
+                  style={[
+                    styles.stepperContainer,
+                    {
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                    },
+                  ]}
+                >
+                  <TouchableOpacity style={styles.stepperBtnItem} onPress={decreasePeople} accessibilityRole="button" accessibilityLabel="Giảm số người cần tuyển">
+                    <Ionicons name="remove" size={16} color={theme.colors.text.primary} />
                   </TouchableOpacity>
-                  <Text style={styles.stepperValue}>{peopleNeeded}</Text>
-                  <TouchableOpacity style={styles.stepperBtnItem} onPress={increasePeople}>
-                    <Ionicons name="add" size={16} color="#0F172A" />
+                  <Text style={[styles.stepperValue, { color: theme.colors.text.primary }]}>{peopleNeeded}</Text>
+                  <TouchableOpacity style={styles.stepperBtnItem} onPress={increasePeople} accessibilityRole="button" accessibilityLabel="Tăng số người cần tuyển">
+                    <Ionicons name="add" size={16} color={theme.colors.text.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <View style={styles.gridColumn}>
-                <Text style={styles.gridLabel}>Số điện thoại liên hệ *</Text>
+                <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Số điện thoại liên hệ *</Text>
                 <TextInput
-                  style={styles.gridInputBox}
+                  style={[
+                    styles.gridInputBox,
+                    {
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: validationErrors.contactPhone ? theme.colors.status.error : theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                      color: theme.colors.text.primary,
+                      paddingHorizontal: theme.spacing.md,
+                    },
+                  ]}
                   placeholder="09xx..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme.colors.text.muted}
                   value={contactPhone}
                   onChangeText={setContactPhone}
                   keyboardType="phone-pad"
+                  accessibilityLabel="Số điện thoại liên hệ"
                 />
+                {validationErrors.contactPhone ? (
+                  <Text style={styles.inlineErrorText}>{validationErrors.contactPhone}</Text>
+                ) : null}
               </View>
             </View>
           )}
 
           {/* DEADLINE PRESETS (RECRUITMENT ONLY) */}
           {postType === 'RECRUITMENT' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Thời hạn nhận ứng tuyển *</Text>
-              <View style={styles.chipsRow}>
-                {DEADLINE_PRESETS.map(preset => {
+            <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+              <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Thời hạn nhận ứng tuyển *</Text>
+              <View style={[styles.chipsRow, { gap: theme.spacing.xs }]}>
+                {DEADLINE_PRESETS.map((preset) => {
                   const isSelected = selectedDeadlinePreset === preset.value;
                   return (
                     <TouchableOpacity
                       key={String(preset.value)}
-                      style={[styles.chip, isSelected && styles.chipActive]}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: theme.colors.background.secondary,
+                          borderColor: theme.colors.border.subtle,
+                        },
+                        isSelected && { backgroundColor: theme.colors.brand.primarySoft, borderColor: theme.colors.brand.primary },
+                      ]}
                       onPress={() => setSelectedDeadlinePreset(preset.value)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Hạn nhận hồ sơ trong ${preset.label}`}
                     >
-                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                      <Text style={[styles.chipText, { color: theme.colors.text.secondary }, isSelected && { color: theme.colors.brand.primaryDark, fontWeight: '700' }]}>
                         {preset.label}
                       </Text>
                     </TouchableOpacity>
@@ -826,17 +1111,29 @@ export const PostJobScreen: React.FC = () => {
           )}
 
           {/* LOẠI CÔNG VIỆC & NGÀY BẮT ĐẦU HOẶC SỐ ĐIỆN THOẠI */}
-          <View style={styles.rowGrid}>
+          <View style={[styles.rowGrid, { marginBottom: theme.spacing.lg, gap: theme.spacing.md }]}>
             <TouchableOpacity
               style={styles.gridColumn}
               onPress={() => setEmploymentModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Chọn loại công việc"
             >
-              <Text style={styles.gridLabel}>Loại công việc *</Text>
-              <View style={styles.gridSelectorBox}>
-                <Text style={styles.gridSelectorText} numberOfLines={1}>
+              <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Loại công việc *</Text>
+              <View
+                style={[
+                  styles.gridSelectorBox,
+                  {
+                    backgroundColor: theme.colors.background.secondary,
+                    borderColor: theme.colors.border.subtle,
+                    borderRadius: theme.radius.small,
+                    paddingHorizontal: theme.spacing.md,
+                  },
+                ]}
+              >
+                <Text style={[styles.gridSelectorText, { color: theme.colors.text.primary }]} numberOfLines={1}>
                   {selectedEmpLabel}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color="#64748B" />
+                <Ionicons name="chevron-down" size={16} color={theme.colors.text.secondary} />
               </View>
             </TouchableOpacity>
 
@@ -844,70 +1141,139 @@ export const PostJobScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.gridColumn}
                 onPress={() => setDatePickerVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn ngày bắt đầu công việc"
               >
-                <Text style={styles.gridLabel}>Ngày bắt đầu *</Text>
-                <View style={styles.gridSelectorBox}>
-                  <Text style={styles.gridSelectorText} numberOfLines={1}>
+                <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Ngày bắt đầu *</Text>
+                <View
+                  style={[
+                    styles.gridSelectorBox,
+                    {
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: validationErrors.startDate ? theme.colors.status.error : theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                      paddingHorizontal: theme.spacing.md,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gridSelectorText, { color: theme.colors.text.primary }]} numberOfLines={1}>
                     {`${String(startDate.getDate()).padStart(2, '0')}/${String(startDate.getMonth() + 1).padStart(2, '0')}/${startDate.getFullYear()}`}
                   </Text>
-                  <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                  <Ionicons name="calendar-outline" size={16} color={theme.colors.text.secondary} />
                 </View>
+                {validationErrors.startDate ? (
+                  <Text style={styles.inlineErrorText}>{validationErrors.startDate}</Text>
+                ) : null}
               </TouchableOpacity>
             ) : (
               <View style={styles.gridColumn}>
-                <Text style={styles.gridLabel}>Số điện thoại liên hệ *</Text>
+                <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Số điện thoại liên hệ *</Text>
                 <TextInput
-                  style={styles.gridInputBox}
+                  style={[
+                    styles.gridInputBox,
+                    {
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: validationErrors.contactPhone ? theme.colors.status.error : theme.colors.border.subtle,
+                      borderRadius: theme.radius.small,
+                      color: theme.colors.text.primary,
+                      paddingHorizontal: theme.spacing.md,
+                    },
+                  ]}
                   placeholder="09xx..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme.colors.text.muted}
                   value={contactPhone}
                   onChangeText={setContactPhone}
                   keyboardType="phone-pad"
+                  accessibilityLabel="Số điện thoại liên hệ"
                 />
+                {validationErrors.contactPhone ? (
+                  <Text style={styles.inlineErrorText}>{validationErrors.contactPhone}</Text>
+                ) : null}
               </View>
             )}
           </View>
 
           {/* DESCRIPTION */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Mô tả chi tiết công việc *</Text>
+          <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Mô tả chi tiết công việc *</Text>
             <TextInput
-              style={styles.textArea}
+              style={[
+                styles.textArea,
+                {
+                  backgroundColor: theme.colors.background.secondary,
+                  borderColor: validationErrors.description ? theme.colors.status.error : theme.colors.border.subtle,
+                  borderRadius: theme.radius.small,
+                  color: theme.colors.text.primary,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingTop: theme.spacing.md,
+                },
+              ]}
               placeholder={
                 postType === 'RECRUITMENT'
-                  ? 'Nhập mô tả công việc thật chi tiết để tăng hiệu quả tuyển dụng.\nLưu ý: Không nhập thông tin liên hệ ở đây.'
-                  : 'Giới thiệu chi tiết dịch vụ, sản phẩm bàn giao, thời gian thực hiện và những gì khách hàng sẽ nhận được.'
+                  ? 'Ví dụ: Cần sửa vòi sen toilet bị rò nước liên tục ở chung cư Gold View Quận 4, hoàn thành trong chiều nay...'
+                  : 'Ví dụ: Nhận sửa chữa ống nước, điện gia dụng tận nơi. Có kinh nghiệm 5 năm...'
               }
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={theme.colors.text.muted}
               value={description}
               onChangeText={setDescription}
               multiline
               numberOfLines={6}
+              accessibilityLabel="Mô tả công việc"
             />
+            {validationErrors.description ? (
+              <Text style={styles.inlineErrorText}>{validationErrors.description}</Text>
+            ) : null}
           </View>
 
           {/* HASHTAGS */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Hashtags</Text>
-            <View style={styles.hashtagInputRow}>
+          <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Hashtags</Text>
+            <View style={[styles.hashtagInputRow, { gap: theme.spacing.xs, marginBottom: theme.spacing.sm }]}>
               <TextInput
-                style={styles.hashtagInput}
-                placeholder="Thêm hashtag mới (nhấn Thêm)"
-                placeholderTextColor="#94A3B8"
+                style={[
+                  styles.hashtagInput,
+                  {
+                    backgroundColor: theme.colors.background.secondary,
+                    borderColor: theme.colors.border.subtle,
+                    borderRadius: theme.radius.small,
+                    color: theme.colors.text.primary,
+                    paddingHorizontal: theme.spacing.md,
+                  },
+                ]}
+                placeholder="Thêm hashtag (nhấn Thêm)"
+                placeholderTextColor={theme.colors.text.muted}
                 value={hashtagInput}
                 onChangeText={setHashtagInput}
                 onSubmitEditing={addHashtag}
+                accessibilityLabel="Nhập hashtag"
               />
-              <TouchableOpacity style={styles.hashtagAddBtn} onPress={addHashtag}>
+              <TouchableOpacity
+                style={[styles.hashtagAddBtn, { backgroundColor: theme.colors.brand.primary, borderRadius: theme.radius.small }]}
+                onPress={addHashtag}
+                accessibilityRole="button"
+                accessibilityLabel="Thêm hashtag hiện tại"
+              >
                 <Text style={styles.hashtagAddText}>Thêm</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.hashtagChipsRow}>
-              {hashtags.map(tag => (
-                <View key={tag} style={styles.hashtagChip}>
-                  <Text style={styles.hashtagChipText}>#{tag}</Text>
-                  <TouchableOpacity onPress={() => removeHashtag(tag)} hitSlop={6}>
-                    <Ionicons name="close-circle" size={14} color="#64748B" />
+            <View style={[styles.hashtagChipsRow, { gap: theme.spacing.xs }]}>
+              {hashtags.map((tag) => (
+                <View
+                  key={tag}
+                  style={[
+                    styles.hashtagChip,
+                    {
+                      backgroundColor: theme.colors.brand.primarySoft,
+                      borderRadius: theme.radius.small,
+                      paddingHorizontal: theme.spacing.sm,
+                      paddingVertical: theme.spacing.xs,
+                      gap: theme.spacing.xs,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.hashtagChipText, { color: theme.colors.brand.primaryDark }]}>#{tag}</Text>
+                  <TouchableOpacity onPress={() => removeHashtag(tag)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Xóa hashtag ${tag}`}>
+                    <Ionicons name="close-circle" size={14} color={theme.colors.text.secondary} />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -915,95 +1281,180 @@ export const PostJobScreen: React.FC = () => {
           </View>
 
           {/* REQUIREMENT TABS (HORIZONTAL SCROLL) */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Yêu cầu ứng viên / Thông tin năng lực</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.reqTabsScroll}
-            >
-              {/* Work Mode */}
+          <View style={[styles.section, { marginBottom: theme.spacing.xl }]}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Yêu cầu ứng viên / Thông tin năng lực</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.reqTabsScroll, { gap: theme.spacing.xs }]}>
               <TouchableOpacity
-                style={[styles.reqTab, workMode !== 'ONSITE' && styles.reqTabActive]}
+                style={[
+                  styles.reqTab,
+                  { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
+                  workMode !== 'ONSITE' && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
+                ]}
                 onPress={() => setWorkModeModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn hình thức làm việc yêu cầu"
               >
-                <Text style={[styles.reqTabText, workMode !== 'ONSITE' && styles.reqTabTextActive]}>
-                  {workMode === 'REMOTE' ? 'Làm từ xa' : workMode === 'NEGOTIABLE' ? 'Làm linh hoạt' : 'Hình thức làm việc'}
+                <Text
+                  style={[
+                    styles.reqTabText,
+                    { color: theme.colors.text.secondary },
+                    workMode !== 'ONSITE' && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
+                  ]}
+                >
+                  {workMode === 'REMOTE' ? 'Làm từ xa' : workMode === 'NEGOTIABLE' ? 'Làm linh hoạt' : 'Hình thức'}
                 </Text>
-                <Ionicons name="chevron-down" size={14} color={workMode !== 'ONSITE' ? "#FF6B35" : "#64748B"} />
+                <Ionicons name="chevron-down" size={14} color={workMode !== 'ONSITE' ? theme.colors.brand.primary : theme.colors.text.secondary} />
               </TouchableOpacity>
 
-              {/* Experience */}
               <TouchableOpacity
-                style={[styles.reqTab, experienceLevel !== 'NO_REQUIREMENT' && styles.reqTabActive]}
+                style={[
+                  styles.reqTab,
+                  { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
+                  experienceLevel !== 'NO_REQUIREMENT' && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
+                ]}
                 onPress={() => setExperienceModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn kinh nghiệm yêu cầu"
               >
-                <Text style={[styles.reqTabText, experienceLevel !== 'NO_REQUIREMENT' && styles.reqTabTextActive]}>
+                <Text
+                  style={[
+                    styles.reqTabText,
+                    { color: theme.colors.text.secondary },
+                    experienceLevel !== 'NO_REQUIREMENT' && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
+                  ]}
+                >
                   {experienceLevel !== 'NO_REQUIREMENT' ? selectedExpLabel : 'Kinh nghiệm'}
                 </Text>
-                <Ionicons name="chevron-down" size={14} color={experienceLevel !== 'NO_REQUIREMENT' ? "#FF6B35" : "#64748B"} />
+                <Ionicons name="chevron-down" size={14} color={experienceLevel !== 'NO_REQUIREMENT' ? theme.colors.brand.primary : theme.colors.text.secondary} />
               </TouchableOpacity>
 
-              {/* Education */}
               <TouchableOpacity
-                style={[styles.reqTab, educationLevel !== 'NO_REQUIREMENT' && styles.reqTabActive]}
+                style={[
+                  styles.reqTab,
+                  { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
+                  educationLevel !== 'NO_REQUIREMENT' && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
+                ]}
                 onPress={() => setEducationModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn bằng cấp yêu cầu"
               >
-                <Text style={[styles.reqTabText, educationLevel !== 'NO_REQUIREMENT' && styles.reqTabTextActive]}>
+                <Text
+                  style={[
+                    styles.reqTabText,
+                    { color: theme.colors.text.secondary },
+                    educationLevel !== 'NO_REQUIREMENT' && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
+                  ]}
+                >
                   {educationLevel !== 'NO_REQUIREMENT' ? selectedEduLabel : 'Bằng cấp'}
                 </Text>
-                <Ionicons name="chevron-down" size={14} color={educationLevel !== 'NO_REQUIREMENT' ? "#FF6B35" : "#64748B"} />
+                <Ionicons name="chevron-down" size={14} color={educationLevel !== 'NO_REQUIREMENT' ? theme.colors.brand.primary : theme.colors.text.secondary} />
               </TouchableOpacity>
 
-              {/* Recruitment-Only Requirements */}
               {postType === 'RECRUITMENT' && (
                 <>
-                  {/* Height */}
                   <TouchableOpacity
-                    style={[styles.reqTab, (minHeightCm !== null || maxHeightCm !== null) && styles.reqTabActive]}
+                    style={[
+                      styles.reqTab,
+                      { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
+                      (minHeightCm !== null || maxHeightCm !== null) && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
+                    ]}
                     onPress={() => setHeightModalVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chọn chiều cao yêu cầu"
                   >
-                    <Text style={[styles.reqTabText, (minHeightCm !== null || maxHeightCm !== null) && styles.reqTabTextActive]}>
-                      {minHeightCm !== null || maxHeightCm !== null 
-                        ? `Cao: ${minHeightCm || 100} - ${maxHeightCm || 220}cm` 
+                    <Text
+                      style={[
+                        styles.reqTabText,
+                        { color: theme.colors.text.secondary },
+                        (minHeightCm !== null || maxHeightCm !== null) && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
+                      ]}
+                    >
+                      {minHeightCm !== null || maxHeightCm !== null
+                        ? `Cao: ${minHeightCm || 100} - ${maxHeightCm || 220}cm`
                         : 'Chiều cao'}
                     </Text>
-                    <Ionicons name="chevron-down" size={14} color={(minHeightCm !== null || maxHeightCm !== null) ? "#FF6B35" : "#64748B"} />
+                    <Ionicons name="chevron-down" size={14} color={minHeightCm !== null || maxHeightCm !== null ? theme.colors.brand.primary : theme.colors.text.secondary} />
                   </TouchableOpacity>
 
-                  {/* Gender */}
                   <TouchableOpacity
-                    style={[styles.reqTab, genderRequirement !== 'NO_REQUIREMENT' && styles.reqTabActive]}
+                    style={[
+                      styles.reqTab,
+                      { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
+                      genderRequirement !== 'NO_REQUIREMENT' && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
+                    ]}
                     onPress={() => setGenderModalVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chọn giới tính yêu cầu"
                   >
-                    <Text style={[styles.reqTabText, genderRequirement !== 'NO_REQUIREMENT' && styles.reqTabTextActive]}>
+                    <Text
+                      style={[
+                        styles.reqTabText,
+                        { color: theme.colors.text.secondary },
+                        genderRequirement !== 'NO_REQUIREMENT' && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
+                      ]}
+                    >
                       {genderRequirement !== 'NO_REQUIREMENT' ? selectedGenderLabel : 'Giới tính'}
                     </Text>
-                    <Ionicons name="chevron-down" size={14} color={genderRequirement !== 'NO_REQUIREMENT' ? "#FF6B35" : "#64748B"} />
+                    <Ionicons name="chevron-down" size={14} color={genderRequirement !== 'NO_REQUIREMENT' ? theme.colors.brand.primary : theme.colors.text.secondary} />
                   </TouchableOpacity>
 
-                  {/* Age */}
                   <TouchableOpacity
-                    style={[styles.reqTab, (minAge !== null || maxAge !== null) && styles.reqTabActive]}
+                    style={[
+                      styles.reqTab,
+                      { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
+                      (minAge !== null || maxAge !== null) && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
+                    ]}
                     onPress={() => setAgeModalVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chọn độ tuổi yêu cầu"
                   >
-                    <Text style={[styles.reqTabText, (minAge !== null || maxAge !== null) && styles.reqTabTextActive]}>
-                      {minAge !== null || maxAge !== null 
-                        ? `Tuổi: ${minAge || 15} - ${maxAge || 60}` 
-                        : 'Độ tuổi'}
+                    <Text
+                      style={[
+                        styles.reqTabText,
+                        { color: theme.colors.text.secondary },
+                        (minAge !== null || maxAge !== null) && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
+                      ]}
+                    >
+                      {minAge !== null || maxAge !== null ? `Tuổi: ${minAge || 15} - ${maxAge || 60}` : 'Độ tuổi'}
                     </Text>
-                    <Ionicons name="chevron-down" size={14} color={(minAge !== null || maxAge !== null) ? "#FF6B35" : "#64748B"} />
+                    <Ionicons name="chevron-down" size={14} color={minAge !== null || maxAge !== null ? theme.colors.brand.primary : theme.colors.text.secondary} />
                   </TouchableOpacity>
                 </>
               )}
             </ScrollView>
           </View>
+
+          {/* ERROR SUMMARY */}
+          {!isFormValid && Object.keys(validationErrors).length > 0 && (
+            <View
+              style={[
+                styles.errorSummaryCard,
+                {
+                  backgroundColor: theme.colors.status.error + '1A',
+                  borderColor: theme.colors.status.error,
+                  borderRadius: theme.radius.medium,
+                  padding: theme.spacing.md,
+                  marginBottom: theme.spacing.lg,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, marginBottom: theme.spacing.xs }}>
+                <Ionicons name="warning" size={18} color={theme.colors.status.error} />
+                <Text style={{ color: theme.colors.status.error, fontWeight: '800', fontSize: 13 }}>
+                  Vui lòng sửa các lỗi sau trước khi đăng bài:
+                </Text>
+              </View>
+              {Object.entries(validationErrors).map(([key, value]) => (
+                <Text key={key} style={{ color: theme.colors.status.error, fontSize: 12, marginLeft: 22, marginTop: 2 }}>
+                  • {value}
+                </Text>
+              ))}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* -------------------- MODALS & BOTTOM SHEETS -------------------- */}
-
-      {/* Category picker */}
+      {/* MODALS */}
       <CategoryPickerModal
         visible={categoryModalVisible}
         selectedFieldId={fieldId}
@@ -1034,7 +1485,6 @@ export const PostJobScreen: React.FC = () => {
         fields={categoriesList}
       />
 
-      {/* Work Mode Modal */}
       <OptionSelectionModal
         visible={workModeModalVisible}
         title="Hình thức làm việc"
@@ -1049,7 +1499,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setWorkModeModalVisible(false)}
       />
 
-      {/* Employment Type Modal */}
       <OptionSelectionModal
         visible={employmentModalVisible}
         title="Loại công việc"
@@ -1059,7 +1508,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setEmploymentModalVisible(false)}
       />
 
-      {/* Experience Level Modal */}
       <OptionSelectionModal
         visible={experienceModalVisible}
         title="Kinh nghiệm yêu cầu"
@@ -1069,7 +1517,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setExperienceModalVisible(false)}
       />
 
-      {/* Education Level Modal */}
       <OptionSelectionModal
         visible={educationModalVisible}
         title="Bằng cấp yêu cầu"
@@ -1079,7 +1526,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setEducationModalVisible(false)}
       />
 
-      {/* Gender Requirement Modal */}
       <OptionSelectionModal
         visible={genderModalVisible}
         title="Giới tính yêu cầu"
@@ -1089,7 +1535,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setGenderModalVisible(false)}
       />
 
-      {/* Age Range Slider Modal */}
       <RangeSelectionModal
         visible={ageModalVisible}
         title="Độ tuổi"
@@ -1105,7 +1550,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setAgeModalVisible(false)}
       />
 
-      {/* Height Range Slider Modal */}
       <RangeSelectionModal
         visible={heightModalVisible}
         title="Chiều cao"
@@ -1121,7 +1565,6 @@ export const PostJobScreen: React.FC = () => {
         onClose={() => setHeightModalVisible(false)}
       />
 
-      {/* Date Picker Modal */}
       <DatePickerModal
         visible={datePickerVisible}
         selectedDate={startDate}
@@ -1135,17 +1578,13 @@ export const PostJobScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
   },
   closeBtn: {
     width: 44,
@@ -1156,56 +1595,46 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
   },
   submitBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#FF6B35',
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 80,
+    minHeight: 36,
   },
   submitBtnDisabled: {
-    backgroundColor: '#F1F5F9',
     opacity: 0.5,
   },
   submitBtnText: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+    color: 'rgba(255,255,255,0.6)',
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
-    padding: 20,
     paddingBottom: 40,
   },
   postTypeContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   postTypeTab: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 10,
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  postTypeTabActive: {
-    backgroundColor: '#FF6B35',
-  },
+  postTypeTabActive: {},
   postTypeTabText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#64748B',
   },
   postTypeTabTextActive: {
     color: '#FFFFFF',
@@ -1213,8 +1642,6 @@ const styles = StyleSheet.create({
   },
   rowGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
   },
   gridColumn: {
     flex: 1,
@@ -1222,191 +1649,169 @@ const styles = StyleSheet.create({
   gridLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
     marginBottom: 6,
   },
   gridSelectorBox: {
     flexDirection: 'row',
     height: 48,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
   },
   disabledSelectorBox: {
     opacity: 0.5,
-    backgroundColor: '#F1F5F9',
   },
   gridSelectorText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
     flex: 1,
     marginRight: 4,
   },
   gridInputBox: {
     height: 48,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    color: '#0F172A',
-    paddingHorizontal: 12,
     fontSize: 14,
     fontWeight: '600',
   },
-  section: {
-    marginBottom: 20,
-  },
+  section: {},
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
     marginBottom: 8,
   },
   imageScroll: {
     flexDirection: 'row',
-    marginTop: 4,
   },
   imageContainer: {
     position: 'relative',
-    marginRight: 12,
+    width: 80,
+    height: 80,
   },
   imagePreview: {
     width: 80,
     height: 80,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    resizeMode: 'cover',
   },
   removeImageButton: {
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
     zIndex: 10,
   },
   uploadPlaceholder: {
     width: 80,
     height: 80,
-    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  uploadPlaceholderText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '600',
-    marginTop: 4,
+    justifyContent: 'center',
   },
   inputBox: {
     height: 48,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    color: '#0F172A',
-    paddingHorizontal: 16,
     fontSize: 14,
     fontWeight: '600',
   },
   counterText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    textAlign: 'right',
-    marginTop: 4,
+    fontSize: 11,
+    alignSelf: 'flex-end',
   },
   chipsRow: {
     flexDirection: 'row',
-    gap: 8,
     flexWrap: 'wrap',
   },
   chip: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 36,
+    justifyContent: 'center',
   },
-  chipActive: {
-    backgroundColor: '#FFF1EB',
-    borderColor: '#FF6B35',
-  },
+  chipActive: {},
   chipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
   },
-  chipTextActive: {
-    color: '#FF6B35',
+  chipTextActive: {},
+  priceRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  priceInputCol: {
+    flex: 1,
+  },
+  priceRangeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: '700',
+  },
+  priceCurrency: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  priceRangeDash: {
+    fontSize: 20,
+    fontWeight: '300',
+  },
+  inlineErrorText: {
+    fontSize: 11,
+    color: '#EF4444',
   },
   stepperContainer: {
     flexDirection: 'row',
     height: 48,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    overflow: 'hidden',
   },
   stepperBtnItem: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    width: 44,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '700',
   },
   textArea: {
-    backgroundColor: '#F8FAFC',
+    height: 120,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 16,
     fontSize: 14,
-    color: '#0F172A',
+    fontWeight: '600',
     textAlignVertical: 'top',
-    minHeight: 120,
-    lineHeight: 20,
   },
   hashtagInputRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
+    alignItems: 'center',
   },
   hashtagInput: {
     flex: 1,
-    height: 44,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    height: 48,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    color: '#0F172A',
-    paddingHorizontal: 12,
     fontSize: 13,
     fontWeight: '600',
   },
   hashtagAddBtn: {
     width: 68,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#FF6B35',
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1418,107 +1823,43 @@ const styles = StyleSheet.create({
   hashtagChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   hashtagChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFF1EB',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   hashtagChipText: {
     fontSize: 12,
-    color: '#FF6B35',
     fontWeight: '600',
   },
   reqTabsScroll: {
-    gap: 8,
     paddingVertical: 4,
   },
   reqTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     height: 48,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
   },
-  reqTabActive: {
-    borderColor: '#FF6B35',
-    backgroundColor: '#FFF1EB',
-  },
+  reqTabActive: {},
   reqTabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
   },
-  reqTabTextActive: {
-    color: '#FF6B35',
-    fontWeight: '700',
-  },
+  reqTabTextActive: {},
   priceHint: {
     fontSize: 12,
-    color: '#64748B',
     marginBottom: 12,
     lineHeight: 17,
-  },
-  priceRangeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
-  priceInputCol: {
-    flex: 1,
-  },
-  priceRangeLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  priceInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-  },
-  priceInputError: {
-    borderColor: '#EF4444',
-  },
-  priceInput: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  priceCurrency: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#94A3B8',
-    marginLeft: 4,
-  },
-  priceRangeDash: {
-    fontSize: 20,
-    fontWeight: '300',
-    color: '#94A3B8',
-    marginTop: 22,
   },
   priceErrorText: {
     fontSize: 11,
     color: '#EF4444',
     marginTop: 6,
+  },
+  errorSummaryCard: {
+    borderWidth: 1.5,
   },
 });

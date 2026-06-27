@@ -23,14 +23,14 @@ router.get(
 );
 
 // ==========================================
-// ADMIN ENDPOINTS (Role: admin)
+// ADMIN ENDPOINTS (Role: ADMIN)
 // ==========================================
 
 // GET /api/admin/banners — List all banners
 router.get(
   '/admin/banners',
   authenticate,
-  authorize('admin'),
+  authorize('ADMIN'),
   bannerController.getBanners
 );
 
@@ -38,7 +38,7 @@ router.get(
 router.get(
   '/admin/banners/:id',
   authenticate,
-  authorize('admin'),
+  authorize('ADMIN'),
   bannerValidator.bannerIdParam,
   validate,
   bannerController.getBannerById
@@ -48,7 +48,7 @@ router.get(
 router.post(
   '/admin/banners',
   authenticate,
-  authorize('admin'),
+  authorize('ADMIN'),
   bannerValidator.createBanner,
   validate,
   bannerController.createBanner
@@ -58,7 +58,7 @@ router.post(
 router.put(
   '/admin/banners/:id',
   authenticate,
-  authorize('admin'),
+  authorize('ADMIN'),
   bannerValidator.updateBanner,
   validate,
   bannerController.updateBanner
@@ -68,7 +68,7 @@ router.put(
 router.patch(
   '/admin/banners/:id/status',
   authenticate,
-  authorize('admin'),
+  authorize('ADMIN'),
   bannerValidator.updateStatus,
   validate,
   bannerController.updateStatus
@@ -78,7 +78,7 @@ router.patch(
 router.delete(
   '/admin/banners/:id',
   authenticate,
-  authorize('admin'),
+  authorize('ADMIN'),
   bannerValidator.bannerIdParam,
   validate,
   bannerController.deleteBanner

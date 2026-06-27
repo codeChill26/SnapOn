@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../theme';
 import { Button } from '../ui/Button';
 
 interface EmptyStateProps {
@@ -16,13 +16,21 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   actionLabel,
   onAction,
 }) => {
+  const theme = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { padding: theme.spacing.xl }]}>
       <View style={styles.iconContainer}>
         <Text style={styles.icon}>📭</Text>
       </View>
-      <Text style={styles.title}>{title}</Text>
-      {message && <Text style={styles.message}>{message}</Text>}
+      <Text style={[styles.title, { color: theme.colors.text.primary, marginBottom: theme.spacing.sm }]}>
+        {title}
+      </Text>
+      {message && (
+        <Text style={[styles.message, { color: theme.colors.text.secondary, marginBottom: theme.spacing.lg }]}>
+          {message}
+        </Text>
+      )}
       {actionLabel && onAction && (
         <Button
           title={actionLabel}
@@ -41,7 +49,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
   },
   iconContainer: {
     marginBottom: 16,
@@ -52,16 +59,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 14,
-    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 16,
   },
   button: {
     minWidth: 160,

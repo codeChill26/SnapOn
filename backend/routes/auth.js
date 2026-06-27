@@ -1,11 +1,21 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 
 const pool = require('../config/db');
 const verifyFirebaseToken = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prisma');
 const redis = require('../config/redis');
+const rateLimiter = require('../middleware/rateLimiter');
+
+// Enforce JWT secrets on startup
+if (!process.env.JWT_ACCESS_SECRET) {
+  throw new Error("CRITICAL: JWT_ACCESS_SECRET environment variable is missing. App cannot start.");
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  throw new Error("CRITICAL: JWT_REFRESH_SECRET environment variable is missing. App cannot start.");
+}
 
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
 const REFRESH_TOKEN_EXPIRY_DAYS = 30; // 30 days
@@ -20,7 +30,7 @@ function generateAccessToken(user) {
       role: user.role || 'USER',
       status: user.status
     },
-    process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure',
+    process.env.JWT_ACCESS_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
   );
 }
@@ -28,7 +38,7 @@ function generateAccessToken(user) {
 function generateRefreshToken(user) {
   return jwt.sign(
     { id: user.id },
-    process.env.JWT_REFRESH_SECRET || 'snapon_jwt_refresh_secret_key_2026_secure',
+    process.env.JWT_REFRESH_SECRET,
     { expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d` }
   );
 }
@@ -60,6 +70,16 @@ async function saveRefreshToken(user, token, req) {
   return dbToken;
 }
 
+// Check dev endpoints guard
+function guardDevRoute(req, res, next) {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Dev APIs are disabled in production environment.'
+    });
+  }
+  next();
+}
 
 router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
   const client = await pool.connect();
@@ -81,7 +101,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
     const finalAvatar = picture || defaultAvatar;
 
-    // 1. Single Upsert query for User - Combines check, insert, and update into one database roundtrip
+    // 1. Single Upsert query for User
     const upsertUserQuery = `
       INSERT INTO users (
         id,
@@ -108,7 +128,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     ]);
     const user = userResult.rows[0];
 
-    // 2. Single Upsert/Select query for Wallet - Combines insert and select into one database roundtrip
+    // 2. Single Upsert/Select query for Wallet
     const upsertWalletQuery = `
       INSERT INTO wallets (
         id,
@@ -155,9 +175,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     console.error('❌ Sync user error:', error);
     try {
       await client.query('ROLLBACK');
-    } catch (rollbackErr) {
-      // Ignore rollback errors if connection already failed
-    }
+    } catch (rollbackErr) {}
 
     return res.status(500).json({
       success: false,
@@ -169,11 +187,8 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// ============================================================
 // DEV MODE LOGIN — bypasses Firebase entirely
-// ============================================================
-
-router.post('/dev/login', async (req, res) => {
+router.post('/dev/login', rateLimiter('dev-login', 5, 60), guardDevRoute, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -213,7 +228,7 @@ router.post('/dev/login', async (req, res) => {
   }
 });
 
-router.post('/dev/register', async (req, res) => {
+router.post('/dev/register', rateLimiter('dev-register', 5, 60), guardDevRoute, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -273,22 +288,78 @@ router.post('/dev/register', async (req, res) => {
   }
 });
 
+// Simple in-memory fallback cache for OTP when Redis is down/inactive
+const inMemoryOtpCache = new Map();
+
+async function setOtpCache(phone, otpData) {
+  const key = `otp:${phone}`;
+  if (redis.isActive()) {
+    await redis.set(key, JSON.stringify(otpData), 300); // 5 minutes TTL
+  } else {
+    otpData.expiresAt = Date.now() + 300 * 1000;
+    inMemoryOtpCache.set(phone, otpData);
+  }
+}
+
+async function getOtpCache(phone) {
+  const key = `otp:${phone}`;
+  if (redis.isActive()) {
+    const data = await redis.get(key);
+    return data ? JSON.parse(data) : null;
+  } else {
+    const data = inMemoryOtpCache.get(phone);
+    if (!data) return null;
+    if (Date.now() > data.expiresAt) {
+      inMemoryOtpCache.delete(phone);
+      return null;
+    }
+    return data;
+  }
+}
+
+async function delOtpCache(phone) {
+  const key = `otp:${phone}`;
+  if (redis.isActive()) {
+    await redis.del(key);
+  } else {
+    inMemoryOtpCache.delete(phone);
+  }
+}
+
+function generateRandomOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // POST /api/auth/send-otp
-router.post('/send-otp', async (req, res) => {
+router.post('/send-otp', rateLimiter('send-otp', 3, 60), async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
     }
+
+    const otp = generateRandomOTP();
+    const otpData = {
+      otp: otp,
+      retryCount: 0,
+      retryLimit: 3
+    };
+
+    await setOtpCache(phone, otpData);
     
-    // Simulate sending OTP. For testing, we use '123456' as standard OTP.
-    console.log(`📱 [OTP SERVICE] Generating OTP for ${phone}: 123456`);
+    console.log(`📱 [OTP SERVICE] Generating OTP for ${phone}: ${otp}`);
     
-    return res.status(200).json({
+    const responsePayload = {
       success: true,
       message: 'OTP sent successfully (Simulated)',
-      otp: '123456'
-    });
+    };
+    
+    // Only return OTP in API response in non-production environments
+    if (process.env.NODE_ENV !== 'production') {
+      responsePayload.otp = otp;
+    }
+    
+    return res.status(200).json(responsePayload);
   } catch (err) {
     console.error('Send OTP error:', err);
     return res.status(500).json({ success: false, message: 'Failed to send OTP' });
@@ -296,7 +367,7 @@ router.post('/send-otp', async (req, res) => {
 });
 
 // POST /api/auth/verify-otp
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', rateLimiter('verify-otp', 5, 60), async (req, res) => {
   const client = await pool.connect();
   try {
     const { phone, otp } = req.body;
@@ -304,9 +375,32 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
     }
 
-    if (otp !== '123456') {
-      return res.status(400).json({ success: false, message: 'Invalid OTP code' });
+    const otpData = await getOtpCache(phone);
+    if (!otpData) {
+      return res.status(400).json({ success: false, message: 'OTP has expired or does not exist' });
     }
+
+    if (otpData.retryCount >= otpData.retryLimit) {
+      await delOtpCache(phone);
+      return res.status(400).json({ success: false, message: 'Too many failed attempts. Please request a new OTP.' });
+    }
+
+    if (otpData.otp !== otp) {
+      otpData.retryCount += 1;
+      if (otpData.retryCount >= otpData.retryLimit) {
+        await delOtpCache(phone);
+        return res.status(400).json({ success: false, message: 'Too many failed attempts. OTP has been invalidated.' });
+      } else {
+        await setOtpCache(phone, otpData);
+        return res.status(400).json({
+          success: false,
+          message: `Invalid OTP code. ${otpData.retryLimit - otpData.retryCount} attempts remaining.`
+        });
+      }
+    }
+
+    // OTP verified successfully, clear cache
+    await delOtpCache(phone);
 
     await client.query('BEGIN');
 
@@ -410,7 +504,6 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 // POST /api/auth/token-login
-// Restores session using the Access Token verified by authenticate middleware
 router.post('/token-login', verifyFirebaseToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -437,7 +530,6 @@ router.post('/token-login', verifyFirebaseToken, async (req, res) => {
       [userId]
     );
 
-    // Standardize user object keys to camelCase for mobile
     const userResponse = {
       id: user.id,
       firebaseUid: user.firebase_uid,
@@ -464,7 +556,6 @@ router.post('/token-login', verifyFirebaseToken, async (req, res) => {
 });
 
 // POST /api/auth/refresh
-// Rotates the refresh token and issues a new access token
 router.post('/refresh', async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -477,7 +568,7 @@ router.post('/refresh', async (req, res) => {
     try {
       decoded = jwt.verify(
         refreshToken,
-        process.env.JWT_REFRESH_SECRET || 'snapon_jwt_refresh_secret_key_2026_secure'
+        process.env.JWT_REFRESH_SECRET
       );
     } catch (err) {
       return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
@@ -499,7 +590,6 @@ router.post('/refresh', async (req, res) => {
     }
 
     if (!isCacheHit) {
-      // Cache miss / fallback: check PostgreSQL
       const tokenRecord = await prisma.refreshToken.findUnique({
         where: { token: refreshToken },
         include: { user: true }
@@ -510,7 +600,6 @@ router.post('/refresh', async (req, res) => {
       }
 
       if (new Date() > new Date(tokenRecord.expiresAt)) {
-        // Clean up expired token
         await prisma.refreshToken.delete({ where: { token: refreshToken } }).catch(() => {});
         await redis.del(redisKey).catch(() => {});
         return res.status(401).json({ success: false, message: 'Refresh token has expired' });
@@ -518,7 +607,6 @@ router.post('/refresh', async (req, res) => {
 
       user = tokenRecord.user;
 
-      // Populate Redis cache back for future requests
       const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
       await redis.set(redisKey, JSON.stringify(user), ttlSeconds).catch(() => {});
     }
@@ -546,10 +634,10 @@ router.post('/refresh', async (req, res) => {
     ]);
 
     const redisPromise = (async () => {
-      await redis.del(redisKey); // Delete old token
+      await redis.del(redisKey);
       const newRedisKey = `refresh_token:${newRefreshToken}`;
       const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
-      await redis.set(newRedisKey, JSON.stringify(user), ttlSeconds); // Set new token
+      await redis.set(newRedisKey, JSON.stringify(user), ttlSeconds);
     })();
 
     await Promise.all([dbPromise, redisPromise]);
@@ -561,20 +649,19 @@ router.post('/refresh', async (req, res) => {
       refreshToken: newRefreshToken
     });
   } catch (err) {
-    console.error('❌ Refresh token error:', err);
+    console.error('❌ Token refresh error:', err);
     return res.status(500).json({ success: false, message: 'Token refresh failed', error: err.message });
   }
 });
 
 // POST /api/auth/logout
-// Revokes the refresh token from the database and Redis cache
 router.post('/logout', async (req, res) => {
   try {
     const { refreshToken } = req.body;
     if (refreshToken) {
       const dbPromise = prisma.refreshToken.delete({
         where: { token: refreshToken }
-      }).catch(() => {}); // ignore error if already deleted
+      }).catch(() => {});
 
       const redisPromise = redis.del(`refresh_token:${refreshToken}`);
 

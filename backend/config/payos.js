@@ -39,6 +39,10 @@ if (HAS_CREDENTIALS) {
         return body.data || body;
       },
     },
+    verifyPaymentWebhookData(body) {
+      console.log(`🔶 [MOCK PayOS] Verifying webhook data:`, JSON.stringify(body));
+      return body.data || body;
+    },
   };
 }
 

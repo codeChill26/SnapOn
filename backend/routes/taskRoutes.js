@@ -4,6 +4,7 @@ const authenticate = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const taskValidator = require('../validators/taskValidator');
 const taskController = require('../controllers/taskController');
+const rateLimiter = require('../middleware/rateLimiter');
 
 /**
  * Task Routes
@@ -32,6 +33,7 @@ router.get(
 router.post(
   '/upload-images',
   authenticate,
+  rateLimiter('image-upload', 10, 60),
   taskValidator.uploadImages,
   validate,
   taskController.uploadTaskImages

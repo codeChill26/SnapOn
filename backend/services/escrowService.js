@@ -12,7 +12,7 @@ function getPlatformFeeRate() {
 const escrowService = {
   /**
    * HOLD funds when a match is confirmed.
-   * - Creates or re-activates escrow row (status: HOLDING)
+   * - Creates or re-activates escrow row (status: HOLDING) for the specific task and tasker.
    * - Moves poster wallet available_balance → locked_balance
    * - Creates a wallet_transaction type=ESCROW_HOLD status=PENDING
    *
@@ -30,10 +30,10 @@ const escrowService = {
 
     const feeRate = getPlatformFeeRate();
 
-    // Lock existing escrow if any
+    // Lock existing escrow for this specific task and tasker
     const existing = await db.query(
-      'SELECT * FROM escrows WHERE task_id = $1 FOR UPDATE',
-      [taskId]
+      'SELECT * FROM escrows WHERE task_id = $1 AND tasker_id = $2 FOR UPDATE',
+      [taskId, taskerId]
     );
 
     let escrow;
@@ -47,20 +47,20 @@ const escrowService = {
       }
 
       if (prev.status === 'RELEASED') {
-        const err = new Error('Công việc này đã được hoàn thành và thanh toán.');
+        const err = new Error('Giao dịch ký quỹ của bạn với người làm này đã hoàn thành và thanh toán.');
         err.statusCode = 400;
         throw err;
       }
 
-      // status === 'REFUNDED': re-activate for new worker
+      // status === 'REFUNDED': re-activate for tasker
       const updated = await db.query(
         `UPDATE escrows
-         SET tasker_id = $2, amount = $3,
-             platform_fee_amount = ROUND($3::numeric * $4::numeric, 2),
+         SET amount = $2,
+             platform_fee_amount = ROUND($2::numeric * $3::numeric, 2),
              status = 'HOLDING'
          WHERE id = $1
          RETURNING *`,
-        [prev.id, taskerId, amt, feeRate]
+        [prev.id, amt, feeRate]
       );
       escrow = updated.rows[0];
     } else {
@@ -120,25 +120,42 @@ const escrowService = {
   },
 
   /**
-   * RELEASE escrow on task completion.
-   * - Deducts from poster locked_balance + balance (net payment settled)
-   * - Credits tasker (amount - platform_fee) into available_balance + balance
-   * - Creates ledger entries for both parties
-   * - Escrow status → RELEASED
-   *
+   * RELEASE escrow on task completion (for all escrows holding for this task).
    * Must run inside an existing transaction (db client).
    */
   async releaseForTask(taskId, db) {
     if (!db) throw new Error('releaseForTask requires a db client');
 
     const escrows = await db.query(
-      'SELECT * FROM escrows WHERE task_id = $1 FOR UPDATE',
+      "SELECT * FROM escrows WHERE task_id = $1 AND status = 'HOLDING' FOR UPDATE",
       [taskId]
     );
-    const escrow = escrows.rows[0];
-    if (!escrow) return null;
-    if (escrow.status !== 'HOLDING') return escrow;
+    
+    for (const escrow of escrows.rows) {
+      await this.releaseEscrowRecord(escrow, db);
+    }
+  },
 
+  /**
+   * RELEASE escrow for a specific tasker/worker.
+   */
+  async releaseForTasker(taskId, taskerId, db) {
+    if (!db) throw new Error('releaseForTasker requires a db client');
+
+    const escrows = await db.query(
+      "SELECT * FROM escrows WHERE task_id = $1 AND tasker_id = $2 AND status = 'HOLDING' FOR UPDATE",
+      [taskId, taskerId]
+    );
+    
+    if (escrows.rows[0]) {
+      await this.releaseEscrowRecord(escrows.rows[0], db);
+    }
+  },
+
+  /**
+   * Helper function to release a single escrow record.
+   */
+  async releaseEscrowRecord(escrow, db) {
     const amount = parseFloat(escrow.amount);
     const platformFee = parseFloat(escrow.platform_fee_amount);
     const taskerEarning = amount - platformFee;
@@ -194,30 +211,45 @@ const escrowService = {
         db
       );
     }
-
-    const released = await db.query('SELECT * FROM escrows WHERE id = $1', [escrow.id]);
-    return released.rows[0];
   },
 
   /**
-   * REFUND escrow on task cancellation or worker decline.
-   * - Moves poster locked_balance → available_balance (no net loss)
-   * - Creates REFUND ledger entry
-   * - Escrow status → REFUNDED
-   *
+   * REFUND escrow on task cancellation or worker decline (for all escrows holding for this task).
    * Must run inside an existing transaction (db client).
    */
   async refundForTask(taskId, db) {
     if (!db) throw new Error('refundForTask requires a db client');
 
     const escrows = await db.query(
-      'SELECT * FROM escrows WHERE task_id = $1 FOR UPDATE',
+      "SELECT * FROM escrows WHERE task_id = $1 AND status = 'HOLDING' FOR UPDATE",
       [taskId]
     );
-    const escrow = escrows.rows[0];
-    if (!escrow) return null;
-    if (escrow.status !== 'HOLDING') return escrow;
+    
+    for (const escrow of escrows.rows) {
+      await this.refundEscrowRecord(escrow, db);
+    }
+  },
 
+  /**
+   * REFUND escrow for a specific tasker/worker.
+   */
+  async refundForTasker(taskId, taskerId, db) {
+    if (!db) throw new Error('refundForTasker requires a db client');
+
+    const escrows = await db.query(
+      "SELECT * FROM escrows WHERE task_id = $1 AND tasker_id = $2 AND status = 'HOLDING' FOR UPDATE",
+      [taskId, taskerId]
+    );
+    
+    if (escrows.rows[0]) {
+      await this.refundEscrowRecord(escrows.rows[0], db);
+    }
+  },
+
+  /**
+   * Helper function to refund a single escrow record.
+   */
+  async refundEscrowRecord(escrow, db) {
     const amount = parseFloat(escrow.amount);
 
     // Update escrow status
@@ -247,9 +279,6 @@ const escrowService = {
       },
       db
     );
-
-    const refunded = await db.query('SELECT * FROM escrows WHERE id = $1', [escrow.id]);
-    return refunded.rows[0];
   },
 };
 

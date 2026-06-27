@@ -51,6 +51,14 @@ const cacheService = {
    */
   async del(key) {
     return await redisService.del(key);
+  },
+
+  /**
+   * Delete keys matching a pattern from cache
+   * @param {string} pattern
+   */
+  async delByPattern(pattern) {
+    return await redisService.delByPattern(pattern);
   }
 };
 

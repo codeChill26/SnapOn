@@ -4,6 +4,7 @@ const authenticate = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { body, query } = require('express-validator');
 const walletController = require('../controllers/walletController');
+const rateLimiter = require('../middleware/rateLimiter');
 
 /**
  * Wallet Routes
@@ -27,6 +28,7 @@ router.get(
 router.post(
   '/topup/mock',
   authenticate,
+  rateLimiter('wallet-topup', 10, 60),
   [body('amount').notEmpty().isFloat({ min: 0.01 })],
   validate,
   walletController.topupMock
@@ -39,6 +41,7 @@ router.post(
 router.post(
   '/topup/payos/create',
   authenticate,
+  rateLimiter('wallet-topup', 10, 60),
   [body('amount').notEmpty().isFloat({ min: 1000 })], // PayOS minimum is 1000 VND
   validate,
   walletController.createPayOSPaymentSession
@@ -59,6 +62,7 @@ router.get(
 router.post(
   '/withdraw',
   authenticate,
+  rateLimiter('wallet-withdraw', 5, 60),
   [
     body('amount').notEmpty().isFloat({ min: 10000 }),
     body('bankName').notEmpty().isString(),
@@ -75,6 +79,7 @@ router.post(
 router.post(
   '/topup/payos',
   authenticate,
+  rateLimiter('wallet-topup', 10, 60),
   [body('amount').notEmpty().isFloat({ min: 1000 })],
   validate,
   walletController.createPayOSPayment

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const chatController = require('../controllers/chatController');
 const authenticate = require('../middleware/auth');
+const rateLimiter = require('../middleware/rateLimiter');
 
 // All chat routes require authentication
 router.use(authenticate);
@@ -104,7 +105,7 @@ router.get('/conversations/:id/messages', chatController.getMessages);
 router.post('/conversations/:id/messages', chatController.sendMessage);
 
 // Upload chat image attachment
-router.post('/attachments/image', chatController.uploadChatImage);
+router.post('/attachments/image', rateLimiter('chat-upload', 10, 60), chatController.uploadChatImage);
 
 // Mark conversation as read
 router.post('/conversations/:id/read', chatController.markConversationAsRead);

@@ -42,24 +42,25 @@ function attachUser(req, user, res, next) {
 }
 
 // ============================================================
-// DEV MODE: Khi AUTH_MODE=dev, bỏ qua Firebase verification.
-// Chỉ cần truyền header: x-user-id = <UUID của user trong DB>
-// 
-// PRODUCTION: Khi AUTH_MODE=firebase (hoặc không set),
-// sẽ dùng Firebase ID token bình thường.
+// AUTH CONFIGURATION
 // ============================================================
 
 const FIREBASE_CONFIGURED = !!(process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID);
-
 let AUTH_MODE = process.env.AUTH_MODE || 'firebase';
 
-// Auto-fallback: if Firebase is not configured, use dev mode
 if (AUTH_MODE === 'firebase' && !FIREBASE_CONFIGURED) {
-  console.log('🔓 Firebase not configured — automatically switching to DEV MODE');
-  AUTH_MODE = 'dev';
+  throw new Error("CRITICAL: Firebase configuration missing. App cannot start.");
 }
 
-// Initialize Firebase Admin SDK (chỉ khi AUTH_MODE = firebase)
+if (!process.env.JWT_ACCESS_SECRET) {
+  throw new Error("CRITICAL: JWT_ACCESS_SECRET environment variable is missing. App cannot start.");
+}
+
+const getJwtAccessSecret = () => {
+  return process.env.JWT_ACCESS_SECRET;
+};
+
+// Initialize Firebase Admin SDK (only if AUTH_MODE = firebase)
 if (AUTH_MODE === 'firebase' && !admin.apps.length) {
   try {
     const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
@@ -84,9 +85,7 @@ if (AUTH_MODE === 'firebase' && !admin.apps.length) {
       throw new Error('Neither service account credentials nor Firebase Project ID was found in environment variables.');
     }
   } catch (err) {
-    console.warn('⚠️  Firebase Admin SDK not initialized:', err.message);
-    console.warn('   Automatically falling back to DEV MODE');
-    AUTH_MODE = 'dev';
+    throw new Error(`CRITICAL: Firebase Admin SDK failed to initialize: ${err.message}`);
   }
 }
 
@@ -97,16 +96,6 @@ if (AUTH_MODE === 'dev') {
 
 /**
  * Authentication Middleware
- * 
- * DEV MODE (AUTH_MODE=dev):
- *   - Đọc user ID từ header: x-user-id
- *   - Tìm user trong DB, attach vào req.user
- *   - Không cần Firebase token
- * 
- * PRODUCTION (AUTH_MODE=firebase):
- *   - Verify Firebase ID token từ Authorization: Bearer <token>
- *   - Tìm user trong DB bằng firebase_uid
- *   - Attach user info vào req.user
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -114,31 +103,26 @@ const authenticate = async (req, res, next) => {
     // DEV MODE
     // =====================
     if (AUTH_MODE === 'dev') {
-      // 1. Try verifying custom Access Token JWT first
       const authHeader = req.headers.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split('Bearer ')[1];
         try {
-          const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+          const decoded = jwt.verify(token, getJwtAccessSecret());
           return attachUser(req, decoded, res, next);
         } catch (e) {
           if (e.name === 'TokenExpiredError') {
             return error(res, 'Token expired. Please refresh token.', 401);
           }
-          // If it looks like a JWT (wrong secret / malformed), reject immediately
           if (token.startsWith('eyJ')) {
             return error(res, 'Invalid token.', 401);
           }
-          // Not a JWT — fall through to x-user-id / UUID-as-bearer dev mode
         }
       }
 
-      // For sync-user in dev mode: decode Firebase JWT from body (no verification)
       const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
       if (isSyncUser) {
         const firebaseToken = req.body?.firebaseToken;
         if (firebaseToken) {
-          // Handle mock-firebase-token (used by Google login mock & dev testing)
           if (firebaseToken.startsWith('mock-firebase-token')) {
             const email = firebaseToken.split(':')[1] || 'mock-user@example.com';
             req.firebaseUser = {
@@ -161,10 +145,9 @@ const authenticate = async (req, res, next) => {
             };
             return next();
           } catch (e) {
-            // JWT decode failed, fall through
+            // fall through
           }
         }
-        // No token in body, try x-user-id
         const fallbackId = req.headers['x-user-id'];
         if (fallbackId) {
           const user = await findUserById(fallbackId);
@@ -174,8 +157,6 @@ const authenticate = async (req, res, next) => {
       }
 
       let userId = req.headers['x-user-id'];
-
-      // Fallback: use Bearer token as user ID (in dev mode, token = user UUID)
       if (!userId) {
         const authHeader = req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -199,7 +180,6 @@ const authenticate = async (req, res, next) => {
     // =====================
     const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
     
-    // For sync-user, we verify the Firebase ID Token
     if (isSyncUser) {
       let token = req.body?.firebaseToken;
       const authHeader = req.headers.authorization;
@@ -230,7 +210,6 @@ const authenticate = async (req, res, next) => {
       return next();
     }
 
-    // For all other endpoints, verify our custom Access Token JWT
     let token;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -242,13 +221,12 @@ const authenticate = async (req, res, next) => {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+      const decoded = jwt.verify(token, getJwtAccessSecret());
       return attachUser(req, decoded, res, next);
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
         return error(res, 'Token expired. Please refresh token.', 401);
       }
-      // If custom JWT fails, check if it's a legacy Firebase ID Token for backward compatibility during transition
       try {
         let decodedFirebaseToken;
         if (token.startsWith('mock-firebase-token')) {
@@ -279,12 +257,10 @@ const authenticate = async (req, res, next) => {
 };
 
 const verifyTokenForSocket = async (token, xUserId) => {
-  // If in dev mode, we can use xUserId
   if (AUTH_MODE === 'dev') {
-    // Try to verify token as JWT first
     if (token) {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+        const decoded = jwt.verify(token, getJwtAccessSecret());
         return {
           id: decoded.id,
           firebaseUid: decoded.firebaseUid || decoded.firebase_uid,
@@ -320,14 +296,12 @@ const verifyTokenForSocket = async (token, xUserId) => {
     };
   }
 
-  // Firebase / Custom JWT mode
   if (!token) {
     throw new Error('No token provided.');
   }
 
-  // 1. Try custom Access Token JWT first
   try {
-    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure');
+    const decoded = jwt.verify(token, getJwtAccessSecret());
     if (decoded.status === 'BANNED') {
       throw new Error('User is banned.');
     }
@@ -340,7 +314,6 @@ const verifyTokenForSocket = async (token, xUserId) => {
       role: decoded.role
     };
   } catch (err) {
-    // 2. Fallback to Firebase ID Token validation (legacy support)
     let decodedToken;
     if (token.startsWith('mock-firebase-token')) {
       const email = token.split(':')[1] || 'mock-user@example.com';
@@ -381,5 +354,27 @@ const verifyTokenForSocket = async (token, xUserId) => {
   }
 };
 
+/**
+ * Middleware phân quyền (Role Authorization)
+ */
+const authorize = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return error(res, 'Access denied. User not authenticated.', 401);
+    }
+
+    const hasRole = allowedRoles.some(role => {
+      return String(req.user.role).toUpperCase() === String(role).toUpperCase();
+    });
+
+    if (!hasRole) {
+      return error(res, 'Bạn không có quyền thực hiện hành động này.', 403);
+    }
+
+    next();
+  };
+};
+
 module.exports = authenticate;
 module.exports.verifyTokenForSocket = verifyTokenForSocket;
+module.exports.authorize = authorize;

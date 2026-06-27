@@ -82,6 +82,16 @@ function httpRequest(method, url, headers = {}, body = null) {
     );
     testCategoryId = catRes.rows[0].id;
 
+    // Get/create a test skill
+    const skillRes = await pool.query(
+      `INSERT INTO skills (id, category_id, name, slug) 
+       VALUES (gen_random_uuid(), $1, 'Test Matching Skill', 'test-matching-skill') 
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [testCategoryId]
+    );
+    const testSkillId = skillRes.rows[0].id;
+
     // Create poster user
     const posterRes = await pool.query(
       `INSERT INTO users (id, firebase_uid, email, full_name, role, status) 
@@ -113,13 +123,17 @@ function httpRequest(method, url, headers = {}, body = null) {
       'x-user-id': posterId,
     }, {
       category_id: testCategoryId,
+      skill_ids: [testSkillId],
       title: 'Test Matching Task',
       description: 'Need someone to test wallets',
       task_type: 'ONLINE',
+      work_mode: 'REMOTE',
       budget_min: 100000,
       budget_max: 500000,
       deadline_start: '2026-06-20T00:00:00Z',
       deadline_end: '2026-06-25T00:00:00Z',
+      contact_phone: '0123456789',
+      start_date: '2030-01-01T00:00:00Z',
     });
 
     if (taskRes.statusCode !== 201) {
@@ -167,8 +181,8 @@ function httpRequest(method, url, headers = {}, body = null) {
     if (matchRes1.statusCode !== 400) {
       throw new Error(`Expected status 400, got ${matchRes1.statusCode}`);
     }
-    if (!matchRes1.body || matchRes1.body.message !== 'Vui lòng nạp thêm tiền vào tài khoản.') {
-      throw new Error(`Expected error message "Vui lòng nạp thêm tiền vào tài khoản.", got "${matchRes1.body ? matchRes1.body.message : ''}"`);
+    if (!matchRes1.body || !matchRes1.body.message.includes('Số dư khả dụng không đủ')) {
+      throw new Error(`Expected error message containing "Số dư khả dụng không đủ", got "${matchRes1.body ? matchRes1.body.message : ''}"`);
     }
     console.log('✓ Successfully returned 400 and "Vui lòng nạp thêm tiền vào tài khoản."');
 

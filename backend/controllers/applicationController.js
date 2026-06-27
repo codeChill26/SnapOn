@@ -18,47 +18,68 @@ const applicationController = {
    * Tasker creates a bid on a task
    */
   async createApplication(req, res) {
+    const client = await pool.connect();
     try {
       const { taskId } = req.params;
       const taskerId = req.user.id;
       const { bid_price, estimated_time, message } = req.body;
 
-      // 1. Check task exists and is OPEN
-      const task = await taskModel.findById(taskId);
-      if (!task) {
+      await client.query('BEGIN');
+
+      // 1. Lock task row
+      const lockedTaskRes = await client.query(
+        'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
+        [taskId]
+      );
+      const dbTask = lockedTaskRes.rows[0];
+      if (!dbTask) {
+        await client.query('ROLLBACK');
         return error(res, 'Task not found.', 404);
       }
+      
+      const { fromDbTaskStatus } = require('../utils/dbEnum');
+      const task = {
+        ...dbTask,
+        status: fromDbTaskStatus(dbTask.status),
+      };
+
       if (task.status !== TASK_STATUS.OPEN) {
+        await client.query('ROLLBACK');
         return error(res, 'This task is no longer accepting applications.', 400);
       }
 
-      // Kiểm tra xem công việc này đã chọn được người làm chưa (chờ xác nhận ASSIGNED hoặc đang làm IN_PROGRESS)
-      const assignments = await assignedTaskModel.findListByTaskId(taskId);
+      // 2. Lock and check assignments
+      const assignments = await assignedTaskModel.findListByTaskId(taskId, client);
       const hasActiveAssignment = assignments.some(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
       if (hasActiveAssignment) {
+        await client.query('ROLLBACK');
         return error(res, 'Công việc này đã chọn được người làm và không nhận thêm ứng tuyển mới.', 400);
       }
 
-      // 2. Check tasker is not the poster
+      // 3. Check tasker is not the poster
       if (task.poster_id === taskerId) {
+        await client.query('ROLLBACK');
         return error(res, 'You cannot bid on your own task.', 400);
       }
 
-      // 3. Check tasker hasn't already applied
-      const existingApplication = await taskApplicationModel.findByTaskerAndTask(taskerId, taskId);
+      // 4. Check tasker hasn't already applied
+      const existingApplication = await taskApplicationModel.findByTaskerAndTask(taskerId, taskId, client);
       if (existingApplication) {
+        await client.query('ROLLBACK');
         return error(res, 'You have already applied to this task.', 409);
       }
 
       // Check active jobs count limit (max 3 concurrent IN_PROGRESS)
-      const activeJobsCount = await assignedTaskModel.countActiveByTaskerId(taskerId);
+      const activeJobsCount = await assignedTaskModel.countActiveByTaskerId(taskerId, client);
       if (activeJobsCount >= 3) {
+        await client.query('ROLLBACK');
         return error(res, 'Bạn không thể ứng tuyển thêm công việc mới vì hiện tại bạn đang có 3 hoặc nhiều hơn công việc ở trạng thái đang làm.', 400);
       }
 
-      // 4. Check bid_price boundaries only if provided
+      // 5. Check bid_price boundaries only if provided
       if (bid_price !== undefined && bid_price !== null) {
         if (task.budget_max !== null && task.budget_max !== undefined && parseFloat(bid_price) > parseFloat(task.budget_max)) {
+          await client.query('ROLLBACK');
           return error(
             res,
             `Bid price cannot exceed the maximum budget of ${task.budget_max}.`,
@@ -67,6 +88,7 @@ const applicationController = {
         }
 
         if (task.budget_min !== null && task.budget_min !== undefined && parseFloat(bid_price) < parseFloat(task.budget_min)) {
+          await client.query('ROLLBACK');
           return error(
             res,
             `Bid price cannot be less than the minimum budget of ${task.budget_min}.`,
@@ -76,27 +98,20 @@ const applicationController = {
       }
 
       // 6. Auto-create a minimal tasker profile if the worker doesn't have one yet.
-      //    This lets users apply immediately without a separate profile-setup step.
-      //    They can enrich their profile later from the Profile screen.
-      await taskerProfileModel.createIfNotExists(taskerId);
+      await taskerProfileModel.createIfNotExists(taskerId, client);
 
-      // 7. Check wallet balance (optional business rule)
-      // Uncomment if you want to require minimum balance to bid
-      // const balanceCheck = await walletService.verifyBalance(taskerId, bid_price);
-      // if (!balanceCheck.hasBalance) {
-      //   return error(res, balanceCheck.message, 400);
-      // }
-
-      // 8. Create the application
+      // 7. Create the application
       const application = await taskApplicationModel.create({
         taskId,
         taskerId,
         bidPrice: bid_price !== undefined ? bid_price : null,
         estimatedTime: estimated_time || null,
         message: message || null,
-      });
+      }, client);
 
-      // Broadcast new application via Socket.io to the task poster
+      await client.query('COMMIT');
+
+      // Broadcast new application via Socket.io to the task poster (outside transaction)
       const io = req.app.get('io');
       if (io) {
         io.to(task.poster_id).emit('application_joined', {
@@ -109,8 +124,11 @@ const applicationController = {
 
       return success(res, application, 'Application submitted successfully.', 201);
     } catch (err) {
+      await client.query('ROLLBACK');
       console.error('Create application error:', err);
       return error(res, 'Failed to submit application.', 500);
+    } finally {
+      client.release();
     }
   },
 
@@ -122,6 +140,11 @@ const applicationController = {
     try {
       const { taskId } = req.params;
       const userId = req.user.id;
+      const { page = 1, limit = 10 } = req.query;
+
+      const currentPage = Math.max(parseInt(page) || 1, 1);
+      const currentLimit = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
+      const offset = (currentPage - 1) * currentLimit;
 
       // Check task exists
       const task = await taskModel.findById(taskId);
@@ -134,9 +157,44 @@ const applicationController = {
         return error(res, 'You can only view applications for your own tasks.', 403);
       }
 
-      const applications = await taskApplicationModel.findByTaskId(taskId);
+      // Count total
+      const countRes = await pool.query(
+        'SELECT COUNT(*) as total FROM task_applications WHERE task_id = $1',
+        [taskId]
+      );
+      const total = parseInt(countRes.rows[0].total);
 
-      return success(res, applications, 'Applications retrieved successfully.');
+      // Paginated query
+      const result = await pool.query(
+        `SELECT ta.*,
+                u.full_name AS tasker_name, u.avatar_url AS tasker_avatar,
+                tp.average_rating, tp.bio, tp.location_text,
+                at.id AS assignment_id,
+                at.status AS assignment_status
+         FROM task_applications ta
+         JOIN users u ON ta.tasker_id = u.id
+         LEFT JOIN tasker_profiles tp ON tp.user_id = ta.tasker_id
+         LEFT JOIN assigned_tasks at ON at.application_id = ta.id
+         WHERE ta.task_id = $1
+         ORDER BY ta.id ASC
+         LIMIT $2 OFFSET $3`,
+        [taskId, currentLimit, offset]
+      );
+
+      const { fromDbApplicationStatus, fromDbAssignedTaskStatus } = require('../utils/dbEnum');
+      for (const r of result.rows) {
+        r.status = fromDbApplicationStatus(r.status);
+        if (r.assignment_status) {
+          r.assignment_status = fromDbAssignedTaskStatus(r.assignment_status);
+        }
+      }
+
+      return paginated(res, result.rows, {
+        page: currentPage,
+        limit: currentLimit,
+        total,
+        totalPages: Math.ceil(total / currentLimit)
+      }, 'Applications retrieved successfully.');
     } catch (err) {
       console.error('Get applications error:', err);
       return error(res, 'Failed to retrieve applications.', 500);
@@ -152,12 +210,55 @@ const applicationController = {
   async getMyApplications(req, res) {
     try {
       const taskerId = req.user.id;
+      const { page = 1, limit = 10 } = req.query;
 
-      const applications = await taskApplicationModel.findByTaskerId(taskerId);
+      const currentPage = Math.max(parseInt(page) || 1, 1);
+      const currentLimit = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
+      const offset = (currentPage - 1) * currentLimit;
 
-      // Derive busy flag: worker is busy if they have ≥1 application that is
-      // ACCEPTED and the related task is currently IN_PROGRESS
-      const isBusy = applications.some(
+      // Count total
+      const countRes = await pool.query(
+        'SELECT COUNT(*) as total FROM task_applications WHERE tasker_id = $1',
+        [taskerId]
+      );
+      const total = parseInt(countRes.rows[0].total);
+
+      // Paginated query
+      const result = await pool.query(
+        `SELECT ta.*,
+                t.title        AS task_title,
+                t.status       AS task_status,
+                t.post_type    AS task_post_type,
+                t.salary_unit  AS task_salary_unit,
+                t.budget_min,
+                t.budget_max,
+                t.deadline_end,
+                u.full_name    AS tasker_name,
+                u.avatar_url   AS tasker_avatar,
+                at.id          AS assignment_id,
+                at.status      AS assignment_status
+         FROM task_applications ta
+         JOIN tasks             t  ON ta.task_id  = t.id
+         JOIN users             u  ON ta.tasker_id = u.id
+         LEFT JOIN assigned_tasks at ON at.application_id = ta.id
+         WHERE ta.tasker_id = $1
+         ORDER BY t.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [taskerId, currentLimit, offset]
+      );
+
+      const { fromDbApplicationStatus, fromDbAssignedTaskStatus, fromDbTaskStatus } = require('../utils/dbEnum');
+      for (const r of result.rows) {
+        r.status = fromDbApplicationStatus(r.status);
+        r.task_status = fromDbTaskStatus(r.task_status);
+        if (r.assignment_status) {
+          r.assignment_status = fromDbAssignedTaskStatus(r.assignment_status);
+        }
+      }
+
+      // Check busy flag
+      const allApps = await taskApplicationModel.findByTaskerId(taskerId);
+      const isBusy = allApps.some(
         (app) =>
           app.status === APPLICATION_STATUS.ACCEPTED &&
           app.task_status === TASK_STATUS.IN_PROGRESS
@@ -166,7 +267,13 @@ const applicationController = {
       return res.status(200).json({
         success: true,
         message: 'My applications retrieved successfully.',
-        data: applications,
+        data: result.rows,
+        pagination: {
+          page: currentPage,
+          limit: currentLimit,
+          total,
+          totalPages: Math.ceil(total / currentLimit)
+        },
         is_busy: isBusy,
       });
     } catch (err) {

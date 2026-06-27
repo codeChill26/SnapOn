@@ -29,12 +29,45 @@ var adminRoutes = require('./routes/adminRoutes');
 const http = require('http');
 const { Server } = require('socket.io');
 
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(o => o.length > 0);
+
+if (allowedOrigins.length === 0) {
+  throw new Error('CRITICAL: ALLOWED_ORIGINS environment variable is missing or empty. App cannot start.');
+}
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: function (origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
@@ -56,10 +89,7 @@ assignmentExpiryService.startSweeper(io);
 
 // Security & CORS
 app.use(helmet());
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
+app.use(cors(corsOptions));
 
 // Response compression
 var compression = require('compression');

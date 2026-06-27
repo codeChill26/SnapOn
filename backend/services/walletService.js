@@ -67,10 +67,35 @@ const walletService = {
     });
   },
 
-  async listTransactions(userId, { limit, cursor } = {}) {
+  async listTransactions(userId, { page = 1, limit = 20 } = {}) {
     const wallet = await walletModel.createIfNotExists(userId);
-    const rows = await walletTransactionModel.listByWalletId(wallet.id, { limit, cursor });
-    return rows;
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const safeLimit = Math.max(1, Math.min(parseInt(limit) || 20, 100));
+    const offset = (currentPage - 1) * safeLimit;
+
+    const countRes = await pool.query(
+      'SELECT COUNT(*) as total FROM wallet_transactions WHERE wallet_id = $1',
+      [wallet.id]
+    );
+    const total = parseInt(countRes.rows[0].total);
+
+    const result = await pool.query(
+      `SELECT * FROM wallet_transactions
+       WHERE wallet_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [wallet.id, safeLimit, offset]
+    );
+
+    return {
+      transactions: result.rows,
+      pagination: {
+        page: currentPage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.ceil(total / safeLimit)
+      }
+    };
   },
 
   /**
@@ -201,7 +226,14 @@ const walletService = {
    * Web Flow: Webhook processor
    */
   async processPayOSWebhook(webhookBody) {
-    const webhookData = payos.webhooks.verify(webhookBody);
+    let webhookData;
+    try {
+      webhookData = await payos.webhooks.verify(webhookBody);
+    } catch (err) {
+      const error = new Error('Invalid signature');
+      error.statusCode = 401;
+      throw error;
+    }
     const { orderCode, amount, code } = webhookData;
 
     return withDbTx(async (db) => {

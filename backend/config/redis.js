@@ -110,6 +110,24 @@ const redisService = {
   },
 
   /**
+   * Delete keys matching a pattern
+   * @param {string} pattern
+   */
+  async delByPattern(pattern) {
+    if (!this.isActive()) return false;
+    try {
+      const keys = await client.keys(pattern);
+      if (keys && keys.length > 0) {
+        await client.del(keys);
+      }
+      return true;
+    } catch (err) {
+      console.error(`❌ Redis delByPattern error for pattern ${pattern}:`, err.message);
+      return false;
+    }
+  },
+
+  /**
    * Disconnect client cleanly (useful for tests)
    */
   async disconnect() {

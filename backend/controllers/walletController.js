@@ -1,5 +1,5 @@
 const walletService = require('../services/walletService');
-const { success, error } = require('../utils/responseHandler');
+const { success, error, paginated } = require('../utils/responseHandler');
 
 const walletController = {
   /**
@@ -22,9 +22,9 @@ const walletController = {
   async getMyTransactions(req, res) {
     try {
       const userId = req.user.id;
-      const { limit, cursor } = req.query;
-      const txs = await walletService.listTransactions(userId, { limit, cursor });
-      return success(res, txs, 'Wallet transactions retrieved successfully.');
+      const { page, limit } = req.query;
+      const result = await walletService.listTransactions(userId, { page, limit });
+      return paginated(res, result.transactions, result.pagination, 'Wallet transactions retrieved successfully.');
     } catch (err) {
       console.error('List wallet transactions error:', err);
       return error(res, 'Failed to retrieve wallet transactions.', 500);
@@ -92,7 +92,8 @@ const walletController = {
       return success(res, result, 'Webhook processed successfully.');
     } catch (err) {
       console.error('PayOS Webhook processing error:', err);
-      return error(res, err.message || 'Failed to process webhook.', 500);
+      // Return 401 Unauthorized for verification/signature failures
+      return error(res, err.message || 'Failed to process webhook.', 401);
     }
   },
 

@@ -7,8 +7,8 @@ const taskerProfileModel = {
   /**
    * Find tasker profile by user ID
    */
-  async findByUserId(userId) {
-    const result = await pool.query(
+  async findByUserId(userId, db = pool) {
+    const result = await db.query(
       'SELECT * FROM tasker_profiles WHERE user_id = $1',
       [userId]
     );
@@ -87,9 +87,9 @@ const taskerProfileModel = {
    * All optional fields default to NULL / 0 so the worker can apply immediately
    * and fill in their full profile later from the Profile screen.
    */
-  async createIfNotExists(userId) {
+  async createIfNotExists(userId, db = pool) {
     // ON CONFLICT DO NOTHING prevents duplicate-key errors if called concurrently
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO tasker_profiles (id, user_id, average_rating)
        VALUES (gen_random_uuid(), $1, 0)
        ON CONFLICT (user_id) DO NOTHING
@@ -98,7 +98,7 @@ const taskerProfileModel = {
     );
     // If the row already existed, fetch it
     if (result.rows.length === 0) {
-      return this.findByUserId(userId);
+      return this.findByUserId(userId, db);
     }
     return result.rows[0];
   },

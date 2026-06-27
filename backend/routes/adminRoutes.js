@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const verifyFirebaseToken = require('../middleware/auth');
+const authorize = require('../middleware/authorize');
 const pool = require('../config/db');
 
 // GET /api/admin/stats — Aggregated platform statistics
-router.get('/stats', verifyFirebaseToken, async (req, res) => {
+router.get('/stats', verifyFirebaseToken, authorize('ADMIN'), async (req, res) => {
   try {
     const [
       userStats,

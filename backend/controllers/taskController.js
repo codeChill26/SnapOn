@@ -8,6 +8,21 @@ const { fromDbTaskStatus } = require('../utils/dbEnum');
 const cacheService = require('../services/cacheService');
 
 /**
+ * Utility to invalidate task-related cache keys (details, lists, and searches)
+ * @param {string} [taskId] - Option task ID to invalidate a specific detail view cache
+ */
+async function invalidateTaskCache(taskId) {
+  try {
+    if (taskId) {
+      await cacheService.del(`tasks:detail:${taskId}`).catch(() => {});
+    }
+    await cacheService.delByPattern('tasks:list:*').catch(() => {});
+  } catch (err) {
+    console.error('Failed to invalidate task cache:', err);
+  }
+}
+
+/**
  * Task Controller — Handles task CRUD operations
  */
 const taskController = {
@@ -177,6 +192,8 @@ const taskController = {
 
       // 4. Fetch the complete task with all relations
       const fullTask = await taskModel.findById(task.id);
+
+      await invalidateTaskCache(task.id);
 
       return success(res, fullTask, 'Task created successfully.', 201);
     } catch (err) {
@@ -416,9 +433,8 @@ const taskController = {
         client.release();
       }
 
-      // Xóa cache chi tiết task khi trạng thái thay đổi
-      const detailKey = `tasks:detail:${id}`;
-      await cacheService.del(detailKey).catch(() => {});
+      // Clear task cache
+      await invalidateTaskCache(id);
 
       const updatedTask = await taskModel.findById(id);
       return success(res, updatedTask, `Task status updated to ${status}.`);
@@ -635,9 +651,8 @@ const taskController = {
         }
       }
 
-      // Xóa cache chi tiết task khi dữ liệu thay đổi
-      const detailKey = `tasks:detail:${id}`;
-      await cacheService.del(detailKey).catch(() => {});
+      // Clear task cache
+      await invalidateTaskCache(id);
 
       const fullUpdatedTask = await taskModel.findById(id);
 
@@ -671,9 +686,8 @@ const taskController = {
       // 3. Perform delete
       await taskModel.delete(id);
 
-      // Xóa cache chi tiết task khi bị xóa
-      const detailKey = `tasks:detail:${id}`;
-      await cacheService.del(detailKey).catch(() => {});
+      // Clear task cache
+      await invalidateTaskCache(id);
 
       return success(res, null, 'Task deleted successfully.');
     } catch (err) {
@@ -691,6 +705,17 @@ const taskController = {
       const { images } = req.body; // Expects { images: [ "base64...", "base64..." ] }
       if (!images || !Array.isArray(images) || images.length === 0) {
         return error(res, 'No images provided.', 400);
+      }
+
+      const { validateBase64Image } = require('../utils/fileValidator');
+
+      // Validate each image
+      for (const base64 of images) {
+        try {
+          validateBase64Image(base64, 5); // 5MB limit
+        } catch (valErr) {
+          return error(res, valErr.message, 400);
+        }
       }
 
       console.log(`Uploading ${images.length} images to Cloudinary...`);
@@ -771,34 +796,105 @@ const taskController = {
    * Close recruitment early for a task (Poster only)
    */
   async closeRecruitment(req, res) {
+    const client = await pool.connect();
     try {
       const { id } = req.params;
       const { closed_reason } = req.body;
       const userId = req.user.id;
 
-      const task = await taskModel.findById(id);
-      if (!task) {
-        return error(res, 'Task not found.', 404);
+      await client.query('BEGIN');
+
+      // 1. Lock the task row
+      const lockedTaskRes = await client.query(
+        'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
+        [id]
+      );
+      const lockedTask = lockedTaskRes.rows[0];
+      if (!lockedTask) {
+        const e = new Error('Task not found.');
+        e.statusCode = 404;
+        throw e;
       }
 
-      if (task.poster_id !== userId) {
-        return error(res, 'You can only close recruitment for your own tasks.', 403);
+      if (lockedTask.poster_id !== userId) {
+        const e = new Error('You can only close recruitment for your own tasks.');
+        e.statusCode = 403;
+        throw e;
       }
 
-      if (task.status !== TASK_STATUS.OPEN) {
-        return error(res, 'You can only close recruitment for open tasks.', 400);
+      const currentStatus = fromDbTaskStatus(lockedTask.status);
+      if (currentStatus !== TASK_STATUS.OPEN) {
+        const e = new Error('You can only close recruitment for open tasks.');
+        e.statusCode = 400;
+        throw e;
       }
 
-      const updatedTask = await taskModel.closeRecruitment(id, userId, closed_reason || null);
+      // 2. Close the task recruitment in DB
+      const updatedTask = await taskModel.closeRecruitment(id, userId, closed_reason || null, client);
 
-      // Xóa cache chi tiết task khi đóng tuyển dụng
-      const detailKey = `tasks:detail:${id}`;
-      await cacheService.del(detailKey).catch(() => {});
+      // 3. Reject pending applications
+      await client.query(
+        "UPDATE task_applications SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE task_id = $1 AND status = 'pending'",
+        [id]
+      );
+
+      // 4. Cancel assignments that haven't started yet (status = 'assigned')
+      const assignedRes = await client.query(
+        "SELECT * FROM assigned_tasks WHERE task_id = $1 AND status = 'assigned' FOR UPDATE",
+        [id]
+      );
+      const unstartedAssignments = assignedRes.rows;
+
+      for (const assoc of unstartedAssignments) {
+        // Cancel assignment
+        await client.query(
+          "UPDATE assigned_tasks SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+          [assoc.id]
+        );
+
+        // Refund escrow for this tasker
+        await escrowService.refundForTasker(id, assoc.tasker_id, client);
+      }
+
+      await client.query('COMMIT');
+
+      // Socket.io & Notifications (outside transaction)
+      const io = req.app.get('io');
+      if (io) {
+        // Notify rejected taskers
+        const rejectedAppsRes = await pool.query(
+          "SELECT tasker_id FROM task_applications WHERE task_id = $1 AND status = 'rejected'",
+          [id]
+        );
+        for (const row of rejectedAppsRes.rows) {
+          io.to(row.tasker_id).emit('application_rejected', {
+            taskId: id,
+            taskTitle: lockedTask.title,
+            reason: closed_reason || 'Recruitment closed by poster.'
+          });
+        }
+
+        // Notify cancelled taskers
+        for (const assoc of unstartedAssignments) {
+          io.to(assoc.tasker_id).emit('assignment_cancelled', {
+            taskId: id,
+            taskTitle: lockedTask.title,
+            reason: closed_reason || 'Recruitment closed by poster.'
+          });
+        }
+      }
+
+      // Clear task cache
+      await invalidateTaskCache(id);
 
       return success(res, updatedTask, 'Recruitment closed successfully.');
     } catch (err) {
+      await client.query('ROLLBACK');
       console.error('Close recruitment error:', err);
-      return error(res, 'Failed to close recruitment.', 500);
+      const statusCode = err.statusCode || 500;
+      return error(res, err.message || 'Failed to close recruitment.', statusCode);
+    } finally {
+      client.release();
     }
   },
 };

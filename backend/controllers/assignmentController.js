@@ -119,7 +119,7 @@ const assignmentController = {
       }
 
       // 5. Refund escrow so poster's funds are unlocked and they can accept another worker
-      await escrowService.refundForTask(assignment.task_id, client);
+      await escrowService.refundForTasker(assignment.task_id, assignment.tasker_id, client);
 
       await client.query('COMMIT');
 
@@ -191,8 +191,12 @@ const assignmentController = {
       // If there are no more active or pending assignments, we can set the task to COMPLETED
       if (activeOrAssigned.length === 0) {
         await taskModel.updateStatus(task.id, TASK_STATUS.COMPLETED, client);
-        // Release escrow: locked_balance → tasker
-        await escrowService.releaseForTask(task.id, client);
+        
+        // Release escrow only for completed assignments
+        const completedAssignments = allAssignments.filter(a => a.status === 'COMPLETED');
+        for (const assoc of completedAssignments) {
+          await escrowService.releaseForTasker(task.id, assoc.tasker_id, client);
+        }
       }
 
       await client.query('COMMIT');
@@ -256,13 +260,14 @@ const assignmentController = {
       // 4. Update assignment to CANCELLED
       await assignedTaskModel.updateStatus(id, 'CANCELLED', client);
 
+      // Refund escrow for this specific tasker
+      await escrowService.refundForTasker(task.id, assignment.tasker_id, client);
+
       // Check if all non-cancelled assignments of this task are completed/cancelled
       const allAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
       const activeOrAssigned = allAssignments.filter(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
 
       if (activeOrAssigned.length === 0) {
-        // Refund escrow regardless of task status (covers OPEN/ASSIGNED and IN_PROGRESS cases)
-        await escrowService.refundForTask(task.id, client);
         if (task.status === TASK_STATUS.IN_PROGRESS) {
           await taskModel.updateStatus(task.id, TASK_STATUS.OPEN, client);
         }

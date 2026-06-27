@@ -88,6 +88,7 @@ const chatController = {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+      const { page = 1, limit = 20 } = req.query;
 
       const conversation = await prisma.conversation.findUnique({
         where: { id }
@@ -101,12 +102,68 @@ const chatController = {
         return error(res, 'Access denied.', 403);
       }
 
-      const messages = await prisma.message.findMany({
-        where: { conversationId: id },
-        orderBy: { createdAt: 'asc' }
+      // Mark conversation as read
+      const isUser1 = conversation.user1Id === userId;
+      const readAt = new Date();
+      if (isUser1) {
+        await prisma.$executeRaw`
+          UPDATE conversations
+          SET user1_last_read_at = ${readAt}
+          WHERE id = ${id}::uuid
+        `;
+      } else {
+        await prisma.$executeRaw`
+          UPDATE conversations
+          SET user2_last_read_at = ${readAt}
+          WHERE id = ${id}::uuid
+        `;
+      }
+
+      const otherUserId = isUser1 ? conversation.user2Id : conversation.user1Id;
+      await prisma.message.updateMany({
+        where: {
+          conversationId: id,
+          senderId: otherUserId,
+          status: { not: 'READ' }
+        },
+        data: {
+          status: 'READ',
+          readAt
+        }
       });
 
-      return success(res, messages, 'Messages retrieved successfully.');
+      const io = req.app.get('io');
+      if (io) {
+        io.to(otherUserId).emit('conversation_read', {
+          conversationId: id,
+          readerId: userId,
+          readAt
+        });
+      }
+
+      const currentPage = Math.max(parseInt(page) || 1, 1);
+      const currentLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+      const skip = (currentPage - 1) * currentLimit;
+
+      const total = await prisma.message.count({
+        where: { conversationId: id }
+      });
+
+      const messages = await prisma.message.findMany({
+        where: { conversationId: id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: currentLimit
+      });
+
+      messages.reverse();
+
+      return paginated(res, messages, {
+        page: currentPage,
+        limit: currentLimit,
+        total,
+        totalPages: Math.ceil(total / currentLimit)
+      }, 'Messages retrieved successfully.');
     } catch (err) {
       console.error('Get messages error:', err);
       return error(res, 'Failed to retrieve messages.', 500);
@@ -160,13 +217,11 @@ const chatController = {
         }
       });
 
-      // Update conversation's updatedAt timestamp and sender's lastReadAt
-      const isUser1 = conversation.user1Id === userId;
+      // Update conversation's updatedAt timestamp
       await prisma.conversation.update({
         where: { id },
         data: {
-          updatedAt: new Date(),
-          ...(isUser1 ? { user1LastReadAt: new Date() } : { user2LastReadAt: new Date() })
+          updatedAt: new Date()
         }
       });
 
@@ -285,12 +340,11 @@ const chatController = {
         return error(res, 'No image data provided', 400);
       }
 
-      const base64Data = String(base64Image).replace(/^data:image\/[\w.+-]+;base64,/, "");
-      const buffer = Buffer.from(base64Data, 'base64');
-
-      // Validate file size (10MB)
-      if (buffer.length > 10 * 1024 * 1024) {
-        return error(res, 'File size exceeds limit (10MB)', 400);
+      const { validateBase64Image } = require('../utils/fileValidator');
+      try {
+        validateBase64Image(base64Image, 10); // 10MB limit
+      } catch (valErr) {
+        return error(res, valErr.message, 400);
       }
 
       const imageUrl = await cloudinary.uploadImage(base64Image, { folder: 'snapon_chat' });
