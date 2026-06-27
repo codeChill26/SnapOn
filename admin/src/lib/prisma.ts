@@ -15,7 +15,8 @@ if (!databaseUrl) {
 
 const pool = globalForPrisma.pool ?? new Pool({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false }
+  // SSL required for Supabase; disabled for local Docker postgres
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.pool = pool;

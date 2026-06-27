@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, StatusBar, TouchableOpacity } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView,
+  Alert, StatusBar, Image, TouchableOpacity,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
-import { AppColors } from '../../theme';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../context/AuthContext';
@@ -11,11 +13,13 @@ import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider } 
 import { auth } from '../../services/firebase';
 import Config from '../../constants/config';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 
 type LoginNavProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
+
+const ORANGE = '#FF6B35';
+const NAVY   = '#1A2B6D';
 
 interface Errors {
   email?: string;
@@ -25,28 +29,25 @@ interface Errors {
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<LoginNavProp>();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isRememberMe, setIsRememberMe] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Errors>({});
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [isRememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [errors, setErrors]         = useState<Errors>({});
 
-  // Auto-fill credentials on mount if Remember Me is active
+  // Restore saved credentials on mount (Remember Me)
   useEffect(() => {
-    const loadCredentials = async () => {
+    (async () => {
       try {
-        const savedEmail = await SecureStore.getItemAsync('snapon_remembered_email');
+        const savedEmail    = await SecureStore.getItemAsync('snapon_remembered_email');
         const savedPassword = await SecureStore.getItemAsync('snapon_remembered_password');
         if (savedEmail && savedPassword) {
           setEmail(savedEmail);
           setPassword(savedPassword);
-          setIsRememberMe(true);
+          setRememberMe(true);
         }
-      } catch (err) {
-        console.error('Failed to load secure store credentials:', err);
-      }
-    };
-    loadCredentials();
+      } catch {}
+    })();
   }, []);
 
   const clearError = (field: keyof Errors) => {
@@ -68,10 +69,9 @@ export const LoginScreen: React.FC = () => {
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const idToken = await userCredential.user.getIdToken();
+      const idToken        = await userCredential.user.getIdToken();
       await login(idToken);
 
-      // Save or clear secure credentials based on remember state
       if (isRememberMe) {
         await SecureStore.setItemAsync('snapon_remembered_email', email.trim());
         await SecureStore.setItemAsync('snapon_remembered_password', password);
@@ -80,11 +80,7 @@ export const LoginScreen: React.FC = () => {
         await SecureStore.deleteItemAsync('snapon_remembered_password');
       }
     } catch (error: any) {
-      if (
-        error.code === 'auth/user-not-found' ||
-        error.code === 'auth/wrong-password' ||
-        error.code === 'auth/invalid-credential'
-      ) {
+      if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
         setErrors({ email: ' ', password: 'Email hoặc mật khẩu không chính xác' });
       } else if (error.code === 'auth/invalid-email') {
         setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ' }));
@@ -105,39 +101,26 @@ export const LoginScreen: React.FC = () => {
       GoogleSignin.configure({ webClientId: Config.FIREBASE.webClientId });
       await GoogleSignin.hasPlayServices();
       const signInResult = await GoogleSignin.signIn();
-      if (!isSuccessResponse(signInResult)) {
-        throw new Error('Đăng nhập Google không thành công hoặc bị hủy.');
-      }
-      const idToken = signInResult.data.idToken;
-      if (!idToken) throw new Error('Không lấy được Google ID Token.');
-      const credential = GoogleAuthProvider.credential(idToken);
-      const userCredential = await signInWithCredential(auth, credential);
-      const firebaseToken = await userCredential.user.getIdToken();
-      await login(firebaseToken);
+      if (!isSuccessResponse(signInResult)) throw new Error('Đăng nhập Google không thành công.');
+      const idToken     = signInResult.data.idToken;
+      if (!idToken)     throw new Error('Không lấy được Google ID Token.');
+      const credential  = GoogleAuthProvider.credential(idToken);
+      const uc          = await signInWithCredential(auth, credential);
+      await login(await uc.user.getIdToken());
     } catch (error: any) {
-      console.error('Google Sign-In error:', error);
-      if (
-        (error.message && error.message.includes('RNGoogleSignin')) ||
-        (error.message && error.message.includes('TurboModuleRegistry'))
-      ) {
+      if (error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry')) {
         Alert.alert(
           'Chế độ Phát triển (Expo Go)',
-          'Không tìm thấy module Google Native. Bạn có muốn sử dụng tài khoản Google giả lập để test tiếp luồng API backend không?',
+          'Không tìm thấy module Google Native. Dùng tài khoản giả lập để test API?',
           [
             { text: 'Hủy', style: 'cancel' },
             {
-              text: 'Đồng ý (Test Google)',
+              text: 'Đồng ý (Test)',
               onPress: async () => {
-                setLoading(true);
                 try {
-                  const testEmail = 'developer-google@example.com';
-                  const mockToken = `mock-firebase-token:${testEmail}`;
-                  await login(mockToken);
-                  Alert.alert('Thành công', 'Đăng nhập Google giả lập thành công!');
+                  await login('mock-firebase-token:developer-google@example.com');
                 } catch (e: any) {
-                  Alert.alert('Lỗi', e.message || 'Đăng nhập giả lập thất bại');
-                } finally {
-                  setLoading(false);
+                  Alert.alert('Lỗi', e.message);
                 }
               },
             },
@@ -145,10 +128,11 @@ export const LoginScreen: React.FC = () => {
         );
         return;
       }
-      let errorMsg = error.message;
-      if (error.code === '12501') errorMsg = 'Đăng nhập Google đã bị hủy.';
-      else if (error.code === '7') errorMsg = 'Lỗi kết nối mạng.';
-      Alert.alert('Đăng nhập thất bại', errorMsg);
+      const msg =
+        error.code === '12501' ? 'Đăng nhập Google đã bị hủy.' :
+        error.code === '7'     ? 'Lỗi kết nối mạng.' :
+        error.message;
+      Alert.alert('Đăng nhập thất bại', msg);
     } finally {
       setLoading(false);
     }
@@ -162,108 +146,120 @@ export const LoginScreen: React.FC = () => {
       locations={[0.0, 0.25, 0.6, 1.0]}
       style={styles.container}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#FF6600" />
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF1EB" />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header animated entrance */}
-          <Animated.View 
-            entering={FadeInDown.duration(450).delay(50)}
-            style={styles.header}
+        {/* Orange accent bar */}
+        <View style={styles.topAccent} />
+
+        {/* Hero: mascot + branding */}
+        <View style={styles.heroSection}>
+          <Image
+            source={require('../../../assets/mascot_main.png')}
+            style={styles.mascotMain}
+            resizeMode="contain"
+          />
+          <View style={styles.heroBranding}>
+            <Image
+              source={require('../../../assets/LogoMain.jpg')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.tagline}>Kết nối việc làm{'\n'}tức thì</Text>
+            <View style={styles.pillRow}>
+              {['⚡ Nhanh gọn', '✓ Tin cậy', '★ Hiệu quả'].map(label => (
+                <View key={label} style={styles.pill}>
+                  <Text style={styles.pillText}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Form card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Đăng nhập</Text>
+
+          <Input
+            label="Email"
+            placeholder="Nhập email của bạn"
+            value={email}
+            onChangeText={(t) => { setEmail(t); clearError('email'); clearError('password'); }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            error={errors.email?.trim() ? errors.email : undefined}
+          />
+
+          <Input
+            label="Mật khẩu"
+            placeholder="Nhập mật khẩu"
+            value={password}
+            onChangeText={(t) => { setPassword(t); clearError('password'); }}
+            secureTextEntry
+            error={errors.password}
+          />
+
+          {/* Remember Me */}
+          <TouchableOpacity
+            style={styles.rememberMeRow}
+            onPress={() => setRememberMe(p => !p)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.logoText}>
-              <Text style={styles.logoSnap}>Snap</Text>
-              <Text style={styles.logoOn}>On</Text>
-            </Text>
-            <Text style={styles.subtitle}>Kết nối việc làm, dễ dàng hơn</Text>
-          </Animated.View>
-
-          {/* Form container card animated entrance */}
-          <Animated.View 
-            entering={FadeInUp.duration(500).delay(150)}
-            style={styles.card}
-          >
-            <Text style={styles.cardTitle}>Chào mừng trở lại</Text>
-            <Text style={styles.cardSubtitle}>Đăng nhập để tiếp tục</Text>
-
-            <Input
-              label="Email"
-              placeholder="Nhập email của bạn"
-              value={email}
-              onChangeText={(t) => { setEmail(t); clearError('email'); clearError('password'); }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={errors.email?.trim() ? errors.email : undefined}
-              lightMode={true}
+            <Ionicons
+              name={isRememberMe ? 'checkbox' : 'square-outline'}
+              size={20}
+              color={isRememberMe ? ORANGE : '#64748B'}
             />
+            <Text style={styles.rememberMeText}>Lưu mật khẩu</Text>
+          </TouchableOpacity>
 
-            <Input
-              label="Mật khẩu"
-              placeholder="Nhập mật khẩu"
-              value={password}
-              onChangeText={(t) => { setPassword(t); clearError('password'); }}
-              secureTextEntry
-              error={errors.password}
-              lightMode={true}
-            />
+          <Button
+            title="Đăng nhập"
+            onPress={handleLogin}
+            loading={loading}
+            disabled={isButtonDisabled}
+            size="lg"
+            style={styles.primaryButton}
+          />
 
-            {/* Custom Remember Me Checkbox */}
-            <View style={styles.rememberMeContainer}>
-              <TouchableOpacity
-                style={styles.checkboxRow}
-                onPress={() => setIsRememberMe(prev => !prev)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isRememberMe ? "checkbox" : "square-outline"}
-                  size={20}
-                  color={isRememberMe ? "#FF6600" : "#64748B"}
-                />
-                <Text style={styles.rememberMeText}>Lưu mật khẩu</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>HOẶC</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
+          <Button
+            title="Đăng nhập với Google"
+            onPress={handleGoogleLogin}
+            loading={loading}
+            variant="outline"
+            size="lg"
+            icon={<Ionicons name="logo-google" size={20} color={ORANGE} style={{ marginRight: 8 }} />}
+          />
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Image
+            source={require('../../../assets/mascot_phone.png')}
+            style={styles.mascotPhone}
+            resizeMode="contain"
+          />
+          <View style={styles.footerLinks}>
+            <Text style={styles.footerText}>Chưa có tài khoản?</Text>
             <Button
-              title="Đăng nhập"
-              onPress={handleLogin}
-              loading={loading}
-              disabled={isButtonDisabled}
-              size="lg"
-              style={styles.loginButton}
+              title="Đăng ký ngay"
+              onPress={() => navigation.navigate('Register')}
+              variant="ghost"
+              size="sm"
+              textStyle={styles.footerLink}
             />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>HOẶC</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Button
-              title="Đăng nhập với Google"
-              onPress={handleGoogleLogin}
-              loading={loading}
-              variant="outline"
-              size="lg"
-              icon={<Ionicons name="logo-google" size={20} color="#FF6600" style={{ marginRight: 8 }} />}
-              textStyle={styles.googleButtonText}
-              style={styles.googleButton}
-            />
-
-            <View style={styles.registerRow}>
-              <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.registerLink}>Đăng ký ngay</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </View>
+        </View>
+      </ScrollView>
     </LinearGradient>
   );
 };
@@ -272,121 +268,130 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  keyboardView: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 70 : 50,
-    paddingBottom: 40,
-    justifyContent: 'center',
+    paddingBottom: 32,
   },
-  header: {
+  topAccent: {
+    height: 4,
+    backgroundColor: ORANGE,
+  },
+  heroSection: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
+    backgroundColor: '#FFF1EB',
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  logoText: {
-    fontSize: 44,
-    fontWeight: '900',
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  mascotMain: {
+    width: 130,
+    height: 148,
   },
-  logoSnap: {
-    color: '#FFFFFF',
+  heroBranding: {
+    flex: 1,
   },
-  logoOn: {
-    color: '#0F172A',
+  logo: {
+    width: 150,
+    height: 45,
+    marginBottom: 10,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#FFFFFF',
+  tagline: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: NAVY,
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  pill: {
+    backgroundColor: '#FFE4D4',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  pillText: {
+    fontSize: 10,
     fontWeight: '600',
-    marginTop: 6,
-    opacity: 0.95,
+    color: ORANGE,
   },
   card: {
+    marginHorizontal: 20,
+    marginTop: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 24,
-    shadowColor: '#FF6600',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 8,
-    width: '100%',
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 24,
-  },
-  rememberMeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 20,
   },
-  checkboxRow: {
+  rememberMeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
   },
   rememberMeText: {
-    marginLeft: 8,
     fontSize: 14,
     color: '#64748B',
-    fontWeight: '500',
   },
-  loginButton: {
-    marginTop: 10,
+  primaryButton: {
     marginBottom: 20,
-    backgroundColor: '#FF6600',
-    shadowColor: '#FF6600',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  googleButton: {
-    borderColor: '#FF6600',
-  },
-  googleButtonText: {
-    color: '#FF6600',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E8ECF2',
   },
   dividerText: {
-    marginHorizontal: 16,
-    fontSize: 12,
+    marginHorizontal: 12,
+    fontSize: 11,
     color: '#94A3B8',
     fontWeight: '700',
+    letterSpacing: 1,
   },
-  registerRow: {
+  footer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingHorizontal: 24,
   },
-  registerText: {
-    fontSize: 14,
+  mascotPhone: {
+    width: 90,
+    height: 97,
+  },
+  footerLinks: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingBottom: 12,
+  },
+  footerText: {
+    fontSize: 13,
     color: '#64748B',
   },
-  registerLink: {
-    color: '#FF6600',
+  footerLink: {
+    color: ORANGE,
     fontWeight: '700',
     fontSize: 14,
   },

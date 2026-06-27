@@ -47,6 +47,21 @@ export function detectBackend(): Promise<string> {
   return detectionPromise;
 }
 
+/**
+ * Gửi ping đến deployed backend ngay khi app khởi động để wake up Render.com cold start.
+ * Fire-and-forget — không block gì cả.
+ * Gọi hàm này càng sớm càng tốt (App.tsx useEffect).
+ */
+export function warmUpBackend(): void {
+  axios
+    .get(`${Config.DEPLOYED_API_URL}/health`, {
+      timeout: 60000,
+      validateStatus: () => true,
+    })
+    .then(() => console.log('[Backend] ☀️ Warm-up done'))
+    .catch(() => {});
+}
+
 /** Reset để detect lại (dùng khi debug) */
 export function resetBackendDetection() {
   detectedUrl = null;

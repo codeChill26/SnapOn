@@ -105,7 +105,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     const userResult = await client.query(upsertUserQuery, [
       uid,
       email,
-      name || null,
+      name || email.split('@')[0],
       finalAvatar
     ]);
     const user = userResult.rows[0];
