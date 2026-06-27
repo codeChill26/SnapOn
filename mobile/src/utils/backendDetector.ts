@@ -12,9 +12,18 @@ export function detectBackend(): Promise<string> {
   if (detectedUrl !== null) return Promise.resolve(detectedUrl);
   if (detectionPromise) return detectionPromise;
 
+  const configuredUrl = Config.API_BASE_URL || Config.DEPLOYED_API_URL;
+
   if (!__DEV__) {
-    detectedUrl = Config.DEPLOYED_API_URL;
+    detectedUrl = configuredUrl;
     Config.API_BASE_URL = detectedUrl;
+    return Promise.resolve(detectedUrl);
+  }
+
+  if (configuredUrl !== Config.LOCAL_API_URL) {
+    detectedUrl = configuredUrl;
+    Config.API_BASE_URL = detectedUrl;
+    console.log('[Backend] Configured:', detectedUrl);
     return Promise.resolve(detectedUrl);
   }
 

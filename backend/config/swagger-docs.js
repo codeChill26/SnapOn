@@ -769,6 +769,12 @@
  *     security:
  *       - DevAuth: []
  *       - BearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SyncUserInput'
  *     responses:
  *       200:
  *         description: Sync thành công
@@ -782,6 +788,301 @@
  *         description: Chưa xác thực
  *       500:
  *         description: Sync user failed
+ */
+
+/**
+ * @swagger
+ * /api/auth/dev/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: DEV login bang email
+ *     description: |
+ *       Dang nhap nhanh trong DEV mode bang email da ton tai trong DB.
+ *       Tra ve accessToken va refreshToken de dung cho cac endpoint yeu cau auth.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/DevLoginInput'
+ *     responses:
+ *       200:
+ *         description: Login thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthSessionResponse'
+ *       400:
+ *         description: Thieu email
+ *       404:
+ *         description: User khong ton tai
+ *       403:
+ *         description: Account bi khoa
+ */
+
+/**
+ * @swagger
+ * /api/auth/dev/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: DEV register bang email
+ *     description: |
+ *       Tao user DEV, tao wallet mac dinh va gui ma xac thuc email 6 so.
+ *       Dung endpoint nay khi can test flow /api/auth/verify-email tren Swagger.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/DevRegisterInput'
+ *     responses:
+ *       201:
+ *         description: Dang ky thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthSessionResponse'
+ *       400:
+ *         description: Thieu email
+ *       409:
+ *         description: Email da duoc dang ky va da verify
+ */
+
+/**
+ * @swagger
+ * /api/auth/send-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Gui OTP dien thoai (simulated)
+ *     description: Endpoint test OTP dien thoai. Hien tai OTP mac dinh la 123456.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SendOtpInput'
+ *     responses:
+ *       200:
+ *         description: Gui OTP thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: OTP sent successfully (Simulated)
+ *                 otp:
+ *                   type: string
+ *                   example: "123456"
+ *       400:
+ *         description: Thieu phone
+ */
+
+/**
+ * @swagger
+ * /api/auth/verify-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verify OTP dien thoai
+ *     description: |
+ *       Xac thuc OTP dien thoai. Neu phone chua co user thi backend tao user, wallet va tasker_profile.
+ *       OTP test hien tai la 123456.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/VerifyOtpInput'
+ *     responses:
+ *       200:
+ *         description: Verify OTP thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthSessionResponse'
+ *       400:
+ *         description: Thieu phone/otp hoac OTP sai
+ */
+
+/**
+ * @swagger
+ * /api/auth/token-login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Restore session tu access token
+ *     description: Lay lai profile va wallet bang access token hien tai.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Token login thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Token login successful
+ *                 user:
+ *                   $ref: '#/components/schemas/UserProfile'
+ *                 wallet:
+ *                   $ref: '#/components/schemas/Wallet'
+ *       401:
+ *         description: Token khong hop le hoac het han
+ *       404:
+ *         description: User khong ton tai
+ */
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Refresh access token
+ *     description: Xoay refresh token cu va cap accessToken/refreshToken moi.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenInput'
+ *     responses:
+ *       200:
+ *         description: Refresh thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TokenPairResponse'
+ *       400:
+ *         description: Thieu refreshToken
+ *       401:
+ *         description: Refresh token khong hop le hoac het han
+ */
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Logout va revoke refresh token
+ *     description: Xoa refreshToken khoi DB/Redis neu request co truyen refreshToken.
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenInput'
+ *     responses:
+ *       200:
+ *         description: Logout thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Logged out successfully
+ */
+
+/**
+ * @swagger
+ * /api/auth/verify-email:
+ *   post:
+ *     tags: [Auth, Verification]
+ *     summary: Verify email bang ma 6 so
+ *     description: |
+ *       Xac thuc email bang token 6 so da duoc gui khi sync/register/resend.
+ *       Neu thanh cong, backend set is_verified = true va tra ve accessToken + refreshToken moi.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/VerifyEmailInput'
+ *     responses:
+ *       200:
+ *         description: Verify email thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthSessionResponse'
+ *       400:
+ *         description: Thieu email/token, token sai, token het han hoac user da verify
+ *       404:
+ *         description: Khong tim thay user
+ */
+
+/**
+ * @swagger
+ * /api/auth/resend-verification:
+ *   post:
+ *     tags: [Auth, Verification]
+ *     summary: Gui lai ma verify email
+ *     description: Tao ma verify email moi, het han sau 15 phut, va gui email lai cho user chua verify.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendVerificationInput'
+ *     responses:
+ *       200:
+ *         description: Gui lai ma thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       400:
+ *         description: Thieu email hoac email da verify
+ *       404:
+ *         description: Khong tim thay user
+ */
+
+/**
+ * @swagger
+ * /api/users/verify:
+ *   post:
+ *     tags: [Users, Verification]
+ *     summary: Verify tai khoan bang anh CCCD va selfie
+ *     description: |
+ *       Upload 3 anh base64: mat truoc CCCD, mat sau CCCD va selfie.
+ *       Backend luu anh vao /uploads, tao user_verifications + verification_documents,
+ *       sau do auto-approve va set is_verified = true de tien cho viec test.
+ *     security:
+ *       - DevAuth: []
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AccountVerificationInput'
+ *     responses:
+ *       200:
+ *         description: Verify tai khoan thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserVerifyResponse'
+ *       400:
+ *         description: Thieu 1 trong 3 anh verify
+ *       401:
+ *         description: Chua xac thuc
+ *       500:
+ *         description: Loi server khi verify tai khoan
  */
 
 /**

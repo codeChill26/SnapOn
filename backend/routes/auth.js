@@ -94,7 +94,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         status,
         is_verified
       )
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', false)
+      VALUES (gen_random_uuid(), $1, $2, COALESCE($3, split_part($2, '@', 1)), $4, 'ACTIVE', false)
       ON CONFLICT (email) DO UPDATE
       SET firebase_uid = EXCLUDED.firebase_uid,
           full_name = COALESCE($3, users.full_name),

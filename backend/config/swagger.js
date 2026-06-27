@@ -339,6 +339,132 @@ const options = {
             message: { type: 'string', example: 'User synced successfully' },
             user: { $ref: '#/components/schemas/UserDb' },
             wallet: { $ref: '#/components/schemas/Wallet' },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        SyncUserInput: {
+          type: 'object',
+          properties: {
+            firebaseToken: {
+              type: 'string',
+              description: 'Firebase ID token. Trong DEV mode co the dung mock-firebase-token:<email>.',
+              example: 'mock-firebase-token:user@example.com',
+            },
+          },
+        },
+
+        DevLoginInput: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+          },
+        },
+
+        DevRegisterInput: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+            fullName: { type: 'string', example: 'Nguyen Van A' },
+          },
+        },
+
+        RefreshTokenInput: {
+          type: 'object',
+          required: ['refreshToken'],
+          properties: {
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        TokenPairResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Tokens refreshed successfully' },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        AuthSessionResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Login successful' },
+            user: { $ref: '#/components/schemas/UserProfile' },
+            wallet: { $ref: '#/components/schemas/Wallet' },
+            token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        VerifyEmailInput: {
+          type: 'object',
+          required: ['email', 'token'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+            token: { type: 'string', minLength: 6, maxLength: 6, example: '123456' },
+          },
+        },
+
+        ResendVerificationInput: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+          },
+        },
+
+        SendOtpInput: {
+          type: 'object',
+          required: ['phone'],
+          properties: {
+            phone: { type: 'string', example: '0900000000' },
+          },
+        },
+
+        VerifyOtpInput: {
+          type: 'object',
+          required: ['phone', 'otp'],
+          properties: {
+            phone: { type: 'string', example: '0900000000' },
+            otp: { type: 'string', minLength: 6, maxLength: 6, example: '123456' },
+          },
+        },
+
+        AccountVerificationInput: {
+          type: 'object',
+          required: ['frontImage', 'backImage', 'selfieImage'],
+          properties: {
+            frontImage: {
+              type: 'string',
+              description: 'Base64 CCCD/ID front image. Accepts raw base64 or data:image/...;base64,...',
+              example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+            },
+            backImage: {
+              type: 'string',
+              description: 'Base64 CCCD/ID back image. Accepts raw base64 or data:image/...;base64,...',
+              example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+            },
+            selfieImage: {
+              type: 'string',
+              description: 'Base64 selfie image. Accepts raw base64 or data:image/...;base64,...',
+              example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+            },
+          },
+        },
+
+        UserVerifyResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Account verified successfully' },
+            user: { $ref: '#/components/schemas/UserProfile' },
           },
         },
 
@@ -427,7 +553,7 @@ const options = {
       { DevAuth: [] },
     ],
   },
-  apis: ['./config/swagger-docs.js'],
+  apis: ['./config/swagger-docs.js', './routes/*.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
