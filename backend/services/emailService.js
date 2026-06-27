@@ -1,23 +1,52 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns');
+const net = require('net');
 
 // Render/runtime may resolve Gmail SMTP to IPv6 first, while the container has no
 // IPv6 route. Prefer IPv4 so smtp.gmail.com connects to an A record.
 dns.setDefaultResultOrder('ipv4first');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true', // true for port 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '10000', 10),
-  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || '10000', 10),
-  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '15000', 10),
-  family: parseInt(process.env.SMTP_FAMILY || '4', 10),
-});
+function createSmtpTransportConfig(host) {
+  const smtpHost = process.env.SMTP_HOST;
+  return {
+    host,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true', // true for port 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '10000', 10),
+    greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || '10000', 10),
+    socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '15000', 10),
+    family: parseInt(process.env.SMTP_FAMILY || '4', 10),
+    tls: {
+      servername: smtpHost,
+    },
+  };
+}
+
+async function createTransporter() {
+  const smtpHost = process.env.SMTP_HOST;
+  if (!smtpHost) {
+    return nodemailer.createTransport(createSmtpTransportConfig(smtpHost));
+  }
+
+  if (process.env.SMTP_FORCE_IPV4 !== 'false' && net.isIP(smtpHost) === 0) {
+    try {
+      const addresses = await dns.promises.resolve4(smtpHost);
+      const ipv4Host = addresses[0];
+      if (ipv4Host) {
+        console.log(`[EMAIL SERVICE] Using IPv4 SMTP host ${ipv4Host} for ${smtpHost}`);
+        return nodemailer.createTransport(createSmtpTransportConfig(ipv4Host));
+      }
+    } catch (error) {
+      console.warn(`[EMAIL SERVICE] IPv4 SMTP lookup failed for ${smtpHost}: ${error.message}`);
+    }
+  }
+
+  return nodemailer.createTransport(createSmtpTransportConfig(smtpHost));
+}
 
 function isEmailDebugOtpEnabled() {
   return process.env.EMAIL_DEBUG_OTP === 'true';
@@ -73,6 +102,7 @@ async function sendVerificationEmail(toEmail, fullName, token) {
   };
 
   try {
+    const transporter = await createTransporter();
     const info = await transporter.sendMail(mailOptions);
     console.log(`✉️ [EMAIL SERVICE] Email sent successfully: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
