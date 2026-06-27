@@ -96,7 +96,7 @@ export const VerificationScreen: React.FC = () => {
         Alert.alert(
           'Đã gửi lại mã',
           debugOtp
-            ? `SMTP đang lỗi nên dùng mã debug: ${debugOtp}`
+            ? `Email đang tạm lỗi nên dùng mã debug: ${debugOtp}`
             : 'Mã xác thực mới đã được gửi vào hòm thư của bạn.'
         );
         startTimer();
