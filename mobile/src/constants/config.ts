@@ -20,7 +20,7 @@ const Config = {
     storageBucket: 'hcm202-2d75e.firebasestorage.app',
     messagingSenderId: '837187985882',
     appId: '1:837187985882:web:a2012ea4bbf3b3003660e3',
-    webClientId: 'webClientId477307811776-7f6ptpobvega67l3cd6ghin732dntka2.apps.googleusercontent.com', // Thay thế bằng Web Client ID thật từ Google Console của bạn
+    webClientId: '837187985882-6lg1da72t6so9vb6lc318otmu3vb43ua.apps.googleusercontent.com', // Thay thế bằng Web Client ID thật từ Google Console của bạn
   },
   PAGINATION: {
     DEFAULT_PAGE: 1,

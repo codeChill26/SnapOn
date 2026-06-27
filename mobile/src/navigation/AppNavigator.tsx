@@ -14,9 +14,11 @@ import { ChatDetailScreen } from '../screens/chat/ChatDetailScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { AccountSettingsScreen } from '../screens/profile/AccountSettingsScreen';
 import { SavedJobsScreen } from '../screens/saved/SavedJobsScreen';
+import { VerificationScreen } from '../screens/auth/VerificationScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
+  Verification: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   AdminTabs: undefined;
   JobDetail: { taskId: string };
@@ -51,6 +53,8 @@ export const AppNavigator: React.FC = () => {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
+        ) : !user?.isVerified ? (
+          <Stack.Screen name="Verification" component={VerificationScreen} />
         ) : user?.role === 'admin' ? (
           <>
             <Stack.Screen name="AdminTabs" component={AdminStackNavigator} options={{ headerShown: false }} />

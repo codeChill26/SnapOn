@@ -6,6 +6,8 @@ const verifyFirebaseToken = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prisma');
 const redis = require('../config/redis');
+const { sendVerificationEmail } = require('../services/emailService');
+const { verifyEmail, resendVerification, generateVerificationToken } = require('../controllers/auth');
 
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
 const REFRESH_TOKEN_EXPIRY_DAYS = 30; // 30 days
@@ -103,7 +105,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     const userResult = await client.query(upsertUserQuery, [
       uid,
       email,
-      name || null,
+      name || email.split('@')[0],
       finalAvatar
     ]);
     const user = userResult.rows[0];
@@ -127,6 +129,24 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     const wallet = walletResult.rows[0];
 
     await client.query('COMMIT');
+
+    // Generate and send verification email if user is not verified
+    if (!user.is_verified) {
+      const token = generateVerificationToken();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          verificationToken: token,
+          verificationTokenExpires: expiresAt
+        }
+      });
+      
+      sendVerificationEmail(user.email, user.full_name, token).catch(err => {
+        console.error('❌ Failed to send verification email during sync-user:', err);
+      });
+    }
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
@@ -223,9 +243,14 @@ router.post('/dev/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await client.query('SELECT id, is_verified FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) {
-      return res.status(409).json({ success: false, message: 'Email already registered' });
+      const existingUser = existing.rows[0];
+      if (existingUser.is_verified) {
+        return res.status(409).json({ success: false, message: 'Email already registered' });
+      }
+      // If the user exists but is not verified, delete the old record to allow fresh registration
+      await client.query('DELETE FROM users WHERE id = $1', [existingUser.id]);
     }
 
     await client.query('BEGIN');
@@ -236,7 +261,7 @@ router.post('/dev/register', async (req, res) => {
 
     const userResult = await client.query(
       `INSERT INTO users (id, firebase_uid, email, full_name, avatar_url, status, is_verified)
-       VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, 'ACTIVE', true)
+       VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, 'ACTIVE', false)
        RETURNING *`,
       [email, fullName || email.split('@')[0], defaultAvatar]
     );
@@ -251,6 +276,22 @@ router.post('/dev/register', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Generate and send verification email for dev registration
+    const token = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationToken: token,
+        verificationTokenExpires: expiresAt
+      }
+    });
+
+    sendVerificationEmail(user.email, user.full_name, token).catch(err => {
+      console.error('❌ Failed to send verification email during dev register:', err);
+    });
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
@@ -590,5 +631,9 @@ router.post('/logout', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Logout failed', error: err.message });
   }
 });
+
+// Verification routes
+router.post('/verify-email', verifyEmail);
+router.post('/resend-verification', resendVerification);
 
 module.exports = router;

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, Alert, StatusBar, Image,
+  View, Text, StyleSheet, ScrollView,
+  Alert, StatusBar, Image, TouchableOpacity,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
@@ -12,10 +12,14 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import Config from '../../constants/config';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 
 type LoginNavProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
-const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const ORANGE = '#FF6B35';
+const NAVY   = '#1A2B6D';
 
 interface Errors {
   email?: string;
@@ -25,10 +29,26 @@ interface Errors {
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<LoginNavProp>();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Errors>({});
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [isRememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [errors, setErrors]         = useState<Errors>({});
+
+  // Restore saved credentials on mount (Remember Me)
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedEmail    = await SecureStore.getItemAsync('snapon_remembered_email');
+        const savedPassword = await SecureStore.getItemAsync('snapon_remembered_password');
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberMe(true);
+        }
+      } catch {}
+    })();
+  }, []);
 
   const clearError = (field: keyof Errors) => {
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -37,7 +57,7 @@ export const LoginScreen: React.FC = () => {
   const validate = (): boolean => {
     const e: Errors = {};
     if (!email.trim()) e.email = 'Vui lòng nhập email';
-    else if (!isValidEmail(email)) e.email = 'Địa chỉ email không hợp lệ';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = 'Địa chỉ email không hợp lệ';
     if (!password) e.password = 'Vui lòng nhập mật khẩu';
     else if (password.length < 6) e.password = 'Mật khẩu phải có ít nhất 6 ký tự';
     setErrors(e);
@@ -49,14 +69,18 @@ export const LoginScreen: React.FC = () => {
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const idToken = await userCredential.user.getIdToken();
+      const idToken        = await userCredential.user.getIdToken();
       await login(idToken);
+
+      if (isRememberMe) {
+        await SecureStore.setItemAsync('snapon_remembered_email', email.trim());
+        await SecureStore.setItemAsync('snapon_remembered_password', password);
+      } else {
+        await SecureStore.deleteItemAsync('snapon_remembered_email');
+        await SecureStore.deleteItemAsync('snapon_remembered_password');
+      }
     } catch (error: any) {
-      if (
-        error.code === 'auth/user-not-found' ||
-        error.code === 'auth/wrong-password' ||
-        error.code === 'auth/invalid-credential'
-      ) {
+      if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
         setErrors({ email: ' ', password: 'Email hoặc mật khẩu không chính xác' });
       } else if (error.code === 'auth/invalid-email') {
         setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ' }));
@@ -77,38 +101,26 @@ export const LoginScreen: React.FC = () => {
       GoogleSignin.configure({ webClientId: Config.FIREBASE.webClientId });
       await GoogleSignin.hasPlayServices();
       const signInResult = await GoogleSignin.signIn();
-      if (!isSuccessResponse(signInResult)) {
-        throw new Error('Đăng nhập Google không thành công hoặc bị hủy.');
-      }
-      const idToken = signInResult.data.idToken;
-      if (!idToken) throw new Error('Không lấy được Google ID Token.');
-      const credential = GoogleAuthProvider.credential(idToken);
-      const userCredential = await signInWithCredential(auth, credential);
-      const firebaseToken = await userCredential.user.getIdToken();
-      await login(firebaseToken);
+      if (!isSuccessResponse(signInResult)) throw new Error('Đăng nhập Google không thành công.');
+      const idToken     = signInResult.data.idToken;
+      if (!idToken)     throw new Error('Không lấy được Google ID Token.');
+      const credential  = GoogleAuthProvider.credential(idToken);
+      const uc          = await signInWithCredential(auth, credential);
+      await login(await uc.user.getIdToken());
     } catch (error: any) {
-      console.error('Google Sign-In error:', error);
-      if (
-        (error.message && error.message.includes('RNGoogleSignin')) ||
-        (error.message && error.message.includes('TurboModuleRegistry'))
-      ) {
+      if (error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry')) {
         Alert.alert(
           'Chế độ Phát triển (Expo Go)',
-          'Không tìm thấy module Google Native. Bạn có muốn sử dụng tài khoản Google giả lập để test tiếp luồng API backend không?',
+          'Không tìm thấy module Google Native. Dùng tài khoản giả lập để test API?',
           [
             { text: 'Hủy', style: 'cancel' },
             {
-              text: 'Đồng ý (Test Google)',
+              text: 'Đồng ý (Test)',
               onPress: async () => {
-                setLoading(true);
                 try {
-                  const mockToken = `mock-firebase-token:developer-google@example.com`;
-                  await login(mockToken);
-                  Alert.alert('Thành công', 'Đăng nhập Google giả lập thành công!');
+                  await login('mock-firebase-token:developer-google@example.com');
                 } catch (e: any) {
-                  Alert.alert('Lỗi', e.message || 'Đăng nhập giả lập thất bại');
-                } finally {
-                  setLoading(false);
+                  Alert.alert('Lỗi', e.message);
                 }
               },
             },
@@ -116,19 +128,23 @@ export const LoginScreen: React.FC = () => {
         );
         return;
       }
-      let errorMsg = error.message;
-      if (error.code === '12501') errorMsg = 'Đăng nhập Google đã bị hủy.';
-      else if (error.code === '7') errorMsg = 'Lỗi kết nối mạng.';
-      Alert.alert('Đăng nhập thất bại', errorMsg);
+      const msg =
+        error.code === '12501' ? 'Đăng nhập Google đã bị hủy.' :
+        error.code === '7'     ? 'Lỗi kết nối mạng.' :
+        error.message;
+      Alert.alert('Đăng nhập thất bại', msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const isButtonDisabled = !email.trim() || !password;
+
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#FF6600', '#FF8C42', '#FFF9F6', '#FFFFFF']}
+      locations={[0.0, 0.25, 0.6, 1.0]}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#FFF1EB" />
       <ScrollView
@@ -136,19 +152,16 @@ export const LoginScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Top accent bar */}
+        {/* Orange accent bar */}
         <View style={styles.topAccent} />
 
-        {/* ── Hero section ── */}
+        {/* Hero: mascot + branding */}
         <View style={styles.heroSection}>
-          {/* Left: mascot chính (thumbs up) */}
           <Image
             source={require('../../../assets/mascot_main.png')}
             style={styles.mascotMain}
             resizeMode="contain"
           />
-
-          {/* Right: logo + tagline + pills */}
           <View style={styles.heroBranding}>
             <Image
               source={require('../../../assets/LogoMain.jpg')}
@@ -166,7 +179,7 @@ export const LoginScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* ── Form card ── */}
+        {/* Form card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Đăng nhập</Text>
 
@@ -189,10 +202,25 @@ export const LoginScreen: React.FC = () => {
             error={errors.password}
           />
 
+          {/* Remember Me */}
+          <TouchableOpacity
+            style={styles.rememberMeRow}
+            onPress={() => setRememberMe(p => !p)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isRememberMe ? 'checkbox' : 'square-outline'}
+              size={20}
+              color={isRememberMe ? ORANGE : '#64748B'}
+            />
+            <Text style={styles.rememberMeText}>Lưu mật khẩu</Text>
+          </TouchableOpacity>
+
           <Button
             title="Đăng nhập"
             onPress={handleLogin}
             loading={loading}
+            disabled={isButtonDisabled}
             size="lg"
             style={styles.primaryButton}
           />
@@ -209,12 +237,12 @@ export const LoginScreen: React.FC = () => {
             loading={loading}
             variant="outline"
             size="lg"
+            icon={<Ionicons name="logo-google" size={20} color={ORANGE} style={{ marginRight: 8 }} />}
           />
         </View>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <View style={styles.footer}>
-          {/* mascot phone decoration — bottom-right */}
           <Image
             source={require('../../../assets/mascot_phone.png')}
             style={styles.mascotPhone}
@@ -232,30 +260,22 @@ export const LoginScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
-
-const ORANGE = '#FF6B35';
-const NAVY  = '#1A2B6D';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 32,
   },
-
-  /* accent bar */
   topAccent: {
     height: 4,
     backgroundColor: ORANGE,
   },
-
-  /* ── Hero ── */
   heroSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -271,7 +291,6 @@ const styles = StyleSheet.create({
   },
   heroBranding: {
     flex: 1,
-    alignItems: 'flex-start',
   },
   logo: {
     width: 150,
@@ -301,8 +320,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: ORANGE,
   },
-
-  /* ── Card ── */
   card: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -323,8 +340,17 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     marginBottom: 20,
   },
+  rememberMeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
   primaryButton: {
-    marginTop: 4,
     marginBottom: 20,
   },
   divider: {
@@ -344,8 +370,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-
-  /* ── Footer ── */
   footer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

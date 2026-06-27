@@ -11,9 +11,13 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
 type RegisterNavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
+
+const ORANGE = '#FF6B35';
 
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 const isValidPhone  = (v: string) => /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
@@ -28,14 +32,14 @@ interface Errors {
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<RegisterNavProp>();
-  const { login } = useAuth();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Errors>({});
+  const { login }  = useAuth();
+  const [name, setName]                   = useState('');
+  const [email, setEmail]                 = useState('');
+  const [phone, setPhone]                 = useState('');
+  const [password, setPassword]           = useState('');
+  const [confirmPassword, setConfirm]     = useState('');
+  const [loading, setLoading]             = useState(false);
+  const [errors, setErrors]               = useState<Errors>({});
 
   const clearError = (field: keyof Errors) => {
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -58,158 +62,168 @@ export const RegisterScreen: React.FC = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      if (userCredential.user) {
-        await updateProfile(userCredential.user, { displayName: name.trim() });
-      }
-      const idToken = await userCredential.user.getIdToken();
+      const uc = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      if (uc.user) await updateProfile(uc.user, { displayName: name.trim() });
+      const idToken = await uc.user.getIdToken(true);
       await login(idToken);
       Alert.alert('Thành công', 'Đăng ký tài khoản thành công!');
     } catch (error: any) {
-      let errorMsg = error.message;
       if (error.code === 'auth/email-already-in-use') {
+        Alert.alert(
+          'Tài khoản đã tồn tại',
+          'Email này đã được đăng ký. Nếu chưa xác thực, hãy đăng nhập để nhận mã xác thực mới.',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            { text: 'Đăng nhập', onPress: () => navigation.navigate('Login') },
+          ]
+        );
         setErrors(prev => ({ ...prev, email: 'Email này đã được đăng ký tài khoản.' }));
       } else if (error.code === 'auth/invalid-email') {
         setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ.' }));
       } else if (error.code === 'auth/weak-password') {
-        setErrors(prev => ({ ...prev, password: 'Mật khẩu quá yếu (phải chứa ít nhất 6 ký tự).' }));
+        setErrors(prev => ({ ...prev, password: 'Mật khẩu quá yếu (ít nhất 6 ký tự).' }));
       } else {
-        Alert.alert('Đăng ký thất bại', errorMsg);
+        Alert.alert('Đăng ký thất bại', error.message);
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const isButtonDisabled = !name.trim() || !email.trim() || !password || !confirmPassword;
+
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#FF6600', '#FF8C42', '#FFF9F6', '#FFFFFF']}
+      locations={[0.0, 0.25, 0.6, 1.0]}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Orange accent bar */}
-        <View style={styles.topAccent} />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Orange accent bar */}
+          <View style={styles.topAccent} />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Ionicons name="arrow-back" size={22} color="#0F172A" />
-          </TouchableOpacity>
+          {/* Header animated */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Ionicons name="arrow-back" size={22} color="#0F172A" />
+            </TouchableOpacity>
 
-          <View style={styles.logoRow}>
-            <Image
-              source={require('../../../assets/LogoSub.jpg')}
-              style={styles.logoIcon}
-              resizeMode="contain"
-            />
-            <View>
-              <Text style={styles.headerTitle}>Tạo tài khoản</Text>
-              <Text style={styles.headerSub}>Tham gia cộng đồng SnapOn</Text>
+            <View style={styles.logoRow}>
+              <Image
+                source={require('../../../assets/LogoSub.jpg')}
+                style={styles.logoIcon}
+                resizeMode="contain"
+              />
+              <View>
+                <Text style={styles.headerTitle}>Tạo tài khoản</Text>
+                <Text style={styles.headerSub}>Tham gia cộng đồng SnapOn</Text>
+              </View>
             </View>
+          </Animated.View>
+
+          {/* Form card animated */}
+          <Animated.View entering={FadeInUp.duration(450).delay(100)} style={styles.card}>
+            <Input
+              label="Họ và tên *"
+              placeholder="Nhập họ và tên (ít nhất 2 ký tự)"
+              value={name}
+              onChangeText={(t) => { setName(t); clearError('name'); }}
+              error={errors.name}
+              autoCapitalize="words"
+            />
+            <Input
+              label="Email *"
+              placeholder="Nhập email"
+              value={email}
+              onChangeText={(t) => { setEmail(t); clearError('email'); }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+            />
+            <Input
+              label="Số điện thoại"
+              placeholder="VD: 0912345678 (không bắt buộc)"
+              value={phone}
+              onChangeText={(t) => { setPhone(t); clearError('phone'); }}
+              keyboardType="phone-pad"
+              maxLength={10}
+              error={errors.phone}
+            />
+            <Input
+              label="Mật khẩu *"
+              placeholder="Ít nhất 6 ký tự"
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                clearError('password');
+                if (errors.confirmPassword && t === confirmPassword) clearError('confirmPassword');
+              }}
+              secureTextEntry
+              error={errors.password}
+            />
+            <Input
+              label="Xác nhận mật khẩu *"
+              placeholder="Nhập lại mật khẩu"
+              value={confirmPassword}
+              onChangeText={(t) => { setConfirm(t); clearError('confirmPassword'); }}
+              secureTextEntry
+              error={errors.confirmPassword}
+            />
+
+            <Button
+              title="Đăng ký"
+              onPress={handleRegister}
+              loading={loading}
+              disabled={isButtonDisabled}
+              size="lg"
+              style={styles.registerButton}
+            />
+          </Animated.View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Đã có tài khoản?</Text>
+            <Button
+              title="Đăng nhập"
+              onPress={() => navigation.navigate('Login')}
+              variant="ghost"
+              size="sm"
+              textStyle={styles.footerLink}
+            />
           </View>
-        </View>
-
-        {/* Form */}
-        <View style={styles.card}>
-          <Input
-            label="Họ và tên *"
-            placeholder="Nhập họ và tên (ít nhất 2 ký tự)"
-            value={name}
-            onChangeText={(t) => { setName(t); clearError('name'); }}
-            error={errors.name}
-            autoCapitalize="words"
-          />
-          <Input
-            label="Email *"
-            placeholder="Nhập email"
-            value={email}
-            onChangeText={(t) => { setEmail(t); clearError('email'); }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={errors.email}
-          />
-          <Input
-            label="Số điện thoại"
-            placeholder="VD: 0912345678 (không bắt buộc)"
-            value={phone}
-            onChangeText={(t) => { setPhone(t); clearError('phone'); }}
-            keyboardType="phone-pad"
-            maxLength={10}
-            error={errors.phone}
-          />
-          <Input
-            label="Mật khẩu *"
-            placeholder="Ít nhất 6 ký tự"
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              clearError('password');
-              if (errors.confirmPassword && t === confirmPassword) clearError('confirmPassword');
-            }}
-            secureTextEntry
-            error={errors.password}
-          />
-          <Input
-            label="Xác nhận mật khẩu *"
-            placeholder="Nhập lại mật khẩu"
-            value={confirmPassword}
-            onChangeText={(t) => { setConfirmPassword(t); clearError('confirmPassword'); }}
-            secureTextEntry
-            error={errors.confirmPassword}
-          />
-
-          <Button
-            title="Đăng ký"
-            onPress={handleRegister}
-            loading={loading}
-            size="lg"
-            style={styles.registerButton}
-          />
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Đã có tài khoản?</Text>
-          <Button
-            title="Đăng nhập"
-            onPress={() => navigation.navigate('Login')}
-            variant="ghost"
-            size="sm"
-            textStyle={styles.footerLink}
-          />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
-
-const ORANGE = '#FF6B35';
-const NAVY  = '#1A2B6D';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 40,
   },
-
   topAccent: {
     height: 4,
     backgroundColor: ORANGE,
   },
-
-  /* Header */
   header: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 16 : 20,
@@ -248,8 +262,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
   },
-
-  /* Form card */
   card: {
     marginHorizontal: 20,
     backgroundColor: '#FFFFFF',
@@ -264,15 +276,19 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   registerButton: {
-    marginTop: 4,
+    marginTop: 8,
+    backgroundColor: ORANGE,
+    shadowColor: ORANGE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
   },
-
-  /* Footer */
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   footerText: {
     fontSize: 14,
