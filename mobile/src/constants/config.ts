@@ -1,6 +1,3 @@
-
-// IP máy tính trên WiFi — đặt trong mobile/.env (EXPO_PUBLIC_LOCAL_IP=192.168.x.x)
-// App sẽ tự thử local trước, fallback sang deployed nếu không kết nối được.
 const LOCAL_IP = process.env.EXPO_PUBLIC_LOCAL_IP ?? '192.168.1.5';
 
 const LOCAL_API_URL = `http://${LOCAL_IP}:3000/api`;
@@ -20,7 +17,8 @@ const Config = {
     storageBucket: 'hcm202-2d75e.firebasestorage.app',
     messagingSenderId: '837187985882',
     appId: '1:837187985882:web:a2012ea4bbf3b3003660e3',
-    webClientId: '837187985882-6lg1da72t6so9vb6lc318otmu3vb43ua.apps.googleusercontent.com', // Thay thế bằng Web Client ID thật từ Google Console của bạn
+    // Đã thay thế mã bắt đầu bằng 8371...fhc4m8... (Web Client ID - Loại 3)
+    webClientId: '837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com', 
   },
   PAGINATION: {
     DEFAULT_PAGE: 1,

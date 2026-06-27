@@ -230,6 +230,7 @@ model AssignedTask {
   applicationId String?            @unique @map("application_id") @db.Uuid
   assignedBy    AssignedBy         @map("assigned_by")
   status        AssignedTaskStatus @default(ACTIVE)
+  createdAt     DateTime           @default(now()) @map("created_at")
   application   TaskApplication?   @relation(fields: [applicationId], references: [id])
   task          Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
   tasker        User               @relation("AssignedTasker", fields: [taskerId], references: [id], onDelete: Cascade)
