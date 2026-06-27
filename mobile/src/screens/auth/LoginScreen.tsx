@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, StatusBar } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
+  Platform, Alert, StatusBar, Image,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
-import { AppColors } from '../../theme';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../context/AuthContext';
@@ -100,8 +102,7 @@ export const LoginScreen: React.FC = () => {
               onPress: async () => {
                 setLoading(true);
                 try {
-                  const testEmail = 'developer-google@example.com';
-                  const mockToken = `mock-firebase-token:${testEmail}`;
+                  const mockToken = `mock-firebase-token:developer-google@example.com`;
                   await login(mockToken);
                   Alert.alert('Thành công', 'Đăng nhập Google giả lập thành công!');
                 } catch (e: any) {
@@ -129,20 +130,46 @@ export const LoginScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="light-content" backgroundColor={AppColors.background.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF1EB" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.logoText}>
-            <Text style={styles.logoSnap}>Snap</Text>
-            <Text style={styles.logoOn}>On</Text>
-          </Text>
-          <Text style={styles.subtitle}>Kết nối việc làm, dễ dàng hơn</Text>
+        {/* Top accent bar */}
+        <View style={styles.topAccent} />
+
+        {/* ── Hero section ── */}
+        <View style={styles.heroSection}>
+          {/* Left: mascot chính (thumbs up) */}
+          <Image
+            source={require('../../../assets/mascot_main.png')}
+            style={styles.mascotMain}
+            resizeMode="contain"
+          />
+
+          {/* Right: logo + tagline + pills */}
+          <View style={styles.heroBranding}>
+            <Image
+              source={require('../../../assets/LogoMain.jpg')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.tagline}>Kết nối việc làm{'\n'}tức thì</Text>
+            <View style={styles.pillRow}>
+              {['⚡ Nhanh gọn', '✓ Tin cậy', '★ Hiệu quả'].map(label => (
+                <View key={label} style={styles.pill}>
+                  <Text style={styles.pillText}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
 
-        <View style={styles.form}>
+        {/* ── Form card ── */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Đăng nhập</Text>
+
           <Input
             label="Email"
             placeholder="Nhập email của bạn"
@@ -167,7 +194,7 @@ export const LoginScreen: React.FC = () => {
             onPress={handleLogin}
             loading={loading}
             size="lg"
-            style={styles.loginButton}
+            style={styles.primaryButton}
           />
 
           <View style={styles.divider}>
@@ -183,15 +210,24 @@ export const LoginScreen: React.FC = () => {
             variant="outline"
             size="lg"
           />
+        </View>
 
-          <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+        {/* ── Footer ── */}
+        <View style={styles.footer}>
+          {/* mascot phone decoration — bottom-right */}
+          <Image
+            source={require('../../../assets/mascot_phone.png')}
+            style={styles.mascotPhone}
+            resizeMode="contain"
+          />
+          <View style={styles.footerLinks}>
+            <Text style={styles.footerText}>Chưa có tài khoản?</Text>
             <Button
-              title="Đăng ký"
+              title="Đăng ký ngay"
               onPress={() => navigation.navigate('Register')}
               variant="ghost"
               size="sm"
-              textStyle={styles.registerLink}
+              textStyle={styles.footerLink}
             />
           </View>
         </View>
@@ -200,71 +236,138 @@ export const LoginScreen: React.FC = () => {
   );
 };
 
+const ORANGE = '#FF6B35';
+const NAVY  = '#1A2B6D';
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.background.primary,
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 80,
-    paddingBottom: 40,
+    paddingBottom: 32,
   },
-  header: {
+
+  /* accent bar */
+  topAccent: {
+    height: 4,
+    backgroundColor: ORANGE,
+  },
+
+  /* ── Hero ── */
+  heroSection: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    backgroundColor: '#FFF1EB',
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  logoText: {
-    fontSize: 36,
-    fontWeight: '800',
+  mascotMain: {
+    width: 130,
+    height: 148,
   },
-  logoSnap: {
-    color: AppColors.brand.primary,
-  },
-  logoOn: {
-    color: AppColors.text.primary,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: AppColors.text.muted,
-    marginTop: 8,
-  },
-  form: {
+  heroBranding: {
     flex: 1,
+    alignItems: 'flex-start',
   },
-  loginButton: {
-    marginTop: 8,
-    marginBottom: 24,
+  logo: {
+    width: 150,
+    height: 45,
+    marginBottom: 10,
+  },
+  tagline: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: NAVY,
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  pill: {
+    backgroundColor: '#FFE4D4',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  pillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: ORANGE,
+  },
+
+  /* ── Card ── */
+  card: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 20,
+  },
+  primaryButton: {
+    marginTop: 4,
+    marginBottom: 20,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: AppColors.border.subtle,
+    backgroundColor: '#E8ECF2',
   },
   dividerText: {
-    marginHorizontal: 16,
-    fontSize: 12,
-    color: AppColors.text.disabled,
-    fontWeight: '600',
+    marginHorizontal: 12,
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '700',
+    letterSpacing: 1,
   },
-  registerRow: {
+
+  /* ── Footer ── */
+  footer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingHorizontal: 24,
   },
-  registerText: {
-    fontSize: 14,
-    color: AppColors.text.secondary,
+  mascotPhone: {
+    width: 90,
+    height: 97,
   },
-  registerLink: {
-    color: AppColors.brand.primary,
+  footerLinks: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingBottom: 12,
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  footerLink: {
+    color: ORANGE,
     fontWeight: '700',
     fontSize: 14,
   },

@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, StatusBar } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
+  Platform, Alert, StatusBar, Image, TouchableOpacity,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
-import { AppColors } from '../../theme';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 
 type RegisterNavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-const isValidPhone = (v: string) => /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
+const isValidPhone  = (v: string) => /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
 
 interface Errors {
   name?: string;
@@ -65,14 +68,11 @@ export const RegisterScreen: React.FC = () => {
     } catch (error: any) {
       let errorMsg = error.message;
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = 'Email này đã được đăng ký tài khoản.';
-        setErrors(prev => ({ ...prev, email: errorMsg }));
+        setErrors(prev => ({ ...prev, email: 'Email này đã được đăng ký tài khoản.' }));
       } else if (error.code === 'auth/invalid-email') {
-        errorMsg = 'Địa chỉ email không hợp lệ.';
-        setErrors(prev => ({ ...prev, email: errorMsg }));
+        setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ.' }));
       } else if (error.code === 'auth/weak-password') {
-        errorMsg = 'Mật khẩu quá yếu (phải chứa ít nhất 6 ký tự).';
-        setErrors(prev => ({ ...prev, password: errorMsg }));
+        setErrors(prev => ({ ...prev, password: 'Mật khẩu quá yếu (phải chứa ít nhất 6 ký tự).' }));
       } else {
         Alert.alert('Đăng ký thất bại', errorMsg);
       }
@@ -86,17 +86,39 @@ export const RegisterScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="light-content" backgroundColor={AppColors.background.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
+        {/* Orange accent bar */}
+        <View style={styles.topAccent} />
+
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Đăng ký tài khoản</Text>
-          <Text style={styles.subtitle}>Tham gia SnapOn ngay hôm nay</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Ionicons name="arrow-back" size={22} color="#0F172A" />
+          </TouchableOpacity>
+
+          <View style={styles.logoRow}>
+            <Image
+              source={require('../../../assets/LogoSub.jpg')}
+              style={styles.logoIcon}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.headerTitle}>Tạo tài khoản</Text>
+              <Text style={styles.headerSub}>Tham gia cộng đồng SnapOn</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.form}>
+        {/* Form */}
+        <View style={styles.card}>
           <Input
             label="Họ và tên *"
             placeholder="Nhập họ và tên (ít nhất 2 ký tự)"
@@ -127,7 +149,11 @@ export const RegisterScreen: React.FC = () => {
             label="Mật khẩu *"
             placeholder="Ít nhất 6 ký tự"
             value={password}
-            onChangeText={(t) => { setPassword(t); clearError('password'); if (errors.confirmPassword && t === confirmPassword) clearError('confirmPassword'); }}
+            onChangeText={(t) => {
+              setPassword(t);
+              clearError('password');
+              if (errors.confirmPassword && t === confirmPassword) clearError('confirmPassword');
+            }}
             secureTextEntry
             error={errors.password}
           />
@@ -147,65 +173,113 @@ export const RegisterScreen: React.FC = () => {
             size="lg"
             style={styles.registerButton}
           />
+        </View>
 
-          <View style={styles.loginRow}>
-            <Text style={styles.loginText}>Đã có tài khoản? </Text>
-            <Button
-              title="Đăng nhập"
-              onPress={() => navigation.navigate('Login')}
-              variant="ghost"
-              size="sm"
-              textStyle={styles.loginLink}
-            />
-          </View>
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Đã có tài khoản?</Text>
+          <Button
+            title="Đăng nhập"
+            onPress={() => navigation.navigate('Login')}
+            variant="ghost"
+            size="sm"
+            textStyle={styles.footerLink}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
+const ORANGE = '#FF6B35';
+const NAVY  = '#1A2B6D';
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.background.primary,
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
     paddingBottom: 40,
   },
+
+  topAccent: {
+    height: 4,
+    backgroundColor: ORANGE,
+  },
+
+  /* Header */
   header: {
-    marginBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 16 : 20,
+    paddingBottom: 20,
+    backgroundColor: '#FFFFFF',
   },
-  title: {
-    fontSize: 28,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F7F9FC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  logoIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8ECF2',
+  },
+  headerTitle: {
+    fontSize: 22,
     fontWeight: '800',
-    color: AppColors.text.primary,
-    marginBottom: 8,
+    color: '#0F172A',
+    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 15,
-    color: AppColors.text.muted,
+  headerSub: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  form: {
-    flex: 1,
+
+  /* Form card */
+  card: {
+    marginHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   registerButton: {
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
   },
-  loginRow: {
+
+  /* Footer */
+  footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 24,
   },
-  loginText: {
+  footerText: {
     fontSize: 14,
-    color: AppColors.text.secondary,
+    color: '#64748B',
   },
-  loginLink: {
-    color: AppColors.brand.primary,
+  footerLink: {
+    color: ORANGE,
     fontWeight: '700',
     fontSize: 14,
   },

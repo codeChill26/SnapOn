@@ -5,10 +5,12 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "postinstall": "prisma generate",
     "db:ping": "node scripts/db-ping.js",
     "db:tables": "node scripts/db-list-tables.js",
     "prisma:generate": "prisma generate",
     "prisma:pull": "prisma db pull",
+    "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "migrate:chat-message-features": "node scripts/migration-chat-message-features.js",
     "migrate:saved-tasks": "node scripts/migration-saved-tasks.js"
