@@ -22,9 +22,9 @@ export const AppColors = {
   },
 
   brand: {
-    primary: '#FF6B35',
-    primaryDark: '#E95522',
-    primarySoft: 'rgba(255, 107, 53, 0.14)',
+    primary: '#FF6600',
+    primaryDark: '#E05300',
+    primarySoft: 'rgba(255, 102, 0, 0.14)',
     secondary: '#2563EB',
   },
 

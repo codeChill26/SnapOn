@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TextInputProps,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { AppColors, Spacing, Radius, Typography } from '../../theme';
 
@@ -15,6 +16,7 @@ interface InputProps extends TextInputProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   onRightIconPress?: () => void;
+  lightMode?: boolean;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -24,17 +26,23 @@ export const Input: React.FC<InputProps> = ({
   rightIcon,
   onRightIconPress,
   style,
+  lightMode = false,
   ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && (
+        <Text style={[styles.label, lightMode ? styles.labelLight : styles.labelDark]}>
+          {label}
+        </Text>
+      )}
       <View
         style={[
           styles.inputContainer,
-          isFocused && styles.inputFocused,
+          lightMode ? styles.inputContainerLight : styles.inputContainerDark,
+          isFocused && (lightMode ? styles.inputFocusedLight : styles.inputFocusedDark),
           error && styles.inputError,
         ]}
       >
@@ -42,13 +50,23 @@ export const Input: React.FC<InputProps> = ({
         <RNInput
           style={[
             styles.input,
+            lightMode ? styles.inputLight : styles.inputDark,
+            props.secureTextEntry && Platform.OS === 'ios' ? { fontFamily: 'System' } : {},
             leftIcon ? { paddingLeft: Spacing.sm } : {},
             rightIcon ? { paddingRight: Spacing.sm } : {},
             style,
           ]}
-          placeholderTextColor={AppColors.text.muted}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          placeholderTextColor={lightMode ? '#94A3B8' : AppColors.text.muted}
+          onFocus={(e) => {
+            setIsFocused(true);
+            props.onFocus && props.onFocus(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur && props.onBlur(e);
+          }}
+          autoCorrect={false}
+          spellCheck={false}
           {...props}
         />
         {rightIcon && (
@@ -73,20 +91,34 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Typography.body.fontSize,
     fontWeight: '600',
-    color: AppColors.text.secondary,
     marginBottom: Spacing.xs,
+  },
+  labelDark: {
+    color: AppColors.text.secondary,
+  },
+  labelLight: {
+    color: '#475569', // slate-600
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.surface.input,
     borderWidth: 1.5,
-    borderColor: AppColors.border.subtle,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
   },
-  inputFocused: {
+  inputContainerDark: {
+    backgroundColor: AppColors.surface.input,
+    borderColor: AppColors.border.subtle,
+  },
+  inputContainerLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  inputFocusedDark: {
     borderColor: AppColors.brand.primary,
+  },
+  inputFocusedLight: {
+    borderColor: '#FF6600',
   },
   inputError: {
     borderColor: AppColors.status.error,
@@ -95,7 +127,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Spacing.md,
     fontSize: Typography.body.fontSize + 1,
+  },
+  inputDark: {
     color: AppColors.text.primary,
+  },
+  inputLight: {
+    color: '#0F172A', // slate-900
   },
   iconLeft: {
     marginRight: Spacing.sm,

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, StatusBar, TouchableOpacity } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { AppColors } from '../../theme';
@@ -10,10 +10,12 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import Config from '../../constants/config';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 
 type LoginNavProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
-
-const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
 interface Errors {
   email?: string;
@@ -25,8 +27,27 @@ export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isRememberMe, setIsRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
+
+  // Auto-fill credentials on mount if Remember Me is active
+  useEffect(() => {
+    const loadCredentials = async () => {
+      try {
+        const savedEmail = await SecureStore.getItemAsync('snapon_remembered_email');
+        const savedPassword = await SecureStore.getItemAsync('snapon_remembered_password');
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setIsRememberMe(true);
+        }
+      } catch (err) {
+        console.error('Failed to load secure store credentials:', err);
+      }
+    };
+    loadCredentials();
+  }, []);
 
   const clearError = (field: keyof Errors) => {
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -35,7 +56,7 @@ export const LoginScreen: React.FC = () => {
   const validate = (): boolean => {
     const e: Errors = {};
     if (!email.trim()) e.email = 'Vui lòng nhập email';
-    else if (!isValidEmail(email)) e.email = 'Địa chỉ email không hợp lệ';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = 'Địa chỉ email không hợp lệ';
     if (!password) e.password = 'Vui lòng nhập mật khẩu';
     else if (password.length < 6) e.password = 'Mật khẩu phải có ít nhất 6 ký tự';
     setErrors(e);
@@ -49,6 +70,15 @@ export const LoginScreen: React.FC = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const idToken = await userCredential.user.getIdToken();
       await login(idToken);
+
+      // Save or clear secure credentials based on remember state
+      if (isRememberMe) {
+        await SecureStore.setItemAsync('snapon_remembered_email', email.trim());
+        await SecureStore.setItemAsync('snapon_remembered_password', password);
+      } else {
+        await SecureStore.deleteItemAsync('snapon_remembered_email');
+        await SecureStore.deleteItemAsync('snapon_remembered_password');
+      }
     } catch (error: any) {
       if (
         error.code === 'auth/user-not-found' ||
@@ -124,134 +154,226 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
+  const isButtonDisabled = !email.trim() || !password;
+
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#FF6600', '#FF8C42', '#FFF9F6', '#FFFFFF']}
+      locations={[0.0, 0.25, 0.6, 1.0]}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="light-content" backgroundColor={AppColors.background.primary} />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <StatusBar barStyle="light-content" backgroundColor="#FF6600" />
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <Text style={styles.logoText}>
-            <Text style={styles.logoSnap}>Snap</Text>
-            <Text style={styles.logoOn}>On</Text>
-          </Text>
-          <Text style={styles.subtitle}>Kết nối việc làm, dễ dàng hơn</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header animated entrance */}
+          <Animated.View 
+            entering={FadeInDown.duration(450).delay(50)}
+            style={styles.header}
+          >
+            <Text style={styles.logoText}>
+              <Text style={styles.logoSnap}>Snap</Text>
+              <Text style={styles.logoOn}>On</Text>
+            </Text>
+            <Text style={styles.subtitle}>Kết nối việc làm, dễ dàng hơn</Text>
+          </Animated.View>
 
-        <View style={styles.form}>
-          <Input
-            label="Email"
-            placeholder="Nhập email của bạn"
-            value={email}
-            onChangeText={(t) => { setEmail(t); clearError('email'); clearError('password'); }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={errors.email?.trim() ? errors.email : undefined}
-          />
+          {/* Form container card animated entrance */}
+          <Animated.View 
+            entering={FadeInUp.duration(500).delay(150)}
+            style={styles.card}
+          >
+            <Text style={styles.cardTitle}>Chào mừng trở lại</Text>
+            <Text style={styles.cardSubtitle}>Đăng nhập để tiếp tục</Text>
 
-          <Input
-            label="Mật khẩu"
-            placeholder="Nhập mật khẩu"
-            value={password}
-            onChangeText={(t) => { setPassword(t); clearError('password'); }}
-            secureTextEntry
-            error={errors.password}
-          />
-
-          <Button
-            title="Đăng nhập"
-            onPress={handleLogin}
-            loading={loading}
-            size="lg"
-            style={styles.loginButton}
-          />
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>HOẶC</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <Button
-            title="Đăng nhập với Google"
-            onPress={handleGoogleLogin}
-            loading={loading}
-            variant="outline"
-            size="lg"
-          />
-
-          <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-            <Button
-              title="Đăng ký"
-              onPress={() => navigation.navigate('Register')}
-              variant="ghost"
-              size="sm"
-              textStyle={styles.registerLink}
+            <Input
+              label="Email"
+              placeholder="Nhập email của bạn"
+              value={email}
+              onChangeText={(t) => { setEmail(t); clearError('email'); clearError('password'); }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email?.trim() ? errors.email : undefined}
+              lightMode={true}
             />
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+            <Input
+              label="Mật khẩu"
+              placeholder="Nhập mật khẩu"
+              value={password}
+              onChangeText={(t) => { setPassword(t); clearError('password'); }}
+              secureTextEntry
+              error={errors.password}
+              lightMode={true}
+            />
+
+            {/* Custom Remember Me Checkbox */}
+            <View style={styles.rememberMeContainer}>
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setIsRememberMe(prev => !prev)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isRememberMe ? "checkbox" : "square-outline"}
+                  size={20}
+                  color={isRememberMe ? "#FF6600" : "#64748B"}
+                />
+                <Text style={styles.rememberMeText}>Lưu mật khẩu</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Button
+              title="Đăng nhập"
+              onPress={handleLogin}
+              loading={loading}
+              disabled={isButtonDisabled}
+              size="lg"
+              style={styles.loginButton}
+            />
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>HOẶC</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Button
+              title="Đăng nhập với Google"
+              onPress={handleGoogleLogin}
+              loading={loading}
+              variant="outline"
+              size="lg"
+              icon={<Ionicons name="logo-google" size={20} color="#FF6600" style={{ marginRight: 8 }} />}
+              textStyle={styles.googleButtonText}
+              style={styles.googleButton}
+            />
+
+            <View style={styles.registerRow}>
+              <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                <Text style={styles.registerLink}>Đăng ký ngay</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.background.primary,
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 80,
+    paddingTop: Platform.OS === 'ios' ? 70 : 50,
     paddingBottom: 40,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 28,
   },
   logoText: {
-    fontSize: 36,
-    fontWeight: '800',
+    fontSize: 44,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   logoSnap: {
-    color: AppColors.brand.primary,
+    color: '#FFFFFF',
   },
   logoOn: {
-    color: AppColors.text.primary,
+    color: '#0F172A',
   },
   subtitle: {
-    fontSize: 15,
-    color: AppColors.text.muted,
-    marginTop: 8,
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginTop: 6,
+    opacity: 0.95,
   },
-  form: {
-    flex: 1,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#FF6600',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+    width: '100%',
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 24,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rememberMeText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
   },
   loginButton: {
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 10,
+    marginBottom: 20,
+    backgroundColor: '#FF6600',
+    shadowColor: '#FF6600',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  googleButton: {
+    borderColor: '#FF6600',
+  },
+  googleButtonText: {
+    color: '#FF6600',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: AppColors.border.subtle,
+    backgroundColor: '#E2E8F0',
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 12,
-    color: AppColors.text.disabled,
-    fontWeight: '600',
+    color: '#94A3B8',
+    fontWeight: '700',
   },
   registerRow: {
     flexDirection: 'row',
@@ -261,10 +383,10 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontSize: 14,
-    color: AppColors.text.secondary,
+    color: '#64748B',
   },
   registerLink: {
-    color: AppColors.brand.primary,
+    color: '#FF6600',
     fontWeight: '700',
     fontSize: 14,
   },
