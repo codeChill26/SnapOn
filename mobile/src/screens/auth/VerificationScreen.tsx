@@ -92,7 +92,13 @@ export const VerificationScreen: React.FC = () => {
     try {
       const response = await authService.resendVerificationEmail(user.email);
       if (response.success) {
-        Alert.alert('Đã gửi lại mã', 'Mã xác thực mới đã được gửi vào hòm thư của bạn.');
+        const debugOtp = response.data?.debugOtp;
+        Alert.alert(
+          'Đã gửi lại mã',
+          debugOtp
+            ? `SMTP đang lỗi nên dùng mã debug: ${debugOtp}`
+            : 'Mã xác thực mới đã được gửi vào hòm thư của bạn.'
+        );
         startTimer();
       } else {
         setError(response.message || 'Gửi lại mã xác thực thất bại.');

@@ -6,11 +6,16 @@ const verifyFirebaseToken = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prisma');
 const redis = require('../config/redis');
-const { sendVerificationEmail } = require('../services/emailService');
+const { sendVerificationEmail, isEmailDebugOtpEnabled } = require('../services/emailService');
 const { verifyEmail, resendVerification, generateVerificationToken } = require('../controllers/auth');
 
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
 const REFRESH_TOKEN_EXPIRY_DAYS = 30; // 30 days
+
+function buildDebugOtpPayload(token) {
+  if (!token || !isEmailDebugOtpEnabled()) return {};
+  return { debugOtp: token };
+}
 
 function generateAccessToken(user) {
   return jwt.sign(
@@ -131,8 +136,10 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
     await client.query('COMMIT');
 
     // Generate and send verification email if user is not verified
+    let debugOtp = null;
     if (!user.is_verified) {
       const token = generateVerificationToken();
+      debugOtp = token;
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
       
       await prisma.user.update({
@@ -146,6 +153,9 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
       sendVerificationEmail(user.email, user.full_name, token).catch(err => {
         console.error('❌ Failed to send verification email during sync-user:', err);
       });
+      if (isEmailDebugOtpEnabled()) {
+        console.log(`[EMAIL DEBUG] Verification OTP for ${user.email}: ${token}`);
+      }
     }
 
     const accessToken = generateAccessToken(user);
@@ -170,6 +180,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
       wallet,
       accessToken,
       refreshToken,
+      ...buildDebugOtpPayload(debugOtp),
     });
   } catch (error) {
     console.error('❌ Sync user error:', error);
@@ -292,6 +303,9 @@ router.post('/dev/register', async (req, res) => {
     sendVerificationEmail(user.email, user.full_name, token).catch(err => {
       console.error('❌ Failed to send verification email during dev register:', err);
     });
+    if (isEmailDebugOtpEnabled()) {
+      console.log(`[EMAIL DEBUG] Verification OTP for ${user.email}: ${token}`);
+    }
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
@@ -304,6 +318,7 @@ router.post('/dev/register', async (req, res) => {
       token: accessToken,
       accessToken,
       refreshToken,
+      ...buildDebugOtpPayload(token),
     });
   } catch (err) {
     await client.query('ROLLBACK');

@@ -7,6 +7,14 @@ const redis = require('../config/redis');
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 
+function buildDebugOtpPayload(token, warning) {
+  if (!emailService.isEmailDebugOtpEnabled()) return null;
+  return {
+    debugOtp: token,
+    ...(warning ? { warning } : {})
+  };
+}
+
 function generateAccessToken(user) {
   return jwt.sign(
     {
@@ -175,10 +183,17 @@ const resendVerification = async (req, res) => {
       }
     });
 
-    // Dispatch verification email
-    await emailService.sendVerificationEmail(user.email, user.fullName || user.full_name, token);
-
-    return response.success(res, null, 'Mã xác thực mới đã được gửi vào email của bạn');
+    try {
+      await emailService.sendVerificationEmail(user.email, user.fullName || user.full_name, token);
+      return response.success(res, buildDebugOtpPayload(token), 'Mã xác thực mới đã được gửi vào email của bạn');
+    } catch (mailError) {
+      const debugPayload = buildDebugOtpPayload(token, mailError.message);
+      if (debugPayload) {
+        console.warn('[EMAIL SERVICE] Returning debug OTP because EMAIL_DEBUG_OTP=true');
+        return response.success(res, debugPayload, 'Không gửi được email, trả OTP debug để test');
+      }
+      throw mailError;
+    }
   } catch (error) {
     console.error('❌ Resend verification error:', error);
     return response.error(res, 'Gửi lại mã xác thực thất bại: ' + error.message, 500);

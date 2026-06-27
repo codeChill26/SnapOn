@@ -8,7 +8,14 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '10000', 10),
+  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || '10000', 10),
+  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '15000', 10),
 });
+
+function isEmailDebugOtpEnabled() {
+  return process.env.EMAIL_DEBUG_OTP === 'true';
+}
 
 /**
  * Sends a verification email to a user with a 6-digit OTP code.
@@ -71,4 +78,5 @@ async function sendVerificationEmail(toEmail, fullName, token) {
 
 module.exports = {
   sendVerificationEmail,
+  isEmailDebugOtpEnabled,
 };
