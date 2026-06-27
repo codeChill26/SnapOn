@@ -16,6 +16,7 @@ const transporter = nodemailer.createTransport({
   connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '10000', 10),
   greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || '10000', 10),
   socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '15000', 10),
+  family: parseInt(process.env.SMTP_FAMILY || '4', 10),
 });
 
 function isEmailDebugOtpEnabled() {
