@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -52,7 +53,13 @@ export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React
             {/* Top Brand Row */}
             <View style={styles.brandRow}>
               <View style={styles.logoAndGreeting}>
-                <Text style={styles.logoText}>SnapOn</Text>
+                <View style={styles.logoWrapper}>
+                  <Image
+                    source={require('../../../assets/LogoSub.jpg')}
+                    style={styles.logoIcon}
+                    resizeMode="contain"
+                  />
+                </View>
                 <Text style={styles.greetingText}>{greetingText}</Text>
               </View>
               <TouchableOpacity
@@ -139,8 +146,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoAndGreeting: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
+    gap: 10,
+  },
+  logoWrapper: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoIcon: {
+    width: 38,
+    height: 38,
   },
   savedButton: {
     width: 42,
@@ -155,22 +182,11 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  logoText: {
-    fontSize: 26,
-    fontWeight: '900',
-    fontStyle: 'italic',
-    color: '#FFFFFF',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }),
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
   greetingText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '600',
-    marginTop: 2,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: '700',
+    flex: 1,
   },
   taglineSection: {
     marginBottom: 20,

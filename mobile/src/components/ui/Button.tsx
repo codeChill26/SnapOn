@@ -78,26 +78,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.md,
-    ...Shadows.sm,
   },
   primary: {
     backgroundColor: AppColors.brand.primary,
+    ...Shadows.sm,
   },
   secondary: {
     backgroundColor: AppColors.surface.glass,
     borderWidth: 1,
     borderColor: AppColors.border.normal,
+    ...Shadows.sm,
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
     borderColor: AppColors.brand.primary,
+    elevation: 0,
   },
   ghost: {
     backgroundColor: 'transparent',
+    elevation: 0,
   },
   danger: {
     backgroundColor: AppColors.status.error,
+    ...Shadows.sm,
   },
   size_sm: {
     paddingVertical: Spacing.sm,

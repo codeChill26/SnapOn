@@ -15,6 +15,8 @@ model User {
   avatarUrl                       String?            @map("avatar_url")
   status                          UserStatus         @default(ACTIVE)
   isVerified                      Boolean            @default(false) @map("is_verified")
+  verificationToken               String?            @map("verification_token") @db.VarChar(255)
+  verificationTokenExpires        DateTime?          @map("verification_token_expires")
   createdAt                       DateTime           @default(now()) @map("created_at")
   role                            String?            @default("USER") @db.VarChar(50)
   bio                             String?
@@ -231,6 +233,7 @@ model AssignedTask {
   applicationId String?            @unique @map("application_id") @db.Uuid
   assignedBy    AssignedBy         @map("assigned_by")
   status        AssignedTaskStatus @default(ACTIVE)
+  createdAt     DateTime           @default(now()) @map("created_at")
   application   TaskApplication?   @relation(fields: [applicationId], references: [id])
   task          Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
   tasker        User               @relation("AssignedTasker", fields: [taskerId], references: [id], onDelete: Cascade)

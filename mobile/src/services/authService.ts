@@ -102,4 +102,14 @@ export const authService = {
     const response = await api.post<any>('/auth/verify-otp', { phone, otp });
     return response.data;
   },
+
+  async verifyEmail(email: string, token: string): Promise<{ success: boolean; user: User; accessToken: string; refreshToken: string; wallet: any; message?: string }> {
+    const response = await api.post<any>('/auth/verify-email', { email, token });
+    return response.data;
+  },
+
+  async resendVerificationEmail(email: string): Promise<{ success: boolean; message: string; data?: { debugOtp?: string; warning?: string } }> {
+    const response = await api.post<any>('/auth/resend-verification', { email });
+    return response.data;
+  },
 };

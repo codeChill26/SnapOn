@@ -1,0 +1,162 @@
+{
+  "project_info": {
+    "project_number": "837187985882",
+    "project_id": "hcm202-2d75e",
+    "storage_bucket": "hcm202-2d75e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837187985882:android:e85e6df1ad99a9e63660e3",
+        "android_client_info": {
+          "package_name": "com.example.fe_pet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARhhhN5HRiFSb5UdtkaW2OCepq6_WShKQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "837187985882-blt8pt7ojim4n6141e3nui83tkve3p1a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fePet"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837187985882:android:76857bcc2c3965f63660e3",
+        "android_client_info": {
+          "package_name": "com.example.fe_petshop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARhhhN5HRiFSb5UdtkaW2OCepq6_WShKQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "837187985882-blt8pt7ojim4n6141e3nui83tkve3p1a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fePet"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837187985882:android:65032799e5e511263660e3",
+        "android_client_info": {
+          "package_name": "com.provider.Snapon"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARhhhN5HRiFSb5UdtkaW2OCepq6_WShKQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "837187985882-blt8pt7ojim4n6141e3nui83tkve3p1a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fePet"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837187985882:android:8abbd025a5cf58913660e3",
+        "android_client_info": {
+          "package_name": "com.snapon.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "837187985882-6lg1da72t6so9vb6lc318otmu3vb43ua.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.snapon.mobile",
+            "certificate_hash": "e17122890a143316b62509ed009d09aadfcf5844"
+          }
+        },
+        {
+          "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARhhhN5HRiFSb5UdtkaW2OCepq6_WShKQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "837187985882-fhc4m8i1pjljd50le64p8q4nps03h942.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "837187985882-blt8pt7ojim4n6141e3nui83tkve3p1a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fePet"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

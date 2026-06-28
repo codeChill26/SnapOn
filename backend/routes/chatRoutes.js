@@ -14,7 +14,8 @@ router.use(authenticate);
  *     summary: Get all conversations for the authenticated user
  *     tags: [Chat]
  *     security:
- *       - bearerAuth: []
+ *       - DevAuth: []
+ *       - BearerAuth: []
  *     responses:
  *       200:
  *         description: List of conversations
@@ -28,7 +29,8 @@ router.get('/conversations', chatController.getConversations);
  *     summary: Start or retrieve a conversation with another user
  *     tags: [Chat]
  *     security:
- *       - bearerAuth: []
+ *       - DevAuth: []
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -55,7 +57,8 @@ router.post('/conversations/start', chatController.startConversation);
  *     summary: Get all messages in a conversation
  *     tags: [Chat]
  *     security:
- *       - bearerAuth: []
+ *       - DevAuth: []
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -77,7 +80,8 @@ router.get('/conversations/:id/messages', chatController.getMessages);
  *     summary: Send a message in a conversation
  *     tags: [Chat]
  *     security:
- *       - bearerAuth: []
+ *       - DevAuth: []
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id

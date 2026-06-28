@@ -30,11 +30,12 @@ const userModel = {
    * Create a new user
    */
   async create({ firebaseUid, fullName, email, phone, avatarUrl, status = 'ACTIVE' }) {
+    const fallbackName = fullName || (email ? email.split('@')[0] : 'User');
     const result = await pool.query(
       `INSERT INTO users (id, firebase_uid, full_name, email, phone, avatar_url, status)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [firebaseUid, fullName, email, phone, avatarUrl, status]
+      [firebaseUid, fallbackName, email, phone, avatarUrl, status]
     );
     return result.rows[0];
   },
