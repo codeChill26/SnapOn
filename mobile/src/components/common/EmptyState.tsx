@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme';
 import { Button } from '../ui/Button';
+import { useScreenSize } from '../../hooks/useScreenSize';
 
 interface EmptyStateProps {
   title: string;
@@ -17,17 +18,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   onAction,
 }) => {
   const theme = useTheme();
+  const { fontScale } = useScreenSize();
 
   return (
     <View style={[styles.container, { padding: theme.spacing.xl }]}>
       <View style={styles.iconContainer}>
         <Text style={styles.icon}>📭</Text>
       </View>
-      <Text style={[styles.title, { color: theme.colors.text.primary, marginBottom: theme.spacing.sm }]}>
+      <Text style={[styles.title, { color: theme.colors.text.primary, fontSize: 18 * fontScale, marginBottom: theme.spacing.sm }]}>
         {title}
       </Text>
       {message && (
-        <Text style={[styles.message, { color: theme.colors.text.secondary, marginBottom: theme.spacing.lg }]}>
+        <Text style={[styles.message, { color: theme.colors.text.secondary, fontSize: 14 * fontScale, marginBottom: theme.spacing.lg }]}>
           {message}
         </Text>
       )}
@@ -51,18 +53,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconContainer: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   icon: {
     fontSize: 48,
+    textAlign: 'center',
   },
   title: {
-    fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
   },
   message: {
-    fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },

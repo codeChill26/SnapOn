@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   StatusBar,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -25,11 +24,9 @@ import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { ProfileStatsRow } from '../../components/profile/ProfileStatsRow';
 import { ProfileTabs } from '../../components/profile/ProfileTabs';
 import { ProfilePostCard, ProfileEmptyState } from '../../components/profile/ProfilePostGrid';
+import { useScreenSize } from '../../hooks/useScreenSize';
 
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
-
-const { width } = Dimensions.get('window');
-const cardWidth = (width - 48) / 2;
 
 const APP_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   PENDING:   { label: 'Chờ duyệt',      color: '#F59E0B' },
@@ -58,6 +55,7 @@ export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileNavProp>();
   const route = useRoute<any>();
   const { user: currentUser } = useAuth();
+  const { columns } = useScreenSize();
 
   const paramUserId = route.params?.userId;
   const isOwnProfile = !paramUserId || paramUserId === currentUser?.id;
@@ -221,10 +219,10 @@ export const ProfileScreen: React.FC = () => {
   // Format list content chunk size so columns are rendered as structured row cards inside a 1-column flatlist
   const formattedData = useMemo(() => {
     if (activeTab === 0 || activeTab === 1) {
-      return chunkArray(listData, 2);
+      return chunkArray(listData, columns);
     }
     return listData;
-  }, [listData, activeTab]);
+  }, [listData, activeTab, columns]);
 
   const handleKeyExtractor = useCallback((item: any) => {
     if (Array.isArray(item)) {
@@ -307,6 +305,7 @@ export const ProfileScreen: React.FC = () => {
 
   const renderItem = useCallback(({ item }: { item: any }) => {
     if (activeTab === 0 || activeTab === 1) {
+      const fillerCount = columns - item.length;
       return (
         <View style={styles.gridRow}>
           {item.map((task: any) => (
@@ -316,7 +315,9 @@ export const ProfileScreen: React.FC = () => {
               onPress={handlePostPress}
             />
           ))}
-          {item.length === 1 && <View style={styles.gridSpacer} />}
+          {fillerCount > 0 && Array.from({ length: fillerCount }).map((_, i) => (
+            <View key={`filler-${i}`} style={styles.gridSpacer} />
+          ))}
         </View>
       );
     }
@@ -360,7 +361,7 @@ export const ProfileScreen: React.FC = () => {
       );
     }
     return null;
-  }, [activeTab, handlePostPress, navigation]);
+  }, [activeTab, columns, handlePostPress, navigation]);
 
   const renderEmptyState = useCallback(() => {
     if (activeTab === 0) {
@@ -484,7 +485,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   gridSpacer: {
-    width: cardWidth,
+    flex: 1,
     margin: 8,
   },
   footerSpacing: {

@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Task } from '../../types';
 import { Ionicons } from '@expo/vector-icons';
 import { formatCurrency, normalizeImageUrl } from '../../utils/format';
-
-const { width } = Dimensions.get('window');
-const cardWidth = (width - 48) / 2;
+import { useScreenSize } from '../../hooks/useScreenSize';
 
 interface ProfilePostCardProps {
   task: Task;
@@ -99,13 +97,17 @@ export const ProfileEmptyState: React.FC<{
   ctaText?: string;
   onCtaPress?: () => void;
 }> = ({ title, subtitle, ctaText, onCtaPress }) => {
+  const { mascotMd, fontScale } = useScreenSize();
   return (
     <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconCircle}>
-        <Ionicons name="sparkles-outline" size={32} color={Colors.primary} />
-      </View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
+      {/* Mascot: sunglasses relaxing pose — profile screen */}
+      <Image
+        source={require('../../../assets/mascot_sunglasses.png')}
+        style={{ width: mascotMd, height: mascotMd * 1.1, marginBottom: 16 }}
+        resizeMode="contain"
+      />
+      <Text style={[styles.emptyTitle, { fontSize: 16 * fontScale }]}>{title}</Text>
+      {subtitle && <Text style={[styles.emptySubtitle, { fontSize: 13 * fontScale }]}>{subtitle}</Text>}
       {ctaText && onCtaPress && (
         <TouchableOpacity
           style={styles.emptyCta}
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EAECF0',
-    width: cardWidth,
+    flex: 1,
     margin: 8,
     overflow: 'hidden',
     elevation: 3,

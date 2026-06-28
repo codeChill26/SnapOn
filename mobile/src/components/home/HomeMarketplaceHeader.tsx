@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeTheme } from './HomeTheme';
+import { useScreenSize } from '../../hooks/useScreenSize';
 import type { User } from '../../types';
 
 interface HomeMarketplaceHeaderProps {
@@ -26,6 +27,8 @@ export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React
   onCategoryPress,
   onSavedPress,
 }) => {
+  const { mascotSm, isTablet } = useScreenSize();
+
   // Extract user's first name dynamically for greeting
   const greetingText = useMemo(() => {
     if (user && user.fullName) {
@@ -73,12 +76,26 @@ export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React
               </TouchableOpacity>
             </View>
 
-            {/* Tagline & Tag description */}
-            <View style={styles.taglineSection}>
-              <Text style={styles.titleText}>Tìm việc nhỏ, thuê người nhanh</Text>
-              <Text style={styles.subtitleText}>
-                Kết nối nhanh người cần việc và người có kỹ năng.
-              </Text>
+            {/* Tagline + Mascot row */}
+            <View style={styles.taglineRow}>
+              <View style={[styles.taglineSection, { flex: 1 }]}>
+                <Text style={styles.titleText}>Tìm việc nhỏ, thuê người nhanh</Text>
+                <Text style={styles.subtitleText}>
+                  Kết nối nhanh người cần việc và người có kỹ năng.
+                </Text>
+              </View>
+              {/* Mascot: thumbs-up hero — pose 1 */}
+              <Image
+                source={require('../../../assets/mascot_main.png')}
+                style={[
+                  styles.mascotHero,
+                  {
+                    width:  mascotSm + (isTablet ? 20 : 0),
+                    height: (mascotSm + (isTablet ? 20 : 0)) * 1.15,
+                  },
+                ]}
+                resizeMode="contain"
+              />
             </View>
 
             {/* Category Selector Pill */}
@@ -188,8 +205,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
   },
-  taglineSection: {
+  taglineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     marginBottom: 20,
+    gap: 8,
+  },
+  taglineSection: {
+    marginBottom: 0,
+  },
+  mascotHero: {
+    marginBottom: -24,
+    opacity: 0.97,
   },
   titleText: {
     fontSize: 18,

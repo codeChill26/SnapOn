@@ -20,6 +20,8 @@ interface HomeCompactJobCardProps {
   onPress: (task: Task) => void;
   onToggleSaved?: (task: Task) => void;
   saving?: boolean;
+  numColumns?: number;
+  paddingH?: number;
 }
 
 const resolveCategory = (task: Task) => {
@@ -88,6 +90,8 @@ export const HomeCompactJobCard: React.FC<HomeCompactJobCardProps> = React.memo(
   onPress,
   onToggleSaved,
   saving = false,
+  numColumns = 2,
+  paddingH = 16,
 }) => {
   const navigation = useNavigation<any>();
   const { width: screenWidth } = useWindowDimensions();
@@ -103,10 +107,9 @@ export const HomeCompactJobCard: React.FC<HomeCompactJobCardProps> = React.memo(
   const posterAvatar = task.poster?.avatarUrl;
 
   const cardWidth = useMemo(() => {
-    const horizontalPadding = 16;
-    const columnGap = 12;
-    return (screenWidth - horizontalPadding * 2 - columnGap) / 2;
-  }, [screenWidth]);
+    const columnGap = 8 * (numColumns - 1);
+    return (screenWidth - paddingH * 2 - columnGap) / numColumns;
+  }, [screenWidth, numColumns, paddingH]);
 
   return (
     <TouchableOpacity

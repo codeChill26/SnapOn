@@ -1,13 +1,10 @@
 import React, { useCallback, useMemo } from 'react';
 import {
-  Keyboard,
-  Platform,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
@@ -21,20 +18,16 @@ import { HomeJobGridSkeleton } from '../../components/home/HomeJobGridSkeleton';
 import { HomeBannerCarousel } from '../../components/home/HomeBannerCarousel';
 import { CategoryPickerModal } from '../../components/categories/CategoryPickerModal';
 import { useAuth } from '../../context/AuthContext';
+
 import { Task } from '../../types';
 import { useTheme } from '../../theme';
 import { useHomeTasks } from './hooks/useHomeTasks';
 import { useAppNavigation } from '../../hooks/useAppNavigation';
 
 export const HomeScreen: React.FC = () => {
-  const theme = useTheme();
   const navigation = useAppNavigation();
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
-
-  // Responsive grid calculation
-  const isTablet = width >= 768;
-  const numColumns = isTablet ? 3 : 2;
+  const theme = useTheme();
 
   const {
     loading,
@@ -83,55 +76,52 @@ export const HomeScreen: React.FC = () => {
     navigation.navigate('SavedJobs');
   }, [navigation]);
 
-  // Group tasks into row arrays for FlashList rendering
+  // Nhóm danh sách công việc thành từng dòng 2 cột cho FlashList hiển thị dạng lưới thủ công
   const taskRows = useMemo(() => {
     const rows: Task[][] = [];
-    for (let i = 0; i < sortedTasks.length; i += numColumns) {
-      const row: Task[] = [];
-      for (let j = 0; j < numColumns; j++) {
-        if (sortedTasks[i + j]) {
-          row.push(sortedTasks[i + j]);
-        }
+    for (let i = 0; i < sortedTasks.length; i += 2) {
+      const row = [sortedTasks[i]];
+      if (sortedTasks[i + 1]) {
+        row.push(sortedTasks[i + 1]);
       }
       rows.push(row);
     }
     return rows;
-  }, [sortedTasks, numColumns]);
+  }, [sortedTasks]);
 
   const renderJobItem = useCallback(
     ({ item }: { item: Task[] }) => {
+      const leftTask = item[0];
+      const rightTask = item[1];
+
       return (
-        <View
-          style={[
-            styles.rowContainer,
-            {
-              paddingHorizontal: theme.spacing.lg,
-              backgroundColor: theme.colors.background.secondary,
-              gap: theme.spacing.md,
-            },
-          ]}
-        >
-          {Array.from({ length: numColumns }).map((_, index) => {
-            const task = item[index];
-            return (
-              <View key={index} style={styles.columnItem}>
-                {task ? (
-                  <HomeCompactJobCard
-                    task={task}
-                    onPress={handleJobPress}
-                    onToggleSaved={handleToggleSaved}
-                    saving={Boolean(savingTaskIds[task.id])}
-                  />
-                ) : (
-                  <View style={styles.emptyColumnPlaceholder} />
-                )}
-              </View>
-            );
-          })}
+        <View style={styles.rowContainer}>
+          <View style={styles.columnItem}>
+            {leftTask && (
+              <HomeCompactJobCard
+                task={leftTask}
+                onPress={handleJobPress}
+                onToggleSaved={handleToggleSaved}
+                saving={Boolean(savingTaskIds[leftTask.id])}
+              />
+            )}
+          </View>
+          <View style={styles.columnItem}>
+            {rightTask ? (
+              <HomeCompactJobCard
+                task={rightTask}
+                onPress={handleJobPress}
+                onToggleSaved={handleToggleSaved}
+                saving={Boolean(savingTaskIds[rightTask.id])}
+              />
+            ) : (
+              <View style={styles.emptyColumnPlaceholder} />
+            )}
+          </View>
         </View>
       );
     },
-    [handleJobPress, handleToggleSaved, savingTaskIds, numColumns, theme]
+    [handleJobPress, handleToggleSaved, savingTaskIds],
   );
 
   const listEmptyComponent = useMemo(() => {
@@ -488,10 +478,11 @@ const styles = StyleSheet.create({
   rowContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
   },
   columnItem: {
     flex: 1,
-    maxWidth: '48.5%',
   },
   emptyColumnPlaceholder: {
     flex: 1,
