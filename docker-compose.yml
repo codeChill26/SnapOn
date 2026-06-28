@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+
+  # ============================================================
+  # PostgreSQL (local dev DB — replaces Supabase when running Docker)
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: snapon-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: snapon
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/createdb.txt:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Redis
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: snapon-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Backend — Express API (port 3000)
+  # Loads backend/.env.production then overrides DB/Redis to local containers.
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: snapon-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Override to local containers instead of Supabase/Redis Labs
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/snapon
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/snapon
+      REDIS_URL: redis://redis:6379
+
+  # ============================================================
+  # Frontend — React/Vite SPA served by nginx (port 5173 → 80)
+  # nginx proxies /api/* → backend:3000 (see frontend/nginx.conf)
+  # VITE_* vars are baked into the bundle at build time.
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Point to relative /api so nginx can proxy to backend container
+        VITE_API_BASE_URL: /api
+        VITE_AUTH_MODE: firebase
+        VITE_FIREBASE_API_KEY: AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ
+        VITE_FIREBASE_AUTH_DOMAIN: hcm202-2d75e.firebaseapp.com
+        VITE_FIREBASE_PROJECT_ID: hcm202-2d75e
+        VITE_FIREBASE_STORAGE_BUCKET: hcm202-2d75e.firebasestorage.app
+        VITE_FIREBASE_MESSAGING_SENDER_ID: "837187985882"
+        VITE_FIREBASE_APP_ID: 1:837187985882:web:a2012ea4bbf3b3003660e3
+    container_name: snapon-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  # ============================================================
+  # Admin — Next.js 16 standalone (port 3001 → 3000)
+  # Loads admin/.env.production then overrides DATABASE_URL to local postgres.
+  # ============================================================
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: snapon-admin
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./admin/.env.production
+    environment:
+      NODE_ENV: production
+      # Override to local postgres instead of Supabase
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/snapon
+
+volumes:
+  pgdata:

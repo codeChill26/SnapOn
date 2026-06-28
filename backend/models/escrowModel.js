@@ -56,6 +56,13 @@ const escrowModel = {
 
     return result.rows;
   },
+  async deleteByTaskId(taskId, db = pool) {
+    const result = await db.query(
+      'DELETE FROM escrows WHERE task_id = $1 RETURNING *',
+      [taskId]
+    );
+    return result.rows[0] || null;
+  },
 };
 
 module.exports = escrowModel;

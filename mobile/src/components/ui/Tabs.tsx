@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { AppColors, Spacing, Radius, Typography, Shadows } from '../../theme';
 
 interface Tab {
   key: string;
@@ -12,6 +12,7 @@ interface TabsProps {
   activeTab: string;
   onTabChange: (key: string) => void;
   scrollable?: boolean;
+  activeColor?: string;
 }
 
 export const Tabs: React.FC<TabsProps> = ({
@@ -19,6 +20,7 @@ export const Tabs: React.FC<TabsProps> = ({
   activeTab,
   onTabChange,
   scrollable = false,
+  activeColor,
 }) => {
   const Container = scrollable ? ScrollView : View;
   const containerProps = scrollable
@@ -32,12 +34,13 @@ export const Tabs: React.FC<TabsProps> = ({
           key={tab.key}
           style={[styles.tab, activeTab === tab.key && styles.activeTab]}
           onPress={() => onTabChange(tab.key)}
-          activeOpacity={0.7}
+          activeOpacity={0.75}
         >
           <Text
             style={[
               styles.tabText,
               activeTab === tab.key && styles.activeTabText,
+              activeTab === tab.key && activeColor ? { color: activeColor } : null,
             ]}
           >
             {tab.label}
@@ -51,27 +54,29 @@ export const Tabs: React.FC<TabsProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: Spacing.xs,
+    borderRadius: Radius.md,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: Radius.sm,
   },
   activeTab: {
-    backgroundColor: Colors.primary,
+    backgroundColor: AppColors.background.elevated,
+    borderColor: AppColors.border.subtle,
+    borderWidth: 1,
+    ...Shadows.sm,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '700',
+    color: AppColors.text.muted,
   },
   activeTabText: {
-    color: Colors.textWhite,
-    fontWeight: '600',
+    color: AppColors.brand.primary,
   },
 });

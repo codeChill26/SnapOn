@@ -12,9 +12,9 @@ function getPlatformFeeRate() {
 const escrowService = {
   /**
    * HOLD funds when a match is confirmed.
-   * - Creates escrow row (status: holding)
-   * - Moves poster wallet available -> pending
-   * - Creates a wallet_transaction type=payment status=pending reference_id=escrow.id
+   * - Creates or re-activates escrow row (status: HOLDING) for the specific task and tasker.
+   * - Moves poster wallet available_balance → locked_balance
+   * - Creates a wallet_transaction type=ESCROW_HOLD status=PENDING
    *
    * Must run inside an existing transaction (db client).
    */
@@ -28,64 +28,89 @@ const escrowService = {
       throw err;
     }
 
-    // Lock escrow row by task
+    const feeRate = getPlatformFeeRate();
+
+    // Lock existing escrow for this specific task and tasker
     const existing = await db.query(
-      'SELECT * FROM escrows WHERE task_id = $1 FOR UPDATE',
-      [taskId]
+      'SELECT * FROM escrows WHERE task_id = $1 AND tasker_id = $2 FOR UPDATE',
+      [taskId, taskerId]
     );
+
+    let escrow;
+
     if (existing.rows[0]) {
-      const escrow = existing.rows[0];
-      // If already holding/released/etc, do not create a new one
-      return { escrow, created: false };
+      const prev = existing.rows[0];
+
+      if (prev.status === 'HOLDING') {
+        // Already locked — idempotent, no double-deduct
+        return { escrow: prev, created: false };
+      }
+
+      if (prev.status === 'RELEASED') {
+        const err = new Error('Giao dịch ký quỹ của bạn với người làm này đã hoàn thành và thanh toán.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // status === 'REFUNDED': re-activate for tasker
+      const updated = await db.query(
+        `UPDATE escrows
+         SET amount = $2,
+             platform_fee_amount = ROUND($2::numeric * $3::numeric, 2),
+             status = 'HOLDING'
+         WHERE id = $1
+         RETURNING *`,
+        [prev.id, amt, feeRate]
+      );
+      escrow = updated.rows[0];
+    } else {
+      const inserted = await db.query(
+        `INSERT INTO escrows (
+           id, task_id, poster_id, tasker_id,
+           amount, platform_fee_amount, insurance_fee_amount,
+           status
+         )
+         VALUES (
+           gen_random_uuid(), $1, $2, $3,
+           $4,
+           ROUND($4::numeric * $5::numeric, 2),
+           0,
+           'HOLDING'
+         )
+         RETURNING *`,
+        [taskId, posterId, taskerId, amt, feeRate]
+      );
+      escrow = inserted.rows[0];
     }
 
+    // Lock poster wallet (create if missing)
     const posterWallet = await walletModel.lockByUserId(posterId, db);
 
-    if (Number(posterWallet.available_balance) < amt) {
-      const err = new Error('Insufficient wallet balance to hold escrow.');
+    const availBal = parseFloat(posterWallet.available_balance);
+    if (availBal < amt) {
+      const err = new Error(
+        `Số dư khả dụng không đủ. Hiện có: ${availBal.toLocaleString('vi-VN')}đ, cần: ${amt.toLocaleString('vi-VN')}đ`
+      );
       err.statusCode = 400;
-      err.code = 'INSUFFICIENT_BALANCE';
-      err.availableBalance = Number(posterWallet.available_balance);
       throw err;
     }
 
-    const feeRate = getPlatformFeeRate();
-
-    const escrowInsert = await db.query(
-      `INSERT INTO escrows (
-         task_id, poster_id, tasker_id,
-         amount, platform_fee_amount, insurance_fee_amount,
-         status
-       )
-       VALUES (
-         $1, $2, $3,
-         $4,
-         ROUND($4::numeric * $5::numeric, 2),
-         0,
-         'holding'
-       )
-       RETURNING *`,
-      [taskId, posterId, taskerId, amt, feeRate]
-    );
-
-    const escrow = escrowInsert.rows[0];
-
-    // Move money: available -> pending
+    // Move available_balance → locked_balance (balance total unchanged)
     await db.query(
       `UPDATE wallets
        SET available_balance = available_balance - $2,
-           pending_balance = pending_balance + $2
+           locked_balance    = locked_balance    + $2
        WHERE id = $1`,
       [posterWallet.id, amt]
     );
 
-    // Ledger: payment pending
+    // Ledger entry: poster ESCROW_HOLD
     await walletTransactionModel.create(
       {
         walletId: posterWallet.id,
-        type: 'payment',
+        type: 'ESCROW_HOLD',
         amount: amt,
-        status: 'pending',
+        status: 'PENDING',
         referenceId: escrow.id,
       },
       db
@@ -95,160 +120,173 @@ const escrowService = {
   },
 
   /**
-   * RELEASE escrow on task completion.
-   * - Poster pending decreases; poster balance decreases
-   * - Tasker receives (amount - fee)
-   * - Escrow status: released
-   * - Poster payment tx -> success
-   * - Tasker ledger entries: earning + fee
+   * RELEASE escrow on task completion (for all escrows holding for this task).
+   * Must run inside an existing transaction (db client).
    */
   async releaseForTask(taskId, db) {
     if (!db) throw new Error('releaseForTask requires a db client');
 
     const escrows = await db.query(
-      'SELECT * FROM escrows WHERE task_id = $1 FOR UPDATE',
+      "SELECT * FROM escrows WHERE task_id = $1 AND status = 'HOLDING' FOR UPDATE",
       [taskId]
     );
-    const escrow = escrows.rows[0];
-    if (!escrow) return null;
-
-    if (escrow.status !== 'holding') return escrow;
-
-    const amount = Number(escrow.amount);
-    const fee = Number(escrow.platform_fee_amount || 0);
-    const net = Math.max(0, amount - fee);
-
-    const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
-    const taskerWallet = await walletModel.lockByUserId(escrow.tasker_id, db);
-
-    // Poster: pending -> out (balance decreases)
-    await db.query(
-      `UPDATE wallets
-       SET pending_balance = pending_balance - $2,
-           balance = balance - $2
-       WHERE id = $1`,
-      [posterWallet.id, amount]
-    );
-
-    // Tasker: receive net
-    await db.query(
-      `UPDATE wallets
-       SET available_balance = available_balance + $2,
-           balance = balance + $2
-       WHERE id = $1`,
-      [taskerWallet.id, net]
-    );
-
-    // Update escrow
-    const updatedEscrow = await db.query(
-      `UPDATE escrows
-       SET status = 'released'
-       WHERE id = $1
-       RETURNING *`,
-      [escrow.id]
-    );
-
-    // Poster payment tx: pending -> success
-    const posterPaymentTx = await walletTransactionModel.findByReference(
-      posterWallet.id,
-      escrow.id,
-      'payment',
-      db
-    );
-    if (posterPaymentTx && posterPaymentTx.status === 'pending') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'success', db);
+    
+    for (const escrow of escrows.rows) {
+      await this.releaseEscrowRecord(escrow, db);
     }
-
-    // Tasker ledger
-    if (net > 0) {
-      await walletTransactionModel.create(
-        {
-          walletId: taskerWallet.id,
-          type: 'earning',
-          amount: net,
-          status: 'success',
-          referenceId: escrow.id,
-        },
-        db
-      );
-    }
-
-    if (fee > 0) {
-      await walletTransactionModel.create(
-        {
-          walletId: taskerWallet.id,
-          type: 'fee',
-          amount: fee,
-          status: 'success',
-          referenceId: escrow.id,
-        },
-        db
-      );
-    }
-
-    return updatedEscrow.rows[0];
   },
 
   /**
-   * REFUND escrow on task cancellation.
-   * - Poster pending -> available
-   * - Escrow status: refunded
-   * - Poster payment tx -> cancelled
-   * - Create refund tx
+   * RELEASE escrow for a specific tasker/worker.
    */
-  async refundForTask(taskId, db) {
-    if (!db) throw new Error('refundForTask requires a db client');
+  async releaseForTasker(taskId, taskerId, db) {
+    if (!db) throw new Error('releaseForTasker requires a db client');
 
     const escrows = await db.query(
-      'SELECT * FROM escrows WHERE task_id = $1 FOR UPDATE',
-      [taskId]
+      "SELECT * FROM escrows WHERE task_id = $1 AND tasker_id = $2 AND status = 'HOLDING' FOR UPDATE",
+      [taskId, taskerId]
     );
-    const escrow = escrows.rows[0];
-    if (!escrow) return null;
+    
+    if (escrows.rows[0]) {
+      await this.releaseEscrowRecord(escrows.rows[0], db);
+    }
+  },
 
-    if (escrow.status !== 'holding') return escrow;
+  /**
+   * Helper function to release a single escrow record.
+   */
+  async releaseEscrowRecord(escrow, db) {
+    const amount = parseFloat(escrow.amount);
+    const platformFee = parseFloat(escrow.platform_fee_amount);
+    const taskerEarning = amount - platformFee;
 
-    const amount = Number(escrow.amount);
+    // Update escrow status
+    await db.query(
+      `UPDATE escrows SET status = 'RELEASED' WHERE id = $1`,
+      [escrow.id]
+    );
+
+    // Lock poster wallet and settle: locked_balance -= amount, balance -= amount
     const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
-
+    const lockedBalance = parseFloat(posterWallet.locked_balance);
+    if (lockedBalance < amount) {
+      throw new Error(`Insufficient locked balance to release escrow. Wallet locked balance: ${lockedBalance}, required: ${amount}`);
+    }
     await db.query(
       `UPDATE wallets
-       SET pending_balance = pending_balance - $2,
-           available_balance = available_balance + $2
+       SET locked_balance = locked_balance - $2,
+           balance        = balance        - $2
        WHERE id = $1`,
       [posterWallet.id, amount]
     );
 
-    const updatedEscrow = await db.query(
-      `UPDATE escrows
-       SET status = 'refunded'
-       WHERE id = $1
-       RETURNING *`,
-      [escrow.id]
-    );
-
-    const posterPaymentTx = await walletTransactionModel.findByReference(
-      posterWallet.id,
-      escrow.id,
-      'payment',
-      db
-    );
-    if (posterPaymentTx && posterPaymentTx.status === 'pending') {
-      await walletTransactionModel.updateStatusById(posterPaymentTx.id, 'cancelled', db);
-    }
-
+    // Ledger: poster payment completed
     await walletTransactionModel.create(
       {
         walletId: posterWallet.id,
-        type: 'refund',
-        amount,
-        status: 'success',
+        type: 'ESCROW_RELEASE',
+        amount: amount,
+        status: 'SUCCESS',
         referenceId: escrow.id,
       },
       db
     );
 
-    return updatedEscrow.rows[0];
+    // Lock tasker wallet and credit earnings
+    if (taskerEarning > 0) {
+      const taskerWallet = await walletModel.lockByUserId(escrow.tasker_id, db);
+      await db.query(
+        `UPDATE wallets
+         SET available_balance = available_balance + $2,
+             balance           = balance           + $2
+         WHERE id = $1`,
+        [taskerWallet.id, taskerEarning]
+      );
+
+      // Ledger: tasker earning
+      await walletTransactionModel.create(
+        {
+          walletId: taskerWallet.id,
+          type: 'ESCROW_RELEASE',
+          amount: taskerEarning,
+          status: 'SUCCESS',
+          referenceId: escrow.id,
+        },
+        db
+      );
+    }
+  },
+
+  /**
+   * REFUND escrow on task cancellation or worker decline (for all escrows holding for this task).
+   * Must run inside an existing transaction (db client).
+   */
+  async refundForTask(taskId, db) {
+    if (!db) throw new Error('refundForTask requires a db client');
+
+    const escrows = await db.query(
+      "SELECT * FROM escrows WHERE task_id = $1 AND status = 'HOLDING' FOR UPDATE",
+      [taskId]
+    );
+    
+    for (const escrow of escrows.rows) {
+      await this.refundEscrowRecord(escrow, db);
+    }
+  },
+
+  /**
+   * REFUND escrow for a specific tasker/worker.
+   */
+  async refundForTasker(taskId, taskerId, db) {
+    if (!db) throw new Error('refundForTasker requires a db client');
+
+    const escrows = await db.query(
+      "SELECT * FROM escrows WHERE task_id = $1 AND tasker_id = $2 AND status = 'HOLDING' FOR UPDATE",
+      [taskId, taskerId]
+    );
+    
+    if (escrows.rows[0]) {
+      await this.refundEscrowRecord(escrows.rows[0], db);
+    }
+  },
+
+  /**
+   * Helper function to refund a single escrow record.
+   */
+  async refundEscrowRecord(escrow, db) {
+    const amount = parseFloat(escrow.amount);
+
+    // Update escrow status
+    await db.query(
+      `UPDATE escrows SET status = 'REFUNDED' WHERE id = $1`,
+      [escrow.id]
+    );
+
+    // Lock poster wallet and move locked → available
+    const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
+    const lockedBalance = parseFloat(posterWallet.locked_balance);
+    if (lockedBalance < amount) {
+      throw new Error(`Insufficient locked balance to refund escrow. Wallet locked balance: ${lockedBalance}, required: ${amount}`);
+    }
+    await db.query(
+      `UPDATE wallets
+       SET locked_balance    = locked_balance    - $2,
+           available_balance = available_balance + $2
+       WHERE id = $1`,
+      [posterWallet.id, amount]
+    );
+
+    // Ledger: poster refund
+    await walletTransactionModel.create(
+      {
+        walletId: posterWallet.id,
+        type: 'REFUND',
+        amount: amount,
+        status: 'SUCCESS',
+        referenceId: escrow.id,
+      },
+      db
+    );
   },
 };
 

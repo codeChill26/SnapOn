@@ -16,6 +16,10 @@ const options = {
         url: 'http://localhost:3000',
         description: 'Development server',
       },
+      {
+        url: "https://snapon.onrender.com",
+        description: "Production server",
+      },
     ],
     components: {
       securitySchemes: {
@@ -335,6 +339,132 @@ const options = {
             message: { type: 'string', example: 'User synced successfully' },
             user: { $ref: '#/components/schemas/UserDb' },
             wallet: { $ref: '#/components/schemas/Wallet' },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        SyncUserInput: {
+          type: 'object',
+          properties: {
+            firebaseToken: {
+              type: 'string',
+              description: 'Firebase ID token. Trong DEV mode co the dung mock-firebase-token:<email>.',
+              example: 'mock-firebase-token:user@example.com',
+            },
+          },
+        },
+
+        DevLoginInput: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+          },
+        },
+
+        DevRegisterInput: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+            fullName: { type: 'string', example: 'Nguyen Van A' },
+          },
+        },
+
+        RefreshTokenInput: {
+          type: 'object',
+          required: ['refreshToken'],
+          properties: {
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        TokenPairResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Tokens refreshed successfully' },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        AuthSessionResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Login successful' },
+            user: { $ref: '#/components/schemas/UserProfile' },
+            wallet: { $ref: '#/components/schemas/Wallet' },
+            token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          },
+        },
+
+        VerifyEmailInput: {
+          type: 'object',
+          required: ['email', 'token'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+            token: { type: 'string', minLength: 6, maxLength: 6, example: '123456' },
+          },
+        },
+
+        ResendVerificationInput: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+          },
+        },
+
+        SendOtpInput: {
+          type: 'object',
+          required: ['phone'],
+          properties: {
+            phone: { type: 'string', example: '0900000000' },
+          },
+        },
+
+        VerifyOtpInput: {
+          type: 'object',
+          required: ['phone', 'otp'],
+          properties: {
+            phone: { type: 'string', example: '0900000000' },
+            otp: { type: 'string', minLength: 6, maxLength: 6, example: '123456' },
+          },
+        },
+
+        AccountVerificationInput: {
+          type: 'object',
+          required: ['frontImage', 'backImage', 'selfieImage'],
+          properties: {
+            frontImage: {
+              type: 'string',
+              description: 'Base64 CCCD/ID front image. Accepts raw base64 or data:image/...;base64,...',
+              example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+            },
+            backImage: {
+              type: 'string',
+              description: 'Base64 CCCD/ID back image. Accepts raw base64 or data:image/...;base64,...',
+              example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+            },
+            selfieImage: {
+              type: 'string',
+              description: 'Base64 selfie image. Accepts raw base64 or data:image/...;base64,...',
+              example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+            },
+          },
+        },
+
+        UserVerifyResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Account verified successfully' },
+            user: { $ref: '#/components/schemas/UserProfile' },
           },
         },
 
@@ -349,13 +479,81 @@ const options = {
             },
           },
         },
+        Banner: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            code: { type: 'string', example: 'HOME_CONTENT' },
+            title: { type: 'string', example: 'Biến ý tưởng thành nội dung thu hút' },
+            subtitle: { type: 'string', example: 'Tìm người viết bài, sáng tạo nội dung và hỗ trợ truyền thông.' },
+            imageUrl: { type: 'string', example: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800' },
+            category: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                code: { type: 'string', example: 'CONTENT' },
+                name: { type: 'string', example: 'Content' }
+              }
+            },
+            action: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', enum: ['CATEGORY', 'EXTERNAL_URL', 'NONE'], example: 'CATEGORY' },
+                value: { type: 'string', example: 'category-uuid' }
+              }
+            },
+            displayOrder: { type: 'integer', example: 1 },
+            isActive: { type: 'boolean', example: true },
+            placement: { type: 'string', enum: ['HOME_FEATURED', 'HOME_TOP'], example: 'HOME_FEATURED' },
+            startAt: { type: 'string', format: 'date-time', nullable: true },
+            endAt: { type: 'string', format: 'date-time', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        CreateBannerInput: {
+          type: 'object',
+          required: ['code', 'title', 'imageUrl', 'categoryId', 'placement', 'actionType', 'displayOrder'],
+          properties: {
+            code: { type: 'string', example: 'HOME_CONTENT' },
+            title: { type: 'string', example: 'Biến ý tưởng thành nội dung thu hút' },
+            subtitle: { type: 'string', example: 'Tìm người viết bài...' },
+            imageUrl: { type: 'string', format: 'url', example: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800' },
+            categoryId: { type: 'string', format: 'uuid', example: '550e8400-e29b-41d4-a716-446655440000' },
+            placement: { type: 'string', enum: ['HOME_FEATURED', 'HOME_TOP'], example: 'HOME_FEATURED' },
+            actionType: { type: 'string', enum: ['CATEGORY', 'EXTERNAL_URL', 'NONE'], example: 'CATEGORY' },
+            actionValue: { type: 'string', example: 'category-uuid' },
+            displayOrder: { type: 'integer', minimum: 1, example: 1 },
+            isActive: { type: 'boolean', default: true, example: true },
+            startAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-15T00:00:00Z' },
+            endAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-20T00:00:00Z' }
+          }
+        },
+        UpdateBannerInput: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', example: 'HOME_CONTENT' },
+            title: { type: 'string', example: 'Biến ý tưởng thành nội dung thu hút' },
+            subtitle: { type: 'string', example: 'Tìm người viết bài...' },
+            imageUrl: { type: 'string', format: 'url', example: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800' },
+            categoryId: { type: 'string', format: 'uuid', example: '550e8400-e29b-41d4-a716-446655440000' },
+            placement: { type: 'string', enum: ['HOME_FEATURED', 'HOME_TOP'], example: 'HOME_FEATURED' },
+            actionType: { type: 'string', enum: ['CATEGORY', 'EXTERNAL_URL', 'NONE'], example: 'CATEGORY' },
+            actionValue: { type: 'string', example: 'category-uuid' },
+            displayOrder: { type: 'integer', minimum: 1, example: 1 },
+            isActive: { type: 'boolean', example: true },
+            startAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-15T00:00:00Z' },
+            endAt: { type: 'string', format: 'date-time', nullable: true, example: '2026-06-20T00:00:00Z' }
+          }
+        }
       },
     },
     security: [
       { DevAuth: [] },
     ],
   },
-  apis: ['./config/swagger-docs.js'],
+  apis: ['./config/swagger-docs.js', './routes/*.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

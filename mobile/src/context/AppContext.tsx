@@ -23,7 +23,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [applications, setApplications] = useState<TaskApplication[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
 
-  const userRole: UserRole = user?.role || 'hirer';
+  const userRole: UserRole = user?.role || 'USER';
 
   const addTask = useCallback((task: Task) => {
     setTasks(prev => [task, ...prev]);

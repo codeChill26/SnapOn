@@ -7,7 +7,7 @@ import {
   Target, BarChart3, FlameKindling, ExternalLink, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp, haversineDistance, DEMO_WORKER, scoreApplicants } from '../context/AppContext';
+import { useApp, haversineDistance, scoreApplicants } from '../context/AppContext';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { MapPicker } from '../components/MapPicker';
 import { UserProfileModal, type HirerProfileData, type WorkerProfileData } from '../components/UserProfileModal';
@@ -46,7 +46,7 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
 function WorkerJobDetailView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { jobs, applyToJob, workerStatus, workerCurrentJobId } = useApp();
+  const { jobs, applyToJob, workerStatus, workerCurrentJobId, currentUser } = useApp();
   const [note, setNote] = useState('');
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [applied, setApplied] = useState(false);
@@ -62,14 +62,14 @@ function WorkerJobDetailView() {
 
   if (!job) return <NotFound />;
 
-  const alreadyApplied = job.applicants.some(a => a.workerId === DEMO_WORKER.id);
-  const myApplication  = job.applicants.find(a => a.workerId === DEMO_WORKER.id);
-  const isMatched      = job.status === 'matched' && job.aiMatchId === DEMO_WORKER.id;
+  const alreadyApplied = job.applicants.some(a => a.workerId === currentUser.id);
+  const myApplication  = job.applicants.find(a => a.workerId === currentUser.id);
+  const isMatched      = job.status === 'matched' && job.aiMatchId === currentUser.id;
   const isCompleted    = job.status === 'completed';
   const isOnThisJob    = workerCurrentJobId === job.id && workerStatus === 'on_job';
   const canApply       = job.status === 'active' && job.expiresAt > Date.now() && !alreadyApplied && !applied && workerStatus === 'available';
   const workerBusy     = workerStatus === 'on_job' && workerCurrentJobId !== job.id;
-  const distance       = haversineDistance(DEMO_WORKER.lat, DEMO_WORKER.lng, job.location.lat, job.location.lng);
+  const distance       = haversineDistance(10.7769, 106.7009, job.location.lat, job.location.lng);
 
   // Competitiveness hint based on bid
   const bidRatio = (bidPrice - job.priceMin) / (job.priceMax - job.priceMin || 1);
@@ -78,7 +78,18 @@ function WorkerJobDetailView() {
     : { label: 'Trung bình', color: 'text-amber-600', bg: 'bg-amber-50' };
 
   const handleApply = () => {
-    applyToJob(job.id, DEMO_WORKER, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
+    const workerWithLoc = {
+      id: currentUser.id,
+      name: currentUser.name,
+      avatar: currentUser.avatar,
+      lat: 10.7769,
+      lng: 106.7009,
+      skills: (currentUser as any).skills || [],
+      rating: parseFloat((currentUser as any).rating) || 0,
+      completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
+      bio: (currentUser as any).bio || '',
+    };
+    applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
     setApplied(true);
     setShowApplyForm(false);
   };
@@ -526,7 +537,9 @@ function HirerJobDetailView() {
             className="bg-purple-50 border border-purple-200 rounded-2xl p-5 mb-4 text-center">
             <PartyPopper className="w-10 h-10 text-purple-500 mx-auto mb-2" />
             <p className="text-purple-700" style={{ fontWeight: 700 }}>Hoàn thành! 🎉</p>
-            <p className="text-purple-600 text-sm mt-1">Đã thanh toán <strong>{fmt(job.price)}</strong>. Cảm ơn bạn đã dùng SnapOn!</p>
+            <p className="text-purple-600 text-sm mt-1">
+              Đã thanh toán <strong>{fmt(job.price)}</strong> cho <strong>{aiWinner?.name || "người nhận việc"}</strong>. Cảm ơn bạn đã dùng SnapOn!
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -733,7 +746,7 @@ function HirerJobDetailView() {
                 transition={{ delay: idx * 0.07 }}
                 className={`rounded-xl border p-4 transition-all ${
                   isSelected ? 'border-green-400 bg-green-50' :
-                  (isMatched && isWinner) ? 'border-blue-400 bg-blue-50' :
+                  ((isMatched || isCompleted) && isWinner) ? 'border-blue-400 bg-blue-50' :
                   rank === 0 && showAlgoDetails ? 'border-purple-300 bg-purple-50/30' :
                   'border-gray-100 bg-white'
                 }`}
@@ -742,7 +755,7 @@ function HirerJobDetailView() {
                   <div className="relative flex-shrink-0">
                     <img src={applicant.avatar} alt={applicant.name}
                       className={`w-11 h-11 rounded-full border-2 ${
-                        (isMatched && isWinner) ? 'border-blue-400' :
+                        ((isMatched || isCompleted) && isWinner) ? 'border-blue-400' :
                         rank === 0 && showAlgoDetails ? 'border-purple-400' : 'border-gray-200'
                       } bg-gray-100`}
                     />
@@ -756,9 +769,9 @@ function HirerJobDetailView() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-gray-900 text-sm" style={{ fontWeight: 700 }}>{applicant.name}</span>
-                      {isMatched && isWinner && (
+                      {((isMatched || isCompleted) && isWinner) && (
                         <span className="flex items-center gap-1 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full" style={{ fontWeight: 600 }}>
-                          <CheckCheck className="w-3 h-3" /> Được chọn
+                          <CheckCheck className="w-3 h-3" /> {isCompleted ? 'Đã hoàn thành việc' : 'Được chọn'}
                         </span>
                       )}
                       {rank === 0 && showAlgoDetails && !isMatched && (

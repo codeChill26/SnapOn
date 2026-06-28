@@ -1,87 +1,218 @@
-const pool = require('../config/db');
-const { success, error } = require('../utils/responseHandler');
+/**
+ * Auth Controller
+ * 
+ * This file is actively used by the authentication routes (backend/routes/auth.js).
+ * It contains functions for:
+ * 1. Email Verification: Handling verifyEmail endpoint request and verifying verificationToken.
+ * 2. Verification Code Resending: Handling resend-verification endpoint and generating new verificationToken.
+ * 3. Token Generation Utilities: Functions for generating access/refresh JWT tokens and caching refresh tokens in Redis.
+ */
+const prisma = require('../db/prisma');
+const emailService = require('../services/emailService');
+const response = require('../utils/responseHandler');
+const jwt = require('jsonwebtoken');
+const redis = require('../config/redis');
 
-const authController = {
-  async devLogin(req, res) {
-    try {
-      const { email, name, role } = req.body;
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 
-      if (!email) {
-        return error(res, 'Email is required.', 400);
-      }
+function buildDebugOtpPayload(token, warning) {
+  if (!emailService.isEmailDebugOtpEnabled()) return null;
+  return {
+    debugOtp: token,
+    ...(warning ? { warning } : {})
+  };
+}
 
-      const existing = await pool.query(
-        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE email = $1',
-        [email]
-      );
+function generateAccessToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      firebaseUid: user.firebaseUid || user.firebase_uid,
+      fullName: user.fullName || user.full_name,
+      email: user.email,
+      role: user.role || 'USER',
+      status: user.status
+    },
+    process.env.JWT_ACCESS_SECRET || 'snapon_jwt_access_secret_key_2026_secure',
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
+  );
+}
 
-      if (existing.rows.length > 0) {
-        const user = existing.rows[0];
-        return success(res, { user, token: user.id }, 'Login successful.');
-      }
+function generateRefreshToken(user) {
+  return jwt.sign(
+    { id: user.id },
+    process.env.JWT_REFRESH_SECRET || 'snapon_jwt_refresh_secret_key_2026_secure',
+    { expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d` }
+  );
+}
 
-      const result = await pool.query(
-        `INSERT INTO users (email, full_name, role, status, is_verified)
-         VALUES ($1, $2, $3, 'active', true)
-         RETURNING id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified`,
-        [email, name || email.split('@')[0], role || 'hirer']
-      );
+async function saveRefreshToken(user, token, req) {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
 
-      const user = result.rows[0];
+  const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
 
-      await pool.query(
-        `INSERT INTO wallets (user_id, balance, available_balance, pending_balance)
-         VALUES ($1, 500000, 500000, 0)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [user.id]
-      );
-
-      return success(res, { user, token: user.id }, 'User created successfully.');
-    } catch (err) {
-      console.error('Dev login error:', err);
-      return error(res, 'Authentication failed.', 500);
+  // 1. Save in PostgreSQL (persistent backup)
+  const dbPromise = prisma.refreshToken.create({
+    data: {
+      token,
+      userId: user.id,
+      deviceInfo,
+      ipAddress,
+      expiresAt
     }
-  },
+  });
 
-  async devRegister(req, res) {
-    try {
-      const { email, name, password, phone, role } = req.body;
+  // 2. Save in Redis Cache with TTL
+  const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+  const redisPromise = redis.set(`refresh_token:${token}`, JSON.stringify(user), ttlSeconds);
 
-      if (!email || !name || !password) {
-        return error(res, 'Email, name, and password are required.', 400);
-      }
+  const [dbToken, _] = await Promise.all([dbPromise, redisPromise]);
+  return dbToken;
+}
 
-      const existing = await pool.query(
-        'SELECT id FROM users WHERE email = $1',
-        [email]
-      );
+/**
+ * Generates a random 6-digit numeric OTP code.
+ */
+function generateVerificationToken() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-      if (existing.rows.length > 0) {
-        return error(res, 'Email already registered.', 409);
-      }
+/**
+ * Handles verifying the user's email with the 6-digit token.
+ */
+const verifyEmail = async (req, res) => {
+  try {
+    const { email, token } = req.body;
 
-      const result = await pool.query(
-        `INSERT INTO users (email, full_name, phone, role, status, is_verified)
-         VALUES ($1, $2, $3, $4, 'active', true)
-         RETURNING id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified`,
-        [email, name, phone || null, role || 'worker']
-      );
-
-      const user = result.rows[0];
-
-      await pool.query(
-        `INSERT INTO wallets (user_id, balance, available_balance, pending_balance)
-         VALUES ($1, 500000, 500000, 0)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [user.id]
-      );
-
-      return success(res, { user, token: user.id }, 'Registration successful.');
-    } catch (err) {
-      console.error('Dev register error:', err);
-      return error(res, 'Registration failed.', 500);
+    if (!email || !token) {
+      return response.error(res, 'Email và mã xác thực là bắt buộc', 400);
     }
-  },
+
+    // 1. Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email: email.trim() },
+      include: { wallet: true }
+    });
+
+    if (!user) {
+      return response.error(res, 'Không tìm thấy người dùng', 404);
+    }
+
+    if (user.isVerified) {
+      return response.error(res, 'Tài khoản đã được xác thực trước đó', 400);
+    }
+
+    // 2. Check token mismatch or expiration
+    if (!user.verificationToken || user.verificationToken !== token) {
+      return response.error(res, 'Mã xác thực không hợp lệ', 400);
+    }
+
+    if (new Date() > new Date(user.verificationTokenExpires)) {
+      return response.error(res, 'Mã xác thực đã hết hạn. Vui lòng yêu cầu gửi lại mã mới', 400);
+    }
+
+    // 3. Update user to verified and clear the token fields
+    const updatedUser = await prisma.user.update({
+      where: { email: email.trim() },
+      data: {
+        isVerified: true,
+        verificationToken: null,
+        verificationTokenExpires: null
+      }
+    });
+
+    // 4. Generate access & refresh tokens
+    const accessToken = generateAccessToken(updatedUser);
+    const refreshToken = generateRefreshToken(updatedUser);
+    await saveRefreshToken(updatedUser, refreshToken, req);
+
+    // Standardize user object keys to camelCase for the frontend
+    const userResponse = {
+      id: updatedUser.id,
+      firebaseUid: updatedUser.firebaseUid || updatedUser.firebase_uid,
+      fullName: updatedUser.fullName || updatedUser.full_name,
+      email: updatedUser.email,
+      phone: updatedUser.phone,
+      avatarUrl: updatedUser.avatarUrl || updatedUser.avatar_url,
+      role: updatedUser.role || 'USER',
+      status: updatedUser.status,
+      isVerified: updatedUser.isVerified,
+      isIdVerified: updatedUser.isIdVerified,
+      createdAt: updatedUser.createdAt,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Xác thực email thành công',
+      user: userResponse,
+      accessToken,
+      refreshToken,
+      wallet: user.wallet
+    });
+  } catch (error) {
+    console.error('❌ Verify email error:', error);
+    return response.error(res, 'Xác thực email thất bại: ' + error.message, 500);
+  }
 };
 
-module.exports = authController;
+/**
+ * Resends the 6-digit verification code.
+ */
+const resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return response.error(res, 'Email là bắt buộc', 400);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.trim() }
+    });
+
+    if (!user) {
+      return response.error(res, 'Không tìm thấy người dùng với email này', 404);
+    }
+
+    if (user.isVerified) {
+      return response.error(res, 'Email này đã được xác thực', 400);
+    }
+
+    // Generate new token and set expiration to 15 minutes
+    const token = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    await prisma.user.update({
+      where: { email: email.trim() },
+      data: {
+        verificationToken: token,
+        verificationTokenExpires: expiresAt
+      }
+    });
+
+    const mailResult = await emailService.sendVerificationEmail(user.email, user.fullName || user.full_name, token);
+    if (mailResult.success) {
+      return response.success(res, buildDebugOtpPayload(token), 'Mã xác thực mới đã được gửi vào email của bạn');
+    }
+
+    const debugPayload = buildDebugOtpPayload(token, mailResult.message);
+    if (debugPayload) {
+      console.warn('[EMAIL SERVICE] Returning debug OTP because EMAIL_DEBUG_OTP=true');
+      return response.success(res, debugPayload, 'Không gửi được email, trả OTP debug để test');
+    }
+
+    return response.error(res, mailResult.message || 'Không thể gửi email xác thực lúc này. Vui lòng thử lại sau.', 500);
+  } catch (error) {
+    console.error('❌ Resend verification error:', error);
+    return response.error(res, 'Gửi lại mã xác thực thất bại: ' + error.message, 500);
+  }
+};
+
+module.exports = {
+  verifyEmail,
+  resendVerification,
+  generateVerificationToken,
+};

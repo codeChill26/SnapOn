@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { PlusCircle, ChevronLeft, Clock, FileText, MapPin, CheckCircle, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -46,7 +46,13 @@ function fmt(n: number) { return n.toLocaleString('vi-VN') + '₫'; }
 
 export default function PostJob() {
   const navigate = useNavigate();
-  const { addJob } = useApp();
+  const { addJob, currentUser, setUserRole } = useApp();
+
+  useEffect(() => {
+    if (currentUser.role !== 'hirer') {
+      setUserRole('hirer');
+    }
+  }, [currentUser.role, setUserRole]);
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [newJobId, setNewJobId] = useState('');

@@ -16,16 +16,18 @@ pnpm-debug.log*
 .pnpm-store/
 .pnp.*
 
-# Env files (keep templates)
+# Env files
 .env
 .env.*
-!.env.example
+!.env.example      # template — always tracked
+!.env.development  # safe localhost values — tracked
 
 # Build / tooling outputs
 dist/
 build/
 .vite/
 coverage/
+.expo/
 
 # OS junk
 .DS_Store

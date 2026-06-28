@@ -1,11 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEYS = {
-  AUTH_TOKEN: '@snapon/auth_token',
+  AUTH_TOKEN: '@snapon/access_token', // Now represents the Access Token
+  REFRESH_TOKEN: '@snapon/refresh_token',
   USER_DATA: '@snapon/user_data',
   WALLET: '@snapon/wallet',
   ROLE: '@snapon/role',
+  CHAT_DRAFTS: '@snapon/chat_drafts',
 };
+
+export interface ChatDraft {
+  text: string;
+  updatedAt: string;
+}
 
 export const storage = {
   async setToken(token: string): Promise<void> {
@@ -18,6 +25,18 @@ export const storage = {
 
   async removeToken(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.AUTH_TOKEN);
+  },
+
+  async setRefreshToken(token: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.REFRESH_TOKEN, token);
+  },
+
+  async getRefreshToken(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.REFRESH_TOKEN);
+  },
+
+  async removeRefreshToken(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.REFRESH_TOKEN);
   },
 
   async setUserData(user: any): Promise<void> {
@@ -48,6 +67,38 @@ export const storage = {
 
   async getRole(): Promise<string | null> {
     return AsyncStorage.getItem(KEYS.ROLE);
+  },
+
+  async getChatDrafts(): Promise<Record<string, ChatDraft>> {
+    const data = await AsyncStorage.getItem(KEYS.CHAT_DRAFTS);
+    return data ? JSON.parse(data) : {};
+  },
+
+  async getChatDraft(conversationId: string): Promise<ChatDraft | null> {
+    const drafts = await this.getChatDrafts();
+    return drafts[conversationId] || null;
+  },
+
+  async setChatDraft(conversationId: string, text: string): Promise<void> {
+    const drafts = await this.getChatDrafts();
+    const trimmedText = text.trim();
+
+    if (!trimmedText) {
+      delete drafts[conversationId];
+    } else {
+      drafts[conversationId] = {
+        text,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    await AsyncStorage.setItem(KEYS.CHAT_DRAFTS, JSON.stringify(drafts));
+  },
+
+  async clearChatDraft(conversationId: string): Promise<void> {
+    const drafts = await this.getChatDrafts();
+    delete drafts[conversationId];
+    await AsyncStorage.setItem(KEYS.CHAT_DRAFTS, JSON.stringify(drafts));
   },
 
   async clearAll(): Promise<void> {

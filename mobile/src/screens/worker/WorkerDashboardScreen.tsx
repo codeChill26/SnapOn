@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -10,8 +9,9 @@ import { JobCard } from '../../components/common/JobCard';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { taskService } from '../../services/taskService';
 import { Task } from '../../types';
-import { formatCurrency } from '../../utils/format';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import { AppColors } from '../../theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type WorkerNavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -49,18 +49,21 @@ export const WorkerDashboardScreen: React.FC = () => {
   };
 
   const statusConfig = {
-    available: { label: 'Sẵn sàng', color: Colors.success },
-    busy: { label: 'Đang bận', color: Colors.warning },
-    offline: { label: 'Ngoại tuyến', color: Colors.textLight },
+    available: { label: 'Sẵn sàng', color: AppColors.status.success },
+    busy: { label: 'Đang bận', color: AppColors.status.warning },
+    offline: { label: 'Ngoại tuyến', color: AppColors.text.disabled },
   };
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppColors.brand.primary} />}
     >
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#0F1E36', '#090E17']}
+        style={styles.header}
+      >
         <Text style={styles.headerTitle}>Bảng điều khiển</Text>
         <View style={styles.statusRow}>
           <Text style={styles.headerSubtitle}>Trạng thái:</Text>
@@ -78,9 +81,9 @@ export const WorkerDashboardScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
-      <Card style={styles.statsCard}>
+      <Card style={styles.statsCard} variant="glass">
         <Text style={styles.statsTitle}>Bán kính tìm việc</Text>
         <View style={styles.radiusRow}>
           {[5, 10, 20, 50].map(r => (
@@ -113,7 +116,7 @@ export const WorkerDashboardScreen: React.FC = () => {
         {loading ? (
           <LoadingSpinner message="Đang tìm việc..." />
         ) : tasks.length === 0 ? (
-          <Card style={styles.emptyCard}>
+          <Card style={styles.emptyCard} variant="glass">
             <Text style={styles.emptyText}>
               Không có công việc nào trong bán kính {radius}km
             </Text>
@@ -137,13 +140,12 @@ export const WorkerDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AppColors.background.primary,
   },
   content: {
     paddingBottom: 20,
   },
   header: {
-    backgroundColor: Colors.secondary,
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 24,
@@ -151,12 +153,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: Colors.textWhite,
+    color: AppColors.text.primary,
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: Colors.textWhite,
+    color: AppColors.text.primary,
     opacity: 0.8,
   },
   statusRow: {
@@ -190,7 +192,7 @@ const styles = StyleSheet.create({
   statsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
     marginBottom: 8,
   },
   radiusRow: {
@@ -203,26 +205,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: AppColors.border.subtle,
+    backgroundColor: AppColors.surface.glass,
   },
   radiusChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: AppColors.brand.primary,
+    borderColor: AppColors.brand.primary,
   },
   radiusText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: AppColors.text.muted,
   },
   radiusTextActive: {
-    color: Colors.textWhite,
+    color: '#FFFFFF',
   },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+    borderTopColor: AppColors.border.subtle,
   },
   summaryItem: {
     flex: 1,
@@ -231,17 +234,17 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 24,
     fontWeight: '800',
-    color: Colors.primary,
+    color: AppColors.brand.primary,
   },
   summaryLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AppColors.text.muted,
     marginTop: 2,
   },
   summaryDivider: {
     width: 1,
     height: 36,
-    backgroundColor: Colors.divider,
+    backgroundColor: AppColors.border.subtle,
   },
   section: {
     paddingHorizontal: 16,
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text,
+    color: AppColors.text.primary,
     marginBottom: 12,
   },
   emptyCard: {
@@ -258,7 +261,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: Colors.textLight,
+    color: AppColors.text.muted,
     textAlign: 'center',
   },
 });

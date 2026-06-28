@@ -4,6 +4,7 @@ const authenticate = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const taskValidator = require('../validators/taskValidator');
 const taskController = require('../controllers/taskController');
+const rateLimiter = require('../middleware/rateLimiter');
 
 /**
  * Task Routes
@@ -25,6 +26,42 @@ router.get(
   '/my-tasks',
   authenticate,
   taskController.getMyTasks
+);
+
+// POST /api/tasks/upload-images — Upload images to Cloudinary (Base64)
+// Note: This must be defined BEFORE /:id to avoid conflict
+router.post(
+  '/upload-images',
+  authenticate,
+  rateLimiter('image-upload', 10, 60),
+  taskValidator.uploadImages,
+  validate,
+  taskController.uploadTaskImages
+);
+
+// GET /api/tasks/saved — Get current user's saved tasks
+router.get(
+  '/saved',
+  authenticate,
+  taskController.getSavedTasks
+);
+
+// POST /api/tasks/:id/save — Save a task
+router.post(
+  '/:id/save',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.saveTask
+);
+
+// DELETE /api/tasks/:id/save — Remove a saved task
+router.delete(
+  '/:id/save',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.unsaveTask
 );
 
 // GET /api/tasks/:id — Get task details
@@ -52,6 +89,33 @@ router.patch(
   taskValidator.updateStatus,
   validate,
   taskController.updateTaskStatus
+);
+
+// PATCH /api/tasks/:id — Update task details
+router.patch(
+  '/:id',
+  authenticate,
+  taskValidator.updateTask,
+  validate,
+  taskController.updateTask
+);
+
+// PATCH /api/tasks/:id/close-recruitment — Close recruitment early
+router.patch(
+  '/:id/close-recruitment',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.closeRecruitment
+);
+
+// DELETE /api/tasks/:id — Delete a task
+router.delete(
+  '/:id',
+  authenticate,
+  taskValidator.taskIdParam,
+  validate,
+  taskController.deleteTask
 );
 
 module.exports = router;

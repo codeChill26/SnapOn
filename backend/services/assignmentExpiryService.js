@@ -1,0 +1,145 @@
+const pool = require('../config/db');
+const assignedTaskModel = require('../models/assignedTaskModel');
+const taskApplicationModel = require('../models/taskApplicationModel');
+const taskModel = require('../models/taskModel');
+const escrowService = require('../services/escrowService');
+const { toDbAssignedTaskStatus, toDbApplicationStatus } = require('../utils/dbEnum');
+
+/**
+ * Assignment Expiry Service
+ * Tự động hủy giao việc sau 15 phút không xác nhận
+ */
+const assignmentExpiryService = {
+  /**
+   * Thực hiện hủy một giao việc đã quá hạn 15 phút
+   * Cập nhật trạng thái sang CANCELLED, hoàn trả tiền ký quỹ (escrow) và gửi socket thông báo
+   */
+  async expireAssignment(assignmentId, io) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Khóa và kiểm tra trạng thái hiện tại của giao việc
+      const assignmentRes = await client.query(
+        'SELECT * FROM assigned_tasks WHERE id = $1 FOR UPDATE',
+        [assignmentId]
+      );
+      const assignment = assignmentRes.rows[0];
+      
+      // Nếu không tìm thấy hoặc đã được accept, decline, hay đã bị hủy trước đó
+      if (!assignment) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      
+      // Chuyển đổi trạng thái từ DB enum (nếu cần)
+      const currentStatus = assignment.status.trim();
+      // DB lưu trạng thái dưới dạng enum DB, ta cần so sánh tương ứng
+      const dbAssignedStatus = toDbAssignedTaskStatus('ASSIGNED');
+      if (assignment.status !== dbAssignedStatus) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      // 2. Cập nhật trạng thái giao việc thành CANCELLED
+      const dbCancelledStatus = toDbAssignedTaskStatus('CANCELLED');
+      await client.query(
+        'UPDATE assigned_tasks SET status = $2 WHERE id = $1',
+        [assignmentId, dbCancelledStatus]
+      );
+
+      // 3. Cập nhật trạng thái đơn ứng tuyển tương ứng thành REJECTED (từ chối/hủy)
+      if (assignment.application_id) {
+        const dbRejectedStatus = toDbApplicationStatus('REJECTED');
+        await client.query(
+          'UPDATE task_applications SET status = $2 WHERE id = $1',
+          [assignment.application_id, dbRejectedStatus]
+        );
+      }
+
+      // 4. Hoàn trả tiền ký quỹ (escrow refund) cho chủ bài đăng
+      await escrowService.refundForTask(assignment.task_id, client);
+
+      await client.query('COMMIT');
+
+      console.log(`[ExpiryService] ⏳ Tự động hủy giao việc quá hạn 15 phút (ID: ${assignmentId}) thành công.`);
+
+      // 5. Gửi thông báo socket thời gian thực đến cả 2 bên
+      if (io) {
+        const task = await taskModel.findById(assignment.task_id);
+        if (task) {
+          // Gửi thông báo cho người làm (tasker/worker)
+          io.to(assignment.tasker_id).emit('assignment_expired_tasker', {
+            taskId: task.id,
+            taskTitle: task.title,
+            message: `Yêu cầu nhận việc cho công việc "${task.title}" đã hết hạn 15 phút do bạn không xác nhận.`
+          });
+
+          // Gửi thông báo cho người đăng (poster)
+          io.to(task.poster_id).emit('assignment_expired_poster', {
+            taskId: task.id,
+            taskTitle: task.title,
+            message: `Ứng viên đã không xác nhận công việc "${task.title}" trong vòng 15 phút. Hệ thống đã tự động hủy giao việc và mở lại bài đăng.`
+          });
+          
+          // Phát tín hiệu cập nhật danh sách bài đăng đến toàn bộ client
+          io.emit('task_status_changed', {
+            taskId: task.id,
+            status: 'OPEN',
+          });
+        }
+      }
+      return true;
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {}
+      console.error(`[ExpiryService] Lỗi khi hủy giao việc quá hạn ${assignmentId}:`, error);
+      return false;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Sweeper chạy định kỳ quét các assigned_tasks bị quá hạn 15 phút trong DB
+   * (Chốt chặn an toàn phòng trường hợp server bị khởi động lại làm mất bộ nhớ timer)
+   */
+  startSweeper(io) {
+    console.log('⏳ assignmentExpiryService Sweeper started (running every 1 minute)...');
+    
+    setInterval(async () => {
+      try {
+        const dbAssignedStatus = toDbAssignedTaskStatus('ASSIGNED');
+        // Tìm các bản ghi ASSIGNED đã được tạo quá 15 phút
+        const expiredRes = await pool.query(
+          `SELECT id FROM assigned_tasks 
+           WHERE status = $1 
+           AND created_at < NOW() - INTERVAL '15 minutes'`,
+          [dbAssignedStatus]
+        );
+        
+        for (const row of expiredRes.rows) {
+          await this.expireAssignment(row.id, io);
+        }
+      } catch (error) {
+        console.error('[ExpiryService] Lỗi sweeper định kỳ:', error);
+      }
+    }, 60000); // Chạy mỗi 1 phút
+  },
+
+  /**
+   * Thiết lập hẹn giờ hủy lập tức sau 15 phút cho một assignment mới tạo (In-memory timer)
+   */
+  setupExpiryTimer(assignmentId, io) {
+    setTimeout(async () => {
+      try {
+        await this.expireAssignment(assignmentId, io);
+      } catch (error) {
+        console.error(`[ExpiryService] Lỗi khi chạy timer hết hạn cho assignment ${assignmentId}:`, error);
+      }
+    }, 15 * 60 * 1000); // Đúng 15 phút (900,000 ms)
+  }
+};
+
+module.exports = assignmentExpiryService;

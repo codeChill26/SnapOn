@@ -1,16 +1,46 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { AppColors, Radius, Spacing, Shadows } from '../../theme';
 import { Colors } from '../../constants/colors';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   padded?: boolean;
+  variant?: 'glass' | 'glassStrong' | 'default';
 }
 
-export const Card: React.FC<CardProps> = ({ children, style, padded = true }) => {
+export const Card: React.FC<CardProps> = ({
+  children,
+  style,
+  padded = true,
+  variant = 'default',
+}) => {
+  const getVariantStyle = () => {
+    switch (variant) {
+      case 'glass':
+        return {
+          backgroundColor: AppColors.surface.glass,
+          borderColor: AppColors.border.subtle,
+          borderWidth: 1,
+        };
+      case 'glassStrong':
+        return {
+          backgroundColor: AppColors.surface.glassStrong,
+          borderColor: AppColors.border.normal,
+          borderWidth: 1,
+        };
+      default:
+        return {
+          backgroundColor: Colors.card,
+          borderColor: Colors.border,
+          borderWidth: 1,
+        };
+    }
+  };
+
   return (
-    <View style={[styles.card, padded && styles.padded, style]}>
+    <View style={[styles.card, getVariantStyle(), padded && styles.padded, style]}>
       {children}
     </View>
   );
@@ -18,15 +48,10 @@ export const Card: React.FC<CardProps> = ({ children, style, padded = true }) =>
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: Radius.lg,
+    ...Shadows.sm,
   },
   padded: {
-    padding: 16,
+    padding: Spacing.lg,
   },
 });

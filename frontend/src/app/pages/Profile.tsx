@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Star, Award, MapPin, Edit3, CheckCircle2, Clock, TrendingUp,
   Briefcase, ChevronRight, Shield, Phone, Mail, Camera,
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
-import { useApp, DEMO_WORKER, CATEGORIES } from '../context/AppContext';
+import { useApp, CATEGORIES } from '../context/AppContext';
 
 // ─── Helper ──────────────────────────────────────────────────
 function fmt(n: number) {
@@ -425,20 +425,31 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 // WORKER PROFILE
 // ═════════════════════════════════════════════════════════════
 function WorkerProfile() {
-  const { jobs } = useApp();
+  const { jobs, currentUser, updateProfile } = useApp();
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'feedback' | 'settings'>('profile');
 
   // Editable fields
-  const [name,    setName]    = useState(DEMO_WORKER.name);
-  const [phone,   setPhone]   = useState('0901 234 567');
-  const [email,   setEmail]   = useState('minh.demo@snapon.vn');
+  const [name,    setName]    = useState(currentUser.name || '');
+  const [phone,   setPhone]   = useState(currentUser.phone || '');
+  const [email,   setEmail]   = useState(currentUser.email || '');
   const [area,    setArea]    = useState('Quận 1, TP.HCM');
-  const [bio,     setBio]     = useState(DEMO_WORKER.bio);
+  const [bio,     setBio]     = useState((currentUser as any).bio || '');
   const [editBio, setEditBio] = useState(false);
   const [draftBio, setDraftBio] = useState(bio);
-  const [skills,  setSkills]  = useState([...DEMO_WORKER.skills]);
+  const [skills,  setSkills]  = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState('');
   const [addingSkill, setAddingSkill] = useState(false);
+
+  useEffect(() => {
+    setName(currentUser.name || '');
+    setPhone(currentUser.phone || '');
+    setEmail(currentUser.email || '');
+  }, [currentUser]);
+
+  const handleSavePhone = async (val: string) => {
+    setPhone(val);
+    await updateProfile({ phone: val });
+  };
 
   // Settings toggles
   const [notifNewJob,   setNotifNewJob]   = useState(true);
@@ -460,8 +471,8 @@ function WorkerProfile() {
     setWorkerReviews(prev => prev.map(r => r.id === id ? { ...r, reply: text } : r));
   };
 
-  const appliedJobs = jobs.filter(j => j.applicants.some(a => a.workerId === DEMO_WORKER.id));
-  const wonJobs     = appliedJobs.filter(j => j.aiMatchId === DEMO_WORKER.id);
+  const appliedJobs = jobs.filter(j => j.applicants.some(a => a.workerId === currentUser.id));
+  const wonJobs     = appliedJobs.filter(j => j.aiMatchId === currentUser.id);
   const totalEarned = wonJobs.reduce((s, j) => s + j.price, 0);
   const avgRating   = workerReviews.reduce((s, r) => s + r.rating, 0) / (workerReviews.length || 1);
 
@@ -486,7 +497,7 @@ function WorkerProfile() {
 
         <div className="relative flex items-start gap-4">
           <div className="relative flex-shrink-0">
-            <img src={DEMO_WORKER.avatar} alt={name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-blue-400 shadow-lg" />
+            <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'Worker')}`} alt={name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-blue-400 shadow-lg" />
             <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition">
               <Camera className="w-3.5 h-3.5 text-blue-600" />
             </button>
@@ -524,7 +535,7 @@ function WorkerProfile() {
         {/* Stats row */}
         <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
           {[
-            { v: DEMO_WORKER.completedJobs, l: 'Việc done' },
+            { v: (currentUser as any).completed_jobs || 0, l: 'Việc done' },
             { v: appliedJobs.length,        l: 'Đã apply' },
             { v: workerReviews.length,       l: 'Đánh giá' },
             { v: fmt(totalEarned) + '₫',    l: 'Tổng thu' },
@@ -658,7 +669,7 @@ function WorkerProfile() {
                   <p className="text-xs text-gray-500" style={{ fontWeight: 600 }}>THÔNG TIN LIÊN HỆ</p>
                 </div>
                 <div className="divide-y divide-gray-50">
-                  <EditableField label="Số điện thoại" value={phone} onSave={setPhone} icon={<Phone className="w-4 h-4 text-blue-500" />} />
+                  <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-blue-500" />} />
                   <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
                   <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-orange-500" />} />
                 </div>
@@ -701,8 +712,8 @@ function WorkerProfile() {
                 </div>
               ) : (
                 appliedJobs.map(job => {
-                  const applicant = job.applicants.find(a => a.workerId === DEMO_WORKER.id);
-                  const isWinner  = job.aiMatchId === DEMO_WORKER.id;
+                  const applicant = job.applicants.find(a => a.workerId === currentUser.id);
+                  const isWinner  = job.aiMatchId === currentUser.id;
                   return (
                     <Link key={job.id} to={`/job/${job.id}`}>
                       <motion.div
@@ -804,20 +815,30 @@ function WorkerProfile() {
 // HIRER PROFILE
 // ═════════════════════════════════════════════════════════════
 function HirerProfile() {
-  const { jobs, currentUser } = useApp();
+  const { jobs, currentUser, updateProfile } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'feedback' | 'settings'>('overview');
 
   // Editable fields
-  const [phone,    setPhone]    = useState('0912 345 678');
-  const [email,    setEmail]    = useState('hoa.nguyen@gmail.com');
+  const [phone,    setPhone]    = useState(currentUser.phone || '0912 345 678');
+  const [email,    setEmail]    = useState(currentUser.email || 'hoa.nguyen@gmail.com');
   const [area,     setArea]     = useState('Quận 1, Bình Thạnh, TP.HCM');
+
+  useEffect(() => {
+    setPhone(currentUser.phone || '0912 345 678');
+    setEmail(currentUser.email || 'hoa.nguyen@gmail.com');
+  }, [currentUser]);
+
+  const handleSavePhone = async (val: string) => {
+    setPhone(val);
+    await updateProfile({ phone: val });
+  };
 
   // Settings
   const [notifApply,  setNotifApply]  = useState(true);
   const [notifRemind, setNotifRemind] = useState(true);
   const [notifPromo,  setNotifPromo]  = useState(false);
 
-  const myJobs        = jobs.filter(j => j.hirerName === currentUser.name || j.hirerName === 'Nguyễn Thị Hoa');
+  const myJobs        = jobs.filter(j => j.hirerId === currentUser.id || j.hirerName === currentUser.name || j.hirerName === 'Nguyễn Thị Hoa');
   const activeJobs    = myJobs.filter(j => j.status === 'active');
   const matchedJobs   = myJobs.filter(j => j.status === 'matched' || j.status === 'completed');
   const totalSpent    = matchedJobs.reduce((s, j) => s + j.price, 0);
@@ -858,7 +879,7 @@ function HirerProfile() {
 
         <div className="relative flex items-start gap-4">
           <div className="relative flex-shrink-0">
-            <img src={currentUser.avatar} alt={currentUser.name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-orange-400 shadow-lg" />
+            <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'Hirer')}`} alt={currentUser.name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-orange-400 shadow-lg" />
             <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition">
               <Camera className="w-3.5 h-3.5 text-orange-600" />
             </button>
@@ -991,7 +1012,7 @@ function HirerProfile() {
                   <p className="text-xs text-gray-500" style={{ fontWeight: 600 }}>THÔNG TIN TÀI KHOẢN</p>
                 </div>
                 <div className="divide-y divide-gray-50">
-                  <EditableField label="Số điện thoại" value={phone} onSave={setPhone} icon={<Phone className="w-4 h-4 text-orange-500" />} />
+                  <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-orange-500" />} />
                   <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
                   <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-blue-500" />} />
                 </div>
@@ -1013,11 +1034,11 @@ function HirerProfile() {
                   <Link key={job.id} to={`/job/${job.id}`}>
                     <motion.div whileHover={{ y: -1 }}
                       className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition ${
-                        job.status === 'active' ? 'border-green-100' : job.status === 'matched' ? 'border-blue-100' : 'border-gray-100'
+                        job.status === 'active' ? 'border-green-100' : job.status === 'matched' ? 'border-blue-100' : job.status === 'completed' ? 'border-purple-100' : 'border-gray-100'
                       }`}>
                       <div className="flex items-start gap-3">
                         <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${
-                          job.status === 'active' ? 'bg-green-50' : job.status === 'matched' ? 'bg-blue-50' : 'bg-gray-50'
+                          job.status === 'active' ? 'bg-green-50' : job.status === 'matched' ? 'bg-blue-50' : job.status === 'completed' ? 'bg-purple-50' : 'bg-gray-50'
                         }`}>
                           {job.categoryIcon}
                         </div>
@@ -1025,11 +1046,12 @@ function HirerProfile() {
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <p className="text-gray-900 text-sm truncate pr-1" style={{ fontWeight: 600 }}>{job.title}</p>
                             <span className={`text-xs px-2.5 py-0.5 rounded-full flex-shrink-0 border ${
-                              job.status === 'active'  ? 'bg-green-50 text-green-700 border-green-200' :
-                              job.status === 'matched' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                              job.status === 'active'    ? 'bg-green-50 text-green-700 border-green-200' :
+                              job.status === 'matched'   ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                              job.status === 'completed' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                               'bg-gray-50 text-gray-500 border-gray-200'
                             }`} style={{ fontWeight: 600 }}>
-                              {job.status === 'active' ? '🟢 Đang tuyển' : job.status === 'matched' ? '✅ Đã khớp' : 'Hết hạn'}
+                              {job.status === 'active' ? '🟢 Đang tuyển' : job.status === 'matched' ? '✅ Đã khớp' : job.status === 'completed' ? '🏆 Hoàn thành' : 'Hết hạn'}
                             </span>
                           </div>
                           <p className="text-gray-400 text-xs truncate">{job.location.address}</p>

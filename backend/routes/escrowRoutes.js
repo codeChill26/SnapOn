@@ -34,4 +34,13 @@ router.get(
   escrowController.getEscrowByTaskId
 );
 
+// DELETE /api/escrows/:taskId — Delete escrow
+router.delete(
+  '/:taskId',
+  authenticate,
+  [param('taskId').isUUID()],
+  validate,
+  escrowController.deleteEscrow
+);
+
 module.exports = router;

@@ -6,8 +6,9 @@ import {
   StyleSheet,
   TextInputProps,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { AppColors, Spacing, Radius, Typography } from '../../theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -15,6 +16,7 @@ interface InputProps extends TextInputProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   onRightIconPress?: () => void;
+  lightMode?: boolean;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -24,17 +26,23 @@ export const Input: React.FC<InputProps> = ({
   rightIcon,
   onRightIconPress,
   style,
+  lightMode = false,
   ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && (
+        <Text style={[styles.label, lightMode ? styles.labelLight : styles.labelDark]}>
+          {label}
+        </Text>
+      )}
       <View
         style={[
           styles.inputContainer,
-          isFocused && styles.inputFocused,
+          lightMode ? styles.inputContainerLight : styles.inputContainerDark,
+          isFocused && (lightMode ? styles.inputFocusedLight : styles.inputFocusedDark),
           error && styles.inputError,
         ]}
       >
@@ -42,13 +50,23 @@ export const Input: React.FC<InputProps> = ({
         <RNInput
           style={[
             styles.input,
-            leftIcon ? { paddingLeft: 8 } : {},
-            rightIcon ? { paddingRight: 8 } : {},
+            lightMode ? styles.inputLight : styles.inputDark,
+            props.secureTextEntry ? { fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : {},
+            leftIcon ? { paddingLeft: Spacing.sm } : {},
+            rightIcon ? { paddingRight: Spacing.sm } : {},
             style,
           ]}
-          placeholderTextColor={Colors.textLight}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          placeholderTextColor={lightMode ? '#94A3B8' : AppColors.text.muted}
+          onFocus={(e) => {
+            setIsFocused(true);
+            props.onFocus && props.onFocus(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur && props.onBlur(e);
+          }}
+          autoCorrect={false}
+          spellCheck={false}
           {...props}
         />
         {rightIcon && (
@@ -68,45 +86,66 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-    marginBottom: 6,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '600',
+    marginBottom: Spacing.xs,
+  },
+  labelDark: {
+    color: AppColors.text.secondary,
+  },
+  labelLight: {
+    color: '#475569', // slate-600
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
   },
-  inputFocused: {
-    borderColor: Colors.primary,
+  inputContainerDark: {
+    backgroundColor: AppColors.surface.input,
+    borderColor: AppColors.border.subtle,
+  },
+  inputContainerLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  inputFocusedDark: {
+    borderColor: AppColors.brand.primary,
+  },
+  inputFocusedLight: {
+    borderColor: '#FF6600',
   },
   inputError: {
-    borderColor: Colors.error,
+    borderColor: AppColors.status.error,
   },
   input: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.text,
+    paddingVertical: Spacing.md,
+    fontSize: Typography.body.fontSize + 1,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    letterSpacing: 0,
+  },
+  inputDark: {
+    color: AppColors.text.primary,
+  },
+  inputLight: {
+    color: '#0F172A', // slate-900
   },
   iconLeft: {
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   iconRight: {
-    marginLeft: 8,
-    padding: 4,
+    marginLeft: Spacing.sm,
+    padding: Spacing.xs,
   },
   errorText: {
-    fontSize: 12,
-    color: Colors.error,
-    marginTop: 4,
+    fontSize: Typography.caption.fontSize,
+    color: AppColors.status.error,
+    marginTop: Spacing.xs,
   },
 });

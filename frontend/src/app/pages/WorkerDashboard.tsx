@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp, CATEGORIES, haversineDistance, DEMO_WORKER, type Worker } from '../context/AppContext';
+import { useApp, CATEGORIES, haversineDistance, type Worker } from '../context/AppContext';
 import { JobCard } from '../components/JobCard';
 import { MapPicker } from '../components/MapPicker';
 import { CountdownTimer } from '../components/CountdownTimer';
@@ -108,11 +108,26 @@ function LocationSearchBox({ onSelect }: { onSelect: (loc: { lat: number; lng: n
 
 // ── Main Component ─────────────────────────────────────
 export default function WorkerDashboard() {
-  const { jobs, applyToJob, workerStatus, workerCurrentJobId } = useApp();
+  const { jobs, applyToJob, workerStatus, workerCurrentJobId, currentUser, setUserRole } = useApp();
+
+  useEffect(() => {
+    if (currentUser.role !== 'worker') {
+      setUserRole('worker');
+    }
+  }, [currentUser.role, setUserRole]);
+
+  const activeWorker = {
+    id: currentUser.id || 'worker',
+    name: currentUser.name || 'Người làm',
+    avatar: currentUser.avatar || '',
+    bio: (currentUser as any).bio || '',
+    rating: parseFloat((currentUser as any).rating) || 0,
+    completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
+  };
 
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number; address: string }>({
-    lat: DEMO_WORKER.lat,
-    lng: DEMO_WORKER.lng,
+    lat: 10.7769,
+    lng: 106.7009,
     address: 'Quận 1, TP. Hồ Chí Minh',
   });
   const [geoLoading, setGeoLoading] = useState(false);
@@ -193,7 +208,17 @@ export default function WorkerDashboard() {
     if (!applyingJobId || sending) return;
     setSending(true);
     setTimeout(() => {
-      const workerWithLoc: Worker = { ...DEMO_WORKER, lat: myLocation.lat, lng: myLocation.lng };
+      const workerWithLoc: Worker = {
+        id: activeWorker.id,
+        name: activeWorker.name,
+        avatar: activeWorker.avatar,
+        lat: myLocation.lat,
+        lng: myLocation.lng,
+        skills: (currentUser as any).skills || [],
+        rating: activeWorker.rating,
+        completedJobs: activeWorker.completedJobs,
+        bio: activeWorker.bio,
+      };
       applyToJob(applyingJobId, workerWithLoc, applyNote || 'Tôi sẵn sàng làm ngay!', applyBid);
       setAppliedJobs(prev => new Set([...prev, applyingJobId]));
       setApplyingJobId(null);
@@ -356,12 +381,12 @@ export default function WorkerDashboard() {
 
                   {/* Worker info + note */}
                   <div className="flex items-center gap-3">
-                    <img src={DEMO_WORKER.avatar} className="w-10 h-10 rounded-full border-2 border-orange-200 flex-shrink-0" />
+                    <img src={activeWorker.avatar} className="w-10 h-10 rounded-full border-2 border-orange-200 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm" style={{ fontWeight: 600 }}>{DEMO_WORKER.name}</p>
+                      <p className="text-sm" style={{ fontWeight: 600 }}>{activeWorker.name}</p>
                       <div className="flex items-center gap-1.5 text-xs text-gray-400">
                         <Star className="w-3 h-3 text-yellow-400" fill="currentColor" />
-                        {DEMO_WORKER.rating} · {DEMO_WORKER.completedJobs} việc đã hoàn thành
+                        {activeWorker.rating} · {activeWorker.completedJobs} việc đã hoàn thành
                       </div>
                     </div>
                   </div>
@@ -480,19 +505,19 @@ export default function WorkerDashboard() {
       <div className={`bg-gradient-to-r ${isOnJob ? 'from-gray-600 to-gray-700' : 'from-blue-600 to-indigo-600'} rounded-2xl p-5 mb-6 text-white transition-colors duration-500`}>
         <div className="flex items-center gap-4">
           <div className="relative">
-            <img src={DEMO_WORKER.avatar} className="w-14 h-14 rounded-full border-2 border-white/40 bg-blue-400" />
+            <img src={activeWorker.avatar} className="w-14 h-14 rounded-full border-2 border-white/40 bg-blue-400" />
             <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-blue-600 ${isOnJob ? 'bg-amber-400' : 'bg-green-400'}`} />
           </div>
           <div className="flex-1">
-            <h2 style={{ fontWeight: 700, fontSize: '1.1rem' }}>{DEMO_WORKER.name}</h2>
-            <p className="text-blue-200 text-sm">{DEMO_WORKER.bio}</p>
+            <h2 style={{ fontWeight: 700, fontSize: '1.1rem' }}>{activeWorker.name}</h2>
+            <p className="text-blue-200 text-sm">{activeWorker.bio}</p>
             <div className="flex items-center gap-3 mt-1.5 text-sm">
               <span className="flex items-center gap-1">
                 <Star className="w-3.5 h-3.5 text-yellow-300" fill="currentColor" />
-                <span style={{ fontWeight: 700 }}>{DEMO_WORKER.rating}</span>
+                <span style={{ fontWeight: 700 }}>{activeWorker.rating}</span>
               </span>
               <span className="flex items-center gap-1 text-blue-200">
-                <Award className="w-3.5 h-3.5" />{DEMO_WORKER.completedJobs} việc
+                <Award className="w-3.5 h-3.5" />{activeWorker.completedJobs} việc
               </span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${isOnJob ? 'bg-amber-400/30 text-amber-200' : 'bg-green-400/30 text-green-200'}`} style={{ fontWeight: 600 }}>
                 {isOnJob ? '🔒 Đang bận' : '✅ Sẵn sàng'}

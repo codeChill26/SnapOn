@@ -2,6 +2,9 @@
   "expo": {
     "name": "SnapOn",
     "slug": "snapon-mobile",
+    "updates": {
+      "enabled": false
+    },
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -12,11 +15,25 @@
     },
     "android": {
       "package": "com.snapon.mobile",
+      "versionCode": 1,
       "config": {
         "googleMaps": {
           "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
         }
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
     },
     "plugins": [
       [
@@ -25,7 +42,31 @@
           "locationAlwaysAndWhenInUsePermission": "SnapOn needs your location to find nearby tasks.",
           "locationWhenInUsePermission": "SnapOn needs your location to find nearby tasks."
         }
-      ]
-    ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SnapOn cần quyền chọn ảnh để bạn tải ảnh lên hồ sơ, bài đăng và tin nhắn.",
+          "cameraPermission": "SnapOn cần quyền camera khi bạn chụp ảnh xác minh hoặc cập nhật hồ sơ."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "SnapOn cần quyền thư viện ảnh để chọn và xem ảnh đã gửi.",
+          "savePhotosPermission": "SnapOn cần quyền lưu ảnh để tải ảnh từ tin nhắn về máy."
+        }
+      ],
+      "expo-notifications",
+      "expo-asset",
+      "@react-native-google-signin/google-signin"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "242e7c6a-8b3c-4113-b78b-09d385d0a34f",
+        "_projectId_friend": "61d6e62d-a4ba-4ae8-bd01-66f2dcca6dd7"
+      }
+    },
+    "owner": "winkiwar"
   }
 }

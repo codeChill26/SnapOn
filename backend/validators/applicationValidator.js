@@ -12,7 +12,7 @@ const applicationValidator = {
       .isUUID().withMessage('Task ID must be a valid UUID.'),
 
     body('bid_price')
-      .notEmpty().withMessage('Bid price is required.')
+      .optional()
       .isFloat({ min: 0.01 }).withMessage('Bid price must be a positive number greater than 0.'),
 
     body('estimated_time')
@@ -52,6 +52,28 @@ const applicationValidator = {
   autoMatch: [
     param('taskId')
       .isUUID().withMessage('Task ID must be a valid UUID.'),
+  ],
+
+  /**
+   * Validation rules for updating an application
+   */
+  updateApplication: [
+    param('id')
+      .isUUID().withMessage('Application ID must be a valid UUID.'),
+
+    body('bid_price')
+      .optional()
+      .isFloat({ min: 0.01 }).withMessage('Bid price must be a positive number greater than 0.'),
+
+    body('estimated_time')
+      .optional()
+      .trim()
+      .isLength({ max: 255 }).withMessage('Estimated time must not exceed 255 characters.'),
+
+    body('message')
+      .optional()
+      .trim()
+      .isLength({ max: 1000 }).withMessage('Message must not exceed 1000 characters.'),
   ],
 };
 

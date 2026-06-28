@@ -29,8 +29,8 @@ const walletModel = {
     if (result.rows[0]) return result.rows[0];
 
     const created = await db.query(
-      `INSERT INTO wallets (user_id, balance, available_balance, locked_balance)
-       VALUES ($1, 0, 0, 0)
+      `INSERT INTO wallets (id, user_id, balance, available_balance, locked_balance)
+       VALUES (gen_random_uuid(), $1, 0, 0, 0)
        RETURNING *`,
       [userId]
     );
@@ -57,8 +57,8 @@ const walletModel = {
     if (existing) return existing;
 
     const result = await db.query(
-      `INSERT INTO wallets (user_id, balance, available_balance, locked_balance)
-       VALUES ($1, 0, 0, 0)
+      `INSERT INTO wallets (id, user_id, balance, available_balance, locked_balance)
+       VALUES (gen_random_uuid(), $1, 0, 0, 0)
        RETURNING *`,
       [userId]
     );

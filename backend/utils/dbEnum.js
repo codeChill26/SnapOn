@@ -16,49 +16,54 @@ const invert = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [
 
 // Task
 const TASK_STATUS_TO_DB = {
-  OPEN: 'open',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
 };
 const TASK_STATUS_FROM_DB = invert(TASK_STATUS_TO_DB);
 
 const TASK_TYPE_TO_DB = {
-  ONLINE: 'online',
-  OFFLINE: 'offline',
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE',
 };
 const TASK_TYPE_FROM_DB = invert(TASK_TYPE_TO_DB);
 
 // Application
 const APPLICATION_STATUS_TO_DB = {
-  PENDING: 'pending',
-  ACCEPTED: 'accepted',
-  REJECTED: 'rejected',
-  // DB has no WITHDRAWN, map to cancelled
-  WITHDRAWN: 'cancelled',
-  CANCELLED: 'cancelled',
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED',
+  WITHDRAWN: 'CANCELLED',
+  CANCELLED: 'CANCELLED',
 };
 const APPLICATION_STATUS_FROM_DB = {
-  pending: 'PENDING',
-  accepted: 'ACCEPTED',
-  rejected: 'REJECTED',
-  cancelled: 'CANCELLED',
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
 };
 
 // Assigned
 const ASSIGNED_BY_TO_DB = {
-  MANUAL: 'hirer',
-  AUTO_MATCH: 'system',
-  ADMIN: 'admin',
+  MANUAL: 'POSTER',
+  AUTO_MATCH: 'SYSTEM',
+  ADMIN: 'ADMIN',
 };
 
 const ASSIGNED_TASK_STATUS_TO_DB = {
-  ASSIGNED: 'assigned',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
+  ASSIGNED: 'ASSIGNED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
 };
-const ASSIGNED_TASK_STATUS_FROM_DB = invert(ASSIGNED_TASK_STATUS_TO_DB);
+const ASSIGNED_TASK_STATUS_FROM_DB = {
+  ACTIVE: 'IN_PROGRESS',
+  ASSIGNED: 'ASSIGNED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+};
 
 module.exports = {
   toDbTaskStatus: (apiValue) => mapValue(apiValue, TASK_STATUS_TO_DB),

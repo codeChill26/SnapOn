@@ -1,5 +1,5 @@
-import { useApp, MOCK_WORKERS } from '../../context/AppContext';
-import { useState, useMemo } from 'react';
+import { useApp } from '../../context/AppContext';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Star, Briefcase, MapPin, Eye, UserCircle, Users as UsersIcon } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import api from '../../../services/api';
 import type { Worker } from '../../context/AppContext';
 
 interface Hirer {
@@ -61,16 +62,26 @@ export default function UsersManagement() {
     return Array.from(hirerMap.values());
   }, [jobs]);
 
+  const [workers, setWorkers] = useState<Worker[]>([]);
+
+  useEffect(() => {
+    api.get('/users').then(res => {
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setWorkers(res.data.data.filter((u: any) => u.role === 'tasker'));
+      }
+    }).catch(() => {});
+  }, []);
+
   // Filter workers
   const filteredWorkers = useMemo(() => {
-    return MOCK_WORKERS.filter(worker => {
+    return workers.filter(worker => {
       const matchesSearch = 
         worker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         worker.skills.some(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
       
       return matchesSearch;
     });
-  }, [searchTerm]);
+  }, [searchTerm, workers]);
 
   // Filter hirers
   const filteredHirers = useMemo(() => {
@@ -111,7 +122,7 @@ export default function UsersManagement() {
             </div>
           </div>
           <h4 className="text-gray-300 text-sm mb-2">Tổng Workers</h4>
-          <p className="text-3xl font-bold text-white mb-1">{MOCK_WORKERS.length}</p>
+          <p className="text-3xl font-bold text-white mb-1">{workers.length}</p>
           <p className="text-purple-400 text-sm">Người lao động đang hoạt động</p>
         </Card>
 
@@ -134,7 +145,7 @@ export default function UsersManagement() {
           </div>
           <h4 className="text-gray-300 text-sm mb-2">Đánh Giá TB</h4>
           <p className="text-3xl font-bold text-white mb-1">
-            {(MOCK_WORKERS.reduce((acc, w) => acc + w.rating, 0) / MOCK_WORKERS.length).toFixed(1)}
+            {(workers.length > 0 ? (workers.reduce((acc, w) => acc + w.rating, 0) / workers.length) : 0).toFixed(1)}
           </p>
           <p className="text-green-400 text-sm">⭐ Từ Workers</p>
         </Card>
@@ -144,7 +155,7 @@ export default function UsersManagement() {
       <Tabs defaultValue="workers" className="space-y-6">
         <TabsList className="bg-slate-800/50 border border-white/10">
           <TabsTrigger value="workers" className="data-[state=active]:bg-purple-500/20">
-            Workers ({MOCK_WORKERS.length})
+            Workers ({workers.length})
           </TabsTrigger>
           <TabsTrigger value="hirers" className="data-[state=active]:bg-blue-500/20">
             Hirers ({hirers.length})
@@ -167,7 +178,7 @@ export default function UsersManagement() {
             </div>
             <div className="mt-4 flex items-center gap-4 text-sm text-gray-400">
               <Filter className="w-4 h-4" />
-              <span>Hiển thị {filteredWorkers.length} / {MOCK_WORKERS.length} workers</span>
+              <span>Hiển thị {filteredWorkers.length} / {workers.length} workers</span>
             </div>
           </Card>
 

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut } from 'lucide-react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from '../../imports/firebase';
+import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useLocation, useNavigate, Link, Outlet } from 'react-router';
 import { SnapOnLogo } from './SnapOnLogo';
+import api from '../../services/api';
 import { AnimatePresence, motion } from 'motion/react';
 import { WalletModal } from './WalletModal';
 
@@ -20,22 +19,69 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     hirerWallet,
     workerWallet,
     topUpWallet,
+    fetchProfile,
+    firebaseUser,
+    authLoading,
+    logout,
   } = useApp();
 
   const [showWallet, setShowWallet] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
+
+  // Listen to PayOS redirect search query params
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
+    const searchParams = new URLSearchParams(location.search);
+    const orderCode = searchParams.get('orderCode');
+    const status = searchParams.get('status');
+    const code = searchParams.get('code');
 
-      if (user) {
-        // Khi đăng nhập thành công, luôn set role mặc định là hirer
-        setUserRole('hirer');
+    if (orderCode && (status === 'PAID' || code === '00')) {
+      const verifyPayOSPayment = async () => {
+        try {
+          const token = localStorage.getItem('firebaseToken');
+          // Call check status API on backend to update database
+          const res = await api.get(`/wallet/topup/payos/status/${orderCode}`);
+          const statusData = res.data;
+          if (statusData.success && statusData.data?.status === 'SUCCESS') {
+              console.log('🎉 PayOS payment verified successfully!');
+              // Re-fetch profile/wallet to show the updated balance
+              await fetchProfile();
+              setPaymentSuccessToast(true);
+              setTimeout(() => {
+                setPaymentSuccessToast(false);
+              }, 5000);
+            }
+        } catch (err) {
+          console.error('Error verifying payment status on redirect:', err);
+        } finally {
+          // Remove the PayOS parameters from URL search to keep URL clean and prevent double verification
+          const cleanParams = new URLSearchParams(location.search);
+          cleanParams.delete('orderCode');
+          cleanParams.delete('status');
+          cleanParams.delete('code');
+          cleanParams.delete('id');
+          cleanParams.delete('cancel');
+          const newSearch = cleanParams.toString();
+          navigate({
+            pathname: location.pathname,
+            search: newSearch ? `?${newSearch}` : '',
+          }, { replace: true });
+        }
+      };
+
+      verifyPayOSPayment();
+    }
+  }, [location.search, location.pathname, navigate, fetchProfile]);
+
+  // Route protection
+  useEffect(() => {
+    if (!authLoading && !firebaseUser) {
+      const protectedPaths = ['/profile', '/activity', '/post', '/worker'];
+      if (protectedPaths.includes(location.pathname)) {
+        navigate('/login');
       }
-    });
-
-    return () => unsubscribe();
-  }, [setUserRole]);
+    }
+  }, [authLoading, firebaseUser, location.pathname, navigate]);
 
   const isWorker = currentUser.role === 'worker';
   const isAdmin = currentUser.role === 'admin';
@@ -57,8 +103,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   const currentJob = workerCurrentJobId ? jobs.find(j => j.id === workerCurrentJobId) : null;
 
   const handleLogout = async () => {
-    await signOut(auth);
-    localStorage.removeItem('firebaseToken');
+    await logout();
     navigate('/login');
   };
 
@@ -87,8 +132,10 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 ? [{ path: '/worker', label: '🔍 Tìm việc' }]
                 : [{ path: firebaseUser ? '/post' : '/login', label: '+ Đăng việc' }]
               ),
-              { path: '/activity', label: '📊 Hoạt động' },
-              { path: '/profile', label: '👤 Hồ sơ' },
+              ...(firebaseUser ? [
+                { path: '/activity', label: '📊 Hoạt động' },
+                { path: '/profile', label: '👤 Hồ sơ' }
+              ] : [])
             ].map(({ path, label }) => {
               const active = location.pathname === path;
               return (
@@ -134,31 +181,47 @@ export function Layout({ children }: { children?: React.ReactNode }) {
               <div className="flex items-center gap-2">
                 <Link
                   to="/profile"
-                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-orange-200 bg-orange-50 hover:bg-orange-100 transition"
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border transition ${
+                    isWorker
+                      ? 'border-blue-300 bg-blue-50/50 hover:bg-blue-100/50'
+                      : 'border-orange-200 bg-orange-50 hover:bg-orange-100'
+                  }`}
                 >
                   <img
                     src={
-                      firebaseUser.photoURL ||
                       currentUser.avatar ||
+                      firebaseUser.photoURL ||
                       'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser'
                     }
-                    alt={firebaseUser.displayName || firebaseUser.email || 'User'}
+                    alt={currentUser.name || firebaseUser.displayName || 'User'}
                     className="w-7 h-7 rounded-full bg-white"
                   />
 
                   <div className="text-left">
                     <p className="text-xs text-gray-800 leading-tight" style={{ fontWeight: 700 }}>
-                      {firebaseUser.displayName || 'Hirer'}
+                      {currentUser.name || firebaseUser.displayName || 'Guest'}
                     </p>
-                    <p className="text-xs text-orange-500 leading-tight">
-                      Người thuê việc
+                    <p className={`text-xs leading-tight ${isWorker ? 'text-blue-200' : 'text-orange-500'}`}>
+                      {isWorker ? 'Người tìm việc' : 'Người thuê việc'}
                     </p>
                   </div>
                 </Link>
 
                 <button
+                  onClick={() => setUserRole(isWorker ? 'hirer' : 'worker')}
+                  className={`px-3 py-1.5 rounded-full text-xs transition border flex items-center gap-1 cursor-pointer ${
+                    isWorker
+                      ? 'border-blue-400 bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'border-orange-300 bg-orange-500 hover:bg-orange-600 text-white'
+                  }`}
+                  style={{ fontWeight: 600 }}
+                >
+                  🔄 {isWorker ? 'Thuê việc' : 'Tìm việc'}
+                </button>
+
+                <button
                   onClick={handleLogout}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-xs transition"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-xs transition cursor-pointer"
                   style={{ fontWeight: 600 }}
                 >
                   <LogOut className="w-4 h-4" />
@@ -271,7 +334,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
             const active = location.pathname === path;
             return (
               <Link
-                key={path}
+                key={`${path}-${label}`}
                 to={path}
                 className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${isWorker
                   ? active ? 'text-white' : 'text-blue-300'
@@ -281,7 +344,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 {path === '/profile' ? (
                   <div className="relative">
                     <img
-                      src={currentUser.avatar}
+                      src={currentUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=SnapOn'}
                       alt=""
                       className={`w-6 h-6 rounded-full border-2 ${active
                         ? isWorker ? 'border-white' : 'border-orange-400'
@@ -301,6 +364,21 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           })}
         </div>
       </nav>
+
+      {/* Success toast */}
+      <AnimatePresence>
+        {paymentSuccessToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] bg-green-500 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2"
+          >
+            <CheckCircle className="w-5 h-5" />
+            <span style={{ fontWeight: 600 }}>Nạp tiền thành công! Số dư ví của bạn đã được cập nhật 🎉</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Wallet Modal */}
       <WalletModal
