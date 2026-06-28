@@ -1,29 +1,23 @@
-const { Resend } = require('resend');
-
-let resendClient = null;
-
-function getResendClient() {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-  if (!resendClient) {
-    resendClient = new Resend(process.env.RESEND_API_KEY);
-  }
-  return resendClient;
-}
-
 function isEmailDebugOtpEnabled() {
   return process.env.EMAIL_DEBUG_OTP === 'true';
 }
 
 async function sendVerificationEmail(to, name, token) {
   try {
-    const resend = getResendClient();
-    const result = await resend.emails.send({
-      from: 'SnapOn App <onboarding@resend.dev>',
-      to,
+    if (!process.env.BREVO_API_KEY) {
+      throw new Error('BREVO_API_KEY is not configured');
+    }
+
+    const payload = {
+      sender: { name: 'SnapOn App', email: 'tuankietpro04@gmail.com' },
+      to: [
+        {
+          email: to,
+          name: name || ''
+        }
+      ],
       subject: `[SnapOn] Ma xac thuc email cua ban: ${token}`,
-      html: `
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; background-color: #F4F5F7; padding: 40px 0;">
           <table align="center" width="100%" style="max-width: 600px; background: #FFFFFF; border-radius: 12px; overflow: hidden;">
             <tr>
@@ -38,27 +32,37 @@ async function sendVerificationEmail(to, name, token) {
             </tr>
           </table>
         </div>
-      `,
+      `
+    };
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json',
+        'accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
 
-    if (result.error) {
-      console.error('[EMAIL SERVICE] Error sending email:', result.error);
-      return {
-        success: false,
-        error: result.error,
-        message: 'Khong the gui email xac thuc luc nay. Vui long thu lai sau.',
-      };
+    if (!response.ok) {
+      let errorBody;
+      try {
+        errorBody = await response.json();
+      } catch (e) {
+        errorBody = await response.text();
+      }
+      console.error('[EMAIL SERVICE] Brevo API error details:', errorBody);
+      throw new Error(typeof errorBody === 'object' ? JSON.stringify(errorBody) : errorBody);
     }
 
-    console.log(`[EMAIL SERVICE] Email sent successfully: ${result.data?.id}`);
-    return { success: true, messageId: result.data?.id };
+    const data = await response.json();
+    console.log(`[EMAIL SERVICE] Email sent successfully: ${data.messageId}`);
+    return { success: true, messageId: data.messageId };
+
   } catch (error) {
     console.error('[EMAIL SERVICE] Error sending email:', error);
-    return {
-      success: false,
-      error,
-      message: 'Khong the gui email xac thuc luc nay. Vui long thu lai sau.',
-    };
+    throw error;
   }
 }
 
