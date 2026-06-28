@@ -205,6 +205,7 @@ router.post('/sync-user', verifyFirebaseToken, async (req, res) => {
         role: user.role,
         status: user.status,
         isVerified: user.is_verified,
+        isIdVerified: user.is_id_verified,
         createdAt: user.created_at,
       },
       wallet,
@@ -237,7 +238,7 @@ router.post('/dev/login', rateLimiter('dev-login', 5, 60), guardDevRoute, async 
     }
 
     const result = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE email = $1',
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified FROM users WHERE email = $1',
       [email]
     );
 
@@ -411,7 +412,10 @@ router.post('/send-otp', rateLimiter('send-otp', 3, 60), async (req, res) => {
 
     await setOtpCache(phone, otpData);
     
-    console.log(`📱 [OTP SERVICE] Generating OTP for ${phone}: ${otp}`);
+    const isDev = process.env.NODE_ENV !== 'production' && process.env.AUTH_MODE === 'dev';
+    if (isDev) {
+      console.log(`📱 [OTP SERVICE] Generating OTP for ${phone}: ${otp}`);
+    }
     
     const responsePayload = {
       success: true,
@@ -419,7 +423,7 @@ router.post('/send-otp', rateLimiter('send-otp', 3, 60), async (req, res) => {
     };
     
     // Only return OTP in API response in non-production environments
-    if (process.env.NODE_ENV !== 'production') {
+    if (isDev) {
       responsePayload.otp = otp;
     }
     
@@ -500,9 +504,10 @@ router.post('/verify-otp', rateLimiter('verify-otp', 5, 60), async (req, res) =>
           avatar_url,
           status,
           is_verified,
+          is_id_verified,
           role
         )
-        VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', true, 'USER')
+        VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, $4, 'ACTIVE', true, false, 'USER')
         RETURNING *;
       `;
       const userResult = await client.query(insertUserQuery, [
@@ -543,6 +548,7 @@ router.post('/verify-otp', rateLimiter('verify-otp', 5, 60), async (req, res) =>
       role: user.role || 'USER',
       status: user.status,
       isVerified: user.is_verified,
+      isIdVerified: user.is_id_verified,
       createdAt: user.created_at,
     };
 
@@ -574,7 +580,7 @@ router.post('/token-login', verifyFirebaseToken, async (req, res) => {
     
     // Fetch fresh user profile
     const userResult = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE id = $1',
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE id = $1',
       [userId]
     );
 
@@ -604,6 +610,7 @@ router.post('/token-login', verifyFirebaseToken, async (req, res) => {
       role: user.role || 'USER',
       status: user.status,
       isVerified: user.is_verified,
+      isIdVerified: user.is_id_verified,
       createdAt: user.created_at,
     };
 

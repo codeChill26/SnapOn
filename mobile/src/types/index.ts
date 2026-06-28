@@ -17,6 +17,7 @@ export interface User {
   role: UserRole;
   status: 'ACTIVE' | 'BANNED' | 'SUSPENDED';
   isVerified: boolean;
+  isIdVerified?: boolean;
   createdAt: string;
   bio?: string;
   headline?: string;
@@ -32,6 +33,7 @@ export interface PublicProfile {
   headline: string;
   skills: string[];
   isVerified: boolean;
+  isIdVerified?: boolean;
   joinedAt: string;
   ratingAverage: number;
   reviewCount: number;

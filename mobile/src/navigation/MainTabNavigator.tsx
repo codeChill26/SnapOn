@@ -125,8 +125,6 @@ export const MainTabNavigator: React.FC = () => {
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabBarItem,
         tabBarLabelStyle: styles.tabBarLabel,
-
-        tabBarAllowFontScaling: false,
       }}
     >
       {visibleTabs.map((tab) => {

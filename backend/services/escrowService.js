@@ -168,6 +168,10 @@ const escrowService = {
 
     // Lock poster wallet and settle: locked_balance -= amount, balance -= amount
     const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
+    const lockedBalance = parseFloat(posterWallet.locked_balance);
+    if (lockedBalance < amount) {
+      throw new Error(`Insufficient locked balance to release escrow. Wallet locked balance: ${lockedBalance}, required: ${amount}`);
+    }
     await db.query(
       `UPDATE wallets
        SET locked_balance = locked_balance - $2,
@@ -260,6 +264,10 @@ const escrowService = {
 
     // Lock poster wallet and move locked → available
     const posterWallet = await walletModel.lockByUserId(escrow.poster_id, db);
+    const lockedBalance = parseFloat(posterWallet.locked_balance);
+    if (lockedBalance < amount) {
+      throw new Error(`Insufficient locked balance to refund escrow. Wallet locked balance: ${lockedBalance}, required: ${amount}`);
+    }
     await db.query(
       `UPDATE wallets
        SET locked_balance    = locked_balance    - $2,

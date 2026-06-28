@@ -84,7 +84,7 @@ router.put("/profile", verifyFirebaseToken, async (req, res) => {
            skills = COALESCE($6::jsonb, skills),
            cover_url = COALESCE($7, cover_url)
        WHERE id = $8
-       RETURNING id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, bio, headline, skills, created_at`,
+       RETURNING id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at`,
       params
     );
     console.log('Profile update SQL result:', result.rows[0]);
@@ -120,6 +120,7 @@ router.put("/profile", verifyFirebaseToken, async (req, res) => {
         role: updatedUser.role,
         status: updatedUser.status,
         isVerified: updatedUser.is_verified,
+        isIdVerified: updatedUser.is_id_verified,
         bio: updatedUser.bio || "",
         headline: updatedUser.headline || "",
         skills: skillsArray,
@@ -141,7 +142,7 @@ router.get("/:userId/profile", verifyFirebaseToken, async (req, res) => {
     // Sử dụng cơ chế Cache-Aside với thời gian sống (TTL) 5 phút
     const profileData = await cacheService.getOrFetch(userKey, 300, async () => {
       const userResult = await pool.query(
-        `SELECT id, full_name, avatar_url, cover_url, bio, headline, skills, is_verified, created_at
+        `SELECT id, full_name, avatar_url, cover_url, bio, headline, skills, is_verified, is_id_verified, created_at
          FROM users
          WHERE id = $1`,
         [userId]
@@ -226,6 +227,7 @@ router.get("/:userId/profile", verifyFirebaseToken, async (req, res) => {
         headline: dbUser.headline || "",
         skills: skillsArray,
         isVerified: dbUser.is_verified,
+        isIdVerified: dbUser.is_id_verified,
         joinedAt: dbUser.created_at,
         ratingAverage: parseFloat(avgRating.toFixed(1)),
         reviewCount: reviewCount,
@@ -567,9 +569,9 @@ router.post("/verify", verifyFirebaseToken, async (req, res) => {
       // 3. Auto-approve the user's verification for convenience in testing
       const userResult = await client.query(
         `UPDATE users
-         SET is_verified = true
+         SET is_id_verified = true
          WHERE id = $1
-         RETURNING id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at`,
+         RETURNING id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at`,
         [req.user.id]
       );
  
@@ -589,6 +591,7 @@ router.post("/verify", verifyFirebaseToken, async (req, res) => {
           role: updatedUser.role,
           status: updatedUser.status,
           isVerified: updatedUser.is_verified,
+          isIdVerified: updatedUser.is_id_verified,
           createdAt: updatedUser.created_at,
         }
       });

@@ -1,3 +1,12 @@
+/**
+ * Auth Controller
+ * 
+ * This file is actively used by the authentication routes (backend/routes/auth.js).
+ * It contains functions for:
+ * 1. Email Verification: Handling verifyEmail endpoint request and verifying verificationToken.
+ * 2. Verification Code Resending: Handling resend-verification endpoint and generating new verificationToken.
+ * 3. Token Generation Utilities: Functions for generating access/refresh JWT tokens and caching refresh tokens in Redis.
+ */
 const prisma = require('../db/prisma');
 const emailService = require('../services/emailService');
 const response = require('../utils/responseHandler');
@@ -131,6 +140,7 @@ const verifyEmail = async (req, res) => {
       role: updatedUser.role || 'USER',
       status: updatedUser.status,
       isVerified: updatedUser.isVerified,
+      isIdVerified: updatedUser.isIdVerified,
       createdAt: updatedUser.createdAt,
     };
 

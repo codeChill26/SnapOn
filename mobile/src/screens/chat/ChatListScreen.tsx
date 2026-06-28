@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
+import { useAppNavigation } from '../../hooks/useAppNavigation';
 import { UserAvatar } from '../../components/common/UserAvatar';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { chatService, ChatConversation, ChatMessage } from '../../services/chatService';
@@ -166,7 +167,7 @@ const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, cur
 });
 
 export const ChatListScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useAppNavigation();
   const isFocused = useIsFocused();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<DraftConversation[]>([]);

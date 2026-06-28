@@ -33,7 +33,10 @@ interface EditProfileModalProps {
   }) => void;
 }
 
-const isValidPhone = (v: string) => !v.trim() || /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
+const isValidPhone = (v: string) => {
+  const clean = v.replace(/\s+/g, '');
+  return !clean || /^(0[3|5|7|8|9])[0-9]{8}$/.test(clean);
+};
 
 interface ProfileErrors {
   fullName?: string;
@@ -61,7 +64,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   onSave,
 }) => {
   const [fullName, setFullName] = useState(initialName);
-  const [phone, setPhone] = useState(initialPhone);
+  const [phone, setPhone] = useState(initialPhone ? initialPhone.replace(/[^0-9]/g, '') : '');
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [coverUrl, setCoverUrl] = useState(initialCoverUrl);
   const [bio, setBio] = useState(initialBio);
@@ -74,7 +77,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   useEffect(() => {
     if (visible) {
       setFullName(initialName);
-      setPhone(initialPhone);
+      setPhone(initialPhone ? initialPhone.replace(/[^0-9]/g, '') : '');
       setAvatarUrl(initialAvatarUrl);
       setCoverUrl(initialCoverUrl);
       setBio(initialBio);
@@ -129,7 +132,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       return;
     }
     setErrors({});
-    onSave({ fullName, phone, avatarUrl, coverUrl, bio, headline, skills });
+    const cleanPhone = phone.replace(/\s+/g, '');
+    onSave({ fullName, phone: cleanPhone, avatarUrl, coverUrl, bio, headline, skills });
   };
 
   return (
@@ -183,7 +187,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           label="Số điện thoại"
           placeholder="VD: 0912345678"
           value={phone}
-          onChangeText={(t) => { setPhone(t); if (errors.phone) setErrors(p => ({ ...p, phone: undefined })); }}
+          onChangeText={(t) => {
+            const clean = t.replace(/[^0-9]/g, '');
+            setPhone(clean);
+            if (errors.phone) setErrors(p => ({ ...p, phone: undefined }));
+          }}
           keyboardType="phone-pad"
           maxLength={10}
           error={errors.phone}

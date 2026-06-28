@@ -2,6 +2,13 @@ const walletModel = require('../models/walletModel');
 const walletTransactionModel = require('../models/walletTransactionModel');
 const withDbTx = require('../utils/withDbTx');
 const payos = require('../config/payos');
+const pool = require('../config/db');
+const crypto = require('crypto');
+
+function generateNumericOrderCode() {
+  const uuid = crypto.randomUUID();
+  return parseInt(uuid.replace(/-/g, '').slice(0, 12), 16);
+}
 
 /**
  * Wallet Service — Business logic for wallet operations
@@ -138,19 +145,29 @@ const walletService = {
 
     const wallet = await walletModel.createIfNotExists(userId);
 
-    // Order Code must be unique number (up to 9007199254740991)
-    // Timestamp (13 digits) + 3 random digits is safe and fits in Postgres BIGINT
-    const orderCode = Number(String(Date.now()) + String(Math.floor(100 + Math.random() * 900)));
-
-    // Create pending transaction in DB
-    await walletTransactionModel.create({
-      walletId: wallet.id,
-      type: 'DEPOSIT',
-      amount: amt,
-      status: 'PENDING',
-      referenceId: null,
-      orderCode,
-    });
+    let orderCode;
+    let txRecord = null;
+    let retries = 5;
+    while (retries > 0 && !txRecord) {
+      orderCode = generateNumericOrderCode();
+      try {
+        txRecord = await walletTransactionModel.create({
+          walletId: wallet.id,
+          type: 'DEPOSIT',
+          amount: amt,
+          status: 'PENDING',
+          referenceId: null,
+          orderCode,
+        });
+      } catch (err) {
+        if (err.code === '23505' || err.message.includes('unique constraint')) {
+          retries--;
+          if (retries === 0) throw err;
+        } else {
+          throw err;
+        }
+      }
+    }
 
     const description = `Topup SnapOn ${userId.slice(0, 8)}`;
     const cancelUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`;
@@ -184,8 +201,28 @@ const walletService = {
 
     const wallet = await walletModel.createIfNotExists(userId);
 
-    // Generate unique orderCode
-    const orderCode = Math.floor(Date.now() % 1000000000) + Math.floor(Math.random() * 1000);
+    let orderCode;
+    let txRecord = null;
+    let retries = 5;
+    while (retries > 0 && !txRecord) {
+      orderCode = generateNumericOrderCode();
+      try {
+        txRecord = await walletTransactionModel.create({
+          walletId: wallet.id,
+          type: 'DEPOSIT',
+          amount: amt,
+          status: 'PENDING',
+          orderCode,
+        });
+      } catch (err) {
+        if (err.code === '23505' || err.message.includes('unique constraint')) {
+          retries--;
+          if (retries === 0) throw err;
+        } else {
+          throw err;
+        }
+      }
+    }
 
     const backendBase = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`;
     const cancelUrl = `${backendBase}/api/wallet/topup/payos/cancel`;
@@ -202,20 +239,15 @@ const walletService = {
     try {
       const paymentLinkRes = await payos.paymentRequests.create(paymentData);
 
-      await walletTransactionModel.create({
-        walletId: wallet.id,
-        type: 'DEPOSIT',
-        amount: amt,
-        status: 'PENDING',
-        orderCode,
-      });
-
       return {
         checkoutUrl: paymentLinkRes.checkoutUrl,
         orderCode,
       };
     } catch (err) {
       console.error('PayOS Create Payment Link error:', err);
+      if (txRecord) {
+        await pool.query('DELETE FROM wallet_transactions WHERE id = $1', [txRecord.id]).catch(() => {});
+      }
       const error = new Error('Failed to create payment link: ' + err.message);
       error.statusCode = 500;
       throw error;

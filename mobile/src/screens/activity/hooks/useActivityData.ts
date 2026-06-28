@@ -197,7 +197,7 @@ export const useActivityData = () => {
           msg: 'Tiếp tục theo dõi và kiểm tra tiến độ dự án.',
           taskId: inProgress.post.id,
           icon: 'rocket-outline',
-          color: '#D97706',
+          colorKey: 'warning',
         };
       }
       const open = activities.find((a) => a.post.status === 'OPEN');
@@ -208,7 +208,7 @@ export const useActivityData = () => {
           msg: `Có ${open.stats?.applicantCount || 0} hồ sơ ứng cử viên mới gửi đến.`,
           taskId: open.post.id,
           icon: 'people-outline',
-          color: '#0369A1',
+          colorKey: 'info',
         };
       }
     } else {
@@ -222,7 +222,7 @@ export const useActivityData = () => {
           msg: 'Xem chi tiết công việc hoặc liên hệ chủ dự án.',
           taskId: inProgress.post.id,
           icon: 'flash-outline',
-          color: '#0284C7',
+          colorKey: 'info',
         };
       }
       const pending = activities.find((a) => a.participation?.status === 'PENDING');
@@ -233,7 +233,7 @@ export const useActivityData = () => {
           msg: 'Đang đợi chủ dự án xem xét và phản hồi.',
           taskId: pending.post.id,
           icon: 'time-outline',
-          color: '#D97706',
+          colorKey: 'warning',
         };
       }
     }

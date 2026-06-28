@@ -24,20 +24,20 @@ import { useActivityData, TabView } from './hooks/useActivityData';
 import { useAppNavigation } from '../../hooks/useAppNavigation';
 
 const POSTED_FILTERS = [
-  { key: 'all', label: 'Tất cả', icon: 'apps-outline', color: '#FF6B35' },
-  { key: 'OPEN', label: 'Đang mở', icon: 'radio-button-on-outline', color: '#0369A1' },
-  { key: 'IN_PROGRESS', label: 'Đang làm', icon: 'flash-outline', color: '#D97706' },
-  { key: 'COMPLETED', label: 'Hoàn thành', icon: 'checkmark-circle-outline', color: '#059669' },
-  { key: 'CANCELLED', label: 'Đã hủy', icon: 'close-circle-outline', color: '#667085' },
+  { key: 'all', label: 'Tất cả', icon: 'apps-outline', colorKey: 'brand' },
+  { key: 'OPEN', label: 'Đang mở', icon: 'radio-button-on-outline', colorKey: 'info' },
+  { key: 'IN_PROGRESS', label: 'Đang làm', icon: 'flash-outline', colorKey: 'warning' },
+  { key: 'COMPLETED', label: 'Hoàn thành', icon: 'checkmark-circle-outline', colorKey: 'success' },
+  { key: 'CANCELLED', label: 'Đã hủy', icon: 'close-circle-outline', colorKey: 'muted' },
 ];
 
 const PARTICIPATING_FILTERS = [
-  { key: 'all', label: 'Tất cả', icon: 'apps-outline', color: '#FF6B35' },
-  { key: 'PENDING', label: 'Chờ phản hồi', icon: 'time-outline', color: '#D97706' },
-  { key: 'ACCEPTED', label: 'Đã nhận', icon: 'checkmark-outline', color: '#0369A1' },
-  { key: 'IN_PROGRESS', label: 'Đang làm', icon: 'flash-outline', color: '#0284C7' },
-  { key: 'COMPLETED', label: 'Hoàn thành', icon: 'checkmark-circle-outline', color: '#059669' },
-  { key: 'ENDED', label: 'Kết thúc', icon: 'close-circle-outline', color: '#667085' },
+  { key: 'all', label: 'Tất cả', icon: 'apps-outline', colorKey: 'brand' },
+  { key: 'PENDING', label: 'Chờ phản hồi', icon: 'time-outline', colorKey: 'warning' },
+  { key: 'ACCEPTED', label: 'Đã nhận', icon: 'checkmark-outline', colorKey: 'info' },
+  { key: 'IN_PROGRESS', label: 'Đang làm', icon: 'flash-outline', colorKey: 'info' },
+  { key: 'COMPLETED', label: 'Hoàn thành', icon: 'checkmark-circle-outline', colorKey: 'success' },
+  { key: 'ENDED', label: 'Kết thúc', icon: 'close-circle-outline', colorKey: 'muted' },
 ];
 
 export const ActivityScreen: React.FC = () => {
@@ -67,6 +67,17 @@ export const ActivityScreen: React.FC = () => {
   } = useActivityData();
 
   const activeFilters = activeTab === 'POSTED' ? POSTED_FILTERS : PARTICIPATING_FILTERS;
+
+  const resolveColor = (colorKey: string) => {
+    switch (colorKey) {
+      case 'brand': return theme.colors.brand.primary;
+      case 'info': return theme.colors.status.info;
+      case 'warning': return theme.colors.status.warning;
+      case 'success': return theme.colors.status.success;
+      case 'muted': return theme.colors.text.muted;
+      default: return theme.colors.text.primary;
+    }
+  };
 
   const getFilterCount = (key: string) => {
     if (!summary) return 0;
@@ -188,6 +199,7 @@ export const ActivityScreen: React.FC = () => {
           {activeFilters.slice(1, 5).map((filter) => {
             const count = getFilterCount(filter.key);
             const isFilterActive = statusFilter === filter.key;
+            const resolvedColor = resolveColor(filter.colorKey);
             return (
               <TouchableOpacity
                 key={filter.key}
@@ -205,8 +217,8 @@ export const ActivityScreen: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel={`Lọc theo trạng thái ${filter.label}`}
               >
-                <View style={[styles.statIcon, { backgroundColor: filter.color + '1A', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name={filter.icon as any} size={14} color={filter.color} />
+                <View style={[styles.statIcon, { backgroundColor: resolvedColor + '1A', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name={filter.icon as any} size={14} color={resolvedColor} />
                 </View>
                 <Text style={[styles.statValue, { color: theme.colors.text.primary, fontWeight: '800', marginTop: theme.spacing.xs }]}>{count}</Text>
                 <Text style={{ color: theme.colors.text.secondary, fontSize: 10 }}>{filter.label}</Text>
@@ -220,6 +232,8 @@ export const ActivityScreen: React.FC = () => {
 
   const renderFocusCard = () => {
     if (!focusItem) return null;
+
+    const resolvedColor = resolveColor(focusItem.colorKey);
 
     return (
       <TouchableOpacity
@@ -241,11 +255,11 @@ export const ActivityScreen: React.FC = () => {
         accessibilityRole="button"
         accessibilityLabel={`Đề xuất cần chú ý: ${focusItem.label}. Công việc: ${focusItem.title}`}
       >
-        <View style={[styles.focusIcon, { backgroundColor: focusItem.color + '1A', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }]}>
-          <Ionicons name={focusItem.icon as any} size={18} color={focusItem.color} />
+        <View style={[styles.focusIcon, { backgroundColor: resolvedColor + '1A', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name={focusItem.icon as any} size={18} color={resolvedColor} />
         </View>
         <View style={styles.focusContent}>
-          <Text style={[styles.focusEyebrow, { color: focusItem.color, fontSize: 10, fontWeight: '800' }]}>{focusItem.label}</Text>
+          <Text style={[styles.focusEyebrow, { color: resolvedColor, fontSize: 10, fontWeight: '800' }]}>{focusItem.label}</Text>
           <Text style={[styles.focusTitle, { color: theme.colors.text.primary, fontSize: 14, fontWeight: '700' }]} numberOfLines={1}>
             {focusItem.title}
           </Text>
@@ -594,7 +608,6 @@ const styles = StyleSheet.create({
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF6B35',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,

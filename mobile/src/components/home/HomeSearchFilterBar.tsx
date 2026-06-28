@@ -4,6 +4,7 @@ import {
   View,
   TextInput,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeTheme } from './HomeTheme';
@@ -174,6 +175,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: HomeTheme.colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    letterSpacing: 0,
   },
   clearButton: {
     padding: 4,

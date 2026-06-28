@@ -22,6 +22,7 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { Ionicons } from '@expo/vector-icons';
 import { AccountConfigSection } from '../../components/profile/AccountConfigSection';
 import { EditProfileModal } from '../../components/profile/EditProfileModal';
+import { ChangePasswordModal } from '../../components/profile/ChangePasswordModal';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -36,6 +37,7 @@ export const AccountSettingsScreen: React.FC = () => {
 
   // States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -293,17 +295,8 @@ export const AccountSettingsScreen: React.FC = () => {
       return;
     }
 
-    setVerifyStep(5);
+    setVerifyStep(4);
     try {
-      if (verifyPhone && verifyPhone.trim() !== currentUser?.phone) {
-        try {
-          const updatedProfile = await authService.updateProfile({ phone: verifyPhone.trim() });
-          updateUser(updatedProfile);
-        } catch (phoneErr) {
-          console.warn('Failed to update phone number in profile:', phoneErr);
-        }
-      }
-
       const updatedUser = await authService.verifyAccount(frontImage, backImage, selfieImage);
       updateUser(updatedUser);
       setIsVerifyModalOpen(false);
@@ -311,7 +304,7 @@ export const AccountSettingsScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Submit verification error:', error);
       Alert.alert('Thất bại', error.message || 'Gửi tài liệu xác thực thất bại. Vui lòng thử lại.');
-      setVerifyStep(4);
+      setVerifyStep(3);
     }
   };
 
@@ -328,7 +321,7 @@ export const AccountSettingsScreen: React.FC = () => {
       { key: 'email', value: !!currentUser?.email },
       { key: 'phone', value: !!currentUser?.phone },
       { key: 'avatar', value: !!currentUser?.avatarUrl },
-      { key: 'verification', value: !!currentUser?.isVerified },
+      { key: 'verification', value: !!currentUser?.isIdVerified },
     ];
     const completedCount = items.filter((item) => item.value).length;
     return completedCount * 20;
@@ -350,11 +343,11 @@ export const AccountSettingsScreen: React.FC = () => {
         <Text style={styles.headerTitle}>Cài đặt tài khoản</Text>
         <View style={{ width: 24 }} />
       </View>
-
+ 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <AccountConfigSection
           completenessScore={getProfileCompleteness()}
-          isVerified={currentUser?.isVerified || false}
+          isVerified={currentUser?.isIdVerified || false}
           walletBalance={wallet?.availableBalance || 0}
           onEditProfile={() => {
             setEditAvatarUrl(currentUser?.avatarUrl || '');
@@ -362,7 +355,7 @@ export const AccountSettingsScreen: React.FC = () => {
             setIsEditModalOpen(true);
           }}
           onVerifyAccount={() => {
-            if (currentUser?.isVerified) {
+            if (currentUser?.isIdVerified) {
               Alert.alert('Xác thực', 'Tài khoản của bạn đã được xác thực thành công.');
             } else {
               handleOpenVerifyModal();
@@ -374,11 +367,19 @@ export const AccountSettingsScreen: React.FC = () => {
           onPostedTasks={() => navigation.navigate('MainTabs', { screen: 'Activity', params: { view: 'POSTED' } } as any)}
           onMyApplications={() => navigation.navigate('MainTabs', { screen: 'Activity', params: { view: 'PARTICIPATING' } } as any)}
           onNotificationPress={() => Alert.alert('Thông báo', 'Cài đặt thông báo đang được phát triển.')}
-          onSecurityPress={() => Alert.alert('Bảo mật', 'Bảo mật tài khoản của bạn đang an toàn.')}
+          onSecurityPress={() => setIsChangePasswordOpen(true)}
           onTermsPress={() => Alert.alert('Điều khoản', 'Điều khoản dịch vụ của SnapOn.')}
           onLogout={handleLogout}
         />
       </ScrollView>
+
+      {/* Change Password Modal */}
+      {isChangePasswordOpen && (
+        <ChangePasswordModal
+          visible={isChangePasswordOpen}
+          onClose={() => setIsChangePasswordOpen(false)}
+        />
+      )}
 
       {/* Edit Profile Modal */}
       {isEditModalOpen && (
@@ -405,14 +406,14 @@ export const AccountSettingsScreen: React.FC = () => {
       <Modal
         visible={isVerifyModalOpen}
         onClose={() => {
-          if (verifyStep !== 5) {
+          if (verifyStep !== 4) {
             setIsVerifyModalOpen(false);
           }
         }}
         title="Xác thực tài khoản"
       >
         <View style={styles.verifyModalContainer}>
-          {verifyStep !== 5 && (
+          {verifyStep !== 4 && (
             <View style={styles.verifyWizardProgress}>
               <View style={[styles.verifyProgressDot, verifyStep >= 1 && { backgroundColor: Colors.primary }]}>
                 <Text style={[styles.verifyProgressDotText, verifyStep >= 1 && styles.verifyProgressDotTextActive]}>1</Text>
@@ -425,92 +426,10 @@ export const AccountSettingsScreen: React.FC = () => {
               <View style={[styles.verifyProgressDot, verifyStep >= 3 && { backgroundColor: Colors.primary }]}>
                 <Text style={[styles.verifyProgressDotText, verifyStep >= 3 && styles.verifyProgressDotTextActive]}>3</Text>
               </View>
-              <View style={[styles.verifyProgressLine, verifyStep >= 4 && { backgroundColor: Colors.primary }]} />
-              <View style={[styles.verifyProgressDot, verifyStep >= 4 && { backgroundColor: Colors.primary }]}>
-                <Text style={[styles.verifyProgressDotText, verifyStep >= 4 && styles.verifyProgressDotTextActive]}>4</Text>
-              </View>
             </View>
           )}
 
           {verifyStep === 1 && (
-            <View style={styles.verifyStepWrapper}>
-              <Text style={styles.verifyStepTitle}>Xác thực số điện thoại</Text>
-              <Text style={styles.verifyStepDesc}>Nhập số điện thoại để nhận mã xác thực OTP gửi về thiết bị.</Text>
-
-              <Input
-                label="Số điện thoại"
-                placeholder="Nhập số điện thoại của bạn"
-                value={verifyPhone}
-                onChangeText={(txt) => {
-                  setVerifyPhone(txt);
-                  setIsPhoneVerified(false);
-                  setIsOtpSent(false);
-                }}
-                keyboardType="phone-pad"
-                editable={!isPhoneVerified}
-              />
-
-              {!isPhoneVerified && (
-                <View style={styles.verifyActionCol}>
-                  <Button
-                    title={otpTimer > 0 ? `Gửi lại mã sau (${otpTimer}s)` : (isOtpSent ? "Gửi lại mã OTP" : "Gửi mã OTP")}
-                    onPress={handleSendOtp}
-                    variant="outline"
-                    disabled={otpTimer > 0}
-                    style={{ borderColor: Colors.primary }}
-                    textStyle={{ color: Colors.primary }}
-                  />
-
-                  {isOtpSent && (
-                    <View style={styles.verifyActionCol}>
-                      <Input
-                        label="Nhập mã OTP"
-                        placeholder="Nhập mã OTP 6 chữ số"
-                        value={otpCode}
-                        onChangeText={setOtpCode}
-                        keyboardType="numeric"
-                        maxLength={6}
-                      />
-                      <View style={styles.verifyOtpTipBox}>
-                        <Text style={styles.verifyOtpTipText}>💡 Mã OTP thử nghiệm là: 123456</Text>
-                      </View>
-                      <Button
-                        title="Xác minh OTP"
-                        onPress={handleVerifyOtp}
-                        disabled={otpCode.length < 6}
-                        style={{ backgroundColor: Colors.primary }}
-                      />
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {isPhoneVerified && (
-                <View style={styles.verifyPhoneSuccessBox}>
-                  <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                  <Text style={styles.verifyPhoneSuccessText}>Số điện thoại đã được xác thực thành công!</Text>
-                </View>
-              )}
-
-              <View style={styles.modalButtons}>
-                <Button
-                  title="Hủy"
-                  variant="outline"
-                  onPress={() => setIsVerifyModalOpen(false)}
-                  style={{ flex: 1, borderColor: Colors.primary }}
-                  textStyle={{ color: Colors.primary }}
-                />
-                <Button
-                  title="Tiếp tục"
-                  disabled={!isPhoneVerified}
-                  onPress={() => setVerifyStep(2)}
-                  style={{ flex: 1, backgroundColor: Colors.primary }}
-                />
-              </View>
-            </View>
-          )}
-
-          {verifyStep === 2 && (
             <View style={styles.verifyStepWrapper}>
               <Text style={styles.verifyStepTitle}>Mặt trước CCCD</Text>
               <Text style={styles.verifyStepDesc}>Chụp hoặc chọn ảnh mặt trước của Căn cước công dân của bạn.</Text>
@@ -547,23 +466,23 @@ export const AccountSettingsScreen: React.FC = () => {
 
               <View style={styles.modalButtons}>
                 <Button
-                  title="Quay lại"
+                  title="Hủy"
                   variant="outline"
-                  onPress={() => setVerifyStep(1)}
+                  onPress={() => setIsVerifyModalOpen(false)}
                   style={{ flex: 1, borderColor: Colors.primary }}
                   textStyle={{ color: Colors.primary }}
                 />
                 <Button
                   title="Tiếp tục"
                   disabled={!frontImage}
-                  onPress={() => setVerifyStep(3)}
+                  onPress={() => setVerifyStep(2)}
                   style={{ flex: 1, backgroundColor: Colors.primary }}
                 />
               </View>
             </View>
           )}
 
-          {verifyStep === 3 && (
+          {verifyStep === 2 && (
             <View style={styles.verifyStepWrapper}>
               <Text style={styles.verifyStepTitle}>Mặt sau CCCD</Text>
               <Text style={styles.verifyStepDesc}>Chụp hoặc chọn ảnh mặt sau của Căn cước công dân của bạn.</Text>
@@ -602,21 +521,21 @@ export const AccountSettingsScreen: React.FC = () => {
                 <Button
                   title="Quay lại"
                   variant="outline"
-                  onPress={() => setVerifyStep(2)}
+                  onPress={() => setVerifyStep(1)}
                   style={{ flex: 1, borderColor: Colors.primary }}
                   textStyle={{ color: Colors.primary }}
                 />
                 <Button
                   title="Tiếp tục"
                   disabled={!backImage}
-                  onPress={() => setVerifyStep(4)}
+                  onPress={() => setVerifyStep(3)}
                   style={{ flex: 1, backgroundColor: Colors.primary }}
                 />
               </View>
             </View>
           )}
 
-          {verifyStep === 4 && (
+          {verifyStep === 3 && (
             <View style={styles.verifyStepWrapper}>
               <Text style={styles.verifyStepTitle}>Ảnh Selfie đối chiếu</Text>
               <Text style={styles.verifyStepDesc}>Chụp ảnh khuôn mặt của bạn trực tiếp tại chỗ, thấy rõ ngũ quan.</Text>
@@ -641,21 +560,13 @@ export const AccountSettingsScreen: React.FC = () => {
                   style={{ flex: 1, borderColor: Colors.primary }}
                   textStyle={{ color: Colors.primary }}
                 />
-                <Button
-                  title="Chọn thư viện"
-                  icon={<Ionicons name="image" size={18} color={Colors.primary} />}
-                  variant="outline"
-                  onPress={() => handleSelectVerifyImage(3, false)}
-                  style={{ flex: 1, borderColor: Colors.primary }}
-                  textStyle={{ color: Colors.primary }}
-                />
               </View>
 
               <View style={styles.modalButtons}>
                 <Button
                   title="Quay lại"
                   variant="outline"
-                  onPress={() => setVerifyStep(3)}
+                  onPress={() => setVerifyStep(2)}
                   style={{ flex: 1, borderColor: Colors.primary }}
                   textStyle={{ color: Colors.primary }}
                 />
@@ -669,7 +580,7 @@ export const AccountSettingsScreen: React.FC = () => {
             </View>
           )}
 
-          {verifyStep === 5 && (
+          {verifyStep === 4 && (
             <View style={{ width: '100%', paddingVertical: 32, alignItems: 'center', gap: 16 }}>
               <ActivityIndicator size="large" color={Colors.primary} />
               <Text style={styles.verifyStepTitle}>Đang tải lên tài liệu...</Text>

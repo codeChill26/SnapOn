@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 /** Look up a user by their database UUID */
 async function findUserById(userId) {
   const result = await pool.query(
-    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE id = $1',
+    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] || null;
@@ -28,6 +28,7 @@ function attachUser(req, user, res, next) {
     role: user.role,
     status: user.status,
     isVerified: user.is_verified ?? user.isVerified,
+    isIdVerified: user.is_id_verified ?? user.isIdVerified,
     createdAt: user.created_at || user.createdAt,
   };
 
@@ -94,6 +95,10 @@ if (AUTH_MODE === 'dev') {
   console.log('   Use header "x-user-id: <user-uuid>" or login via /api/auth/dev/login');
 }
 
+const isMockAllowed = () => {
+  return AUTH_MODE === 'dev' || process.env.NODE_ENV !== 'production';
+};
+
 /**
  * Authentication Middleware
  */
@@ -124,6 +129,9 @@ const authenticate = async (req, res, next) => {
         const firebaseToken = req.body?.firebaseToken;
         if (firebaseToken) {
           if (firebaseToken.startsWith('mock-firebase-token')) {
+            if (!isMockAllowed()) {
+              return error(res, 'Mock token not allowed in production.', 401);
+            }
             const email = firebaseToken.split(':')[1] || 'mock-user@example.com';
             req.firebaseUser = {
               uid: `mock-uid-${email.replace(/[@.]/g, '-')}`,
@@ -193,6 +201,9 @@ const authenticate = async (req, res, next) => {
 
       let decodedToken;
       if (token && token.startsWith('mock-firebase-token')) {
+        if (!isMockAllowed()) {
+          return error(res, 'Mock token not allowed in production.', 401);
+        }
         const email = token.split(':')[1] || 'mock-user@example.com';
         const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
         const name = email.split('@')[0];
@@ -230,6 +241,9 @@ const authenticate = async (req, res, next) => {
       try {
         let decodedFirebaseToken;
         if (token.startsWith('mock-firebase-token')) {
+          if (!isMockAllowed()) {
+            return error(res, 'Mock token not allowed in production.', 401);
+          }
           const email = token.split(':')[1] || 'mock-user@example.com';
           decodedFirebaseToken = { uid: `mock-uid-${email.replace(/[@.]/g, '-')}` };
         } else {
@@ -237,7 +251,7 @@ const authenticate = async (req, res, next) => {
         }
 
         const result = await pool.query(
-          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at FROM users WHERE firebase_uid = $1',
+          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE firebase_uid = $1',
           [decodedFirebaseToken.uid]
         );
 
@@ -276,7 +290,7 @@ const verifyTokenForSocket = async (token, xUserId) => {
       throw new Error('DEV MODE: User ID is required.');
     }
     const result = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE id = $1',
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified FROM users WHERE id = $1',
       [xUserId]
     );
     if (result.rows.length === 0) {
@@ -316,6 +330,9 @@ const verifyTokenForSocket = async (token, xUserId) => {
   } catch (err) {
     let decodedToken;
     if (token.startsWith('mock-firebase-token')) {
+      if (!isMockAllowed()) {
+        throw new Error('Mock token not allowed in production.');
+      }
       const email = token.split(':')[1] || 'mock-user@example.com';
       const uid = `mock-uid-${email.replace(/[@.]/g, '-')}`;
       const name = email.split('@')[0];
@@ -330,7 +347,7 @@ const verifyTokenForSocket = async (token, xUserId) => {
     }
 
     const result = await pool.query(
-      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified FROM users WHERE firebase_uid = $1',
+      'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified FROM users WHERE firebase_uid = $1',
       [decodedToken.uid]
     );
 

@@ -51,7 +51,7 @@ export const Input: React.FC<InputProps> = ({
           style={[
             styles.input,
             lightMode ? styles.inputLight : styles.inputDark,
-            props.secureTextEntry && Platform.OS === 'ios' ? { fontFamily: 'System' } : {},
+            props.secureTextEntry ? { fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : {},
             leftIcon ? { paddingLeft: Spacing.sm } : {},
             rightIcon ? { paddingRight: Spacing.sm } : {},
             style,
@@ -127,6 +127,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Spacing.md,
     fontSize: Typography.body.fontSize + 1,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    letterSpacing: 0,
   },
   inputDark: {
     color: AppColors.text.primary,

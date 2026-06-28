@@ -9,7 +9,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../context/AuthContext';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
-import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import Config from '../../constants/config';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -62,6 +62,50 @@ export const LoginScreen: React.FC = () => {
     else if (password.length < 6) e.password = 'Mật khẩu phải có ít nhất 6 ký tự';
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setErrors(prev => ({ ...prev, email: 'Vui lòng nhập địa chỉ email để khôi phục mật khẩu' }));
+      Alert.alert('Nhập email', 'Vui lòng nhập địa chỉ email của bạn vào ô Email để hệ thống gửi liên kết đặt lại mật khẩu.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ' }));
+      Alert.alert('Email không hợp lệ', 'Vui lòng nhập địa chỉ email hợp lệ (VD: example@gmail.com).');
+      return;
+    }
+
+    Alert.alert(
+      'Khôi phục mật khẩu',
+      `SnapOn sẽ gửi liên kết đặt lại mật khẩu tới hòm thư:\n${cleanEmail}\n\nBạn có muốn tiếp tục không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Gửi yêu cầu',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await sendPasswordResetEmail(auth, cleanEmail);
+              Alert.alert(
+                'Đã gửi email khôi phục',
+                'Liên kết đặt lại mật khẩu đã được gửi thành công. Vui lòng kiểm tra hộp thư đến (và cả mục Thư rác/Spam) của bạn để đặt lại mật khẩu mới.'
+              );
+            } catch (error: any) {
+              console.error('Send password reset email error:', error);
+              if (error.code === 'auth/user-not-found') {
+                Alert.alert('Thất bại', 'Email này chưa được đăng ký tài khoản trên hệ thống SnapOn.');
+              } else {
+                Alert.alert('Thất bại', 'Không thể gửi email khôi phục. Vui lòng thử lại sau.');
+              }
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleLogin = async () => {
@@ -202,19 +246,29 @@ export const LoginScreen: React.FC = () => {
             error={errors.password}
           />
 
-          {/* Remember Me */}
-          <TouchableOpacity
-            style={styles.rememberMeRow}
-            onPress={() => setRememberMe(p => !p)}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={isRememberMe ? 'checkbox' : 'square-outline'}
-              size={20}
-              color={isRememberMe ? ORANGE : '#64748B'}
-            />
-            <Text style={styles.rememberMeText}>Lưu mật khẩu</Text>
-          </TouchableOpacity>
+           {/* Remember Me & Forgot Password */}
+          <View style={styles.optionsRow}>
+            <TouchableOpacity
+              style={styles.rememberMeRow}
+              onPress={() => setRememberMe(p => !p)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isRememberMe ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={isRememberMe ? ORANGE : '#64748B'}
+              />
+              <Text style={styles.rememberMeText}>Lưu mật khẩu</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleForgotPassword}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+          </View>
 
           <Button
             title="Đăng nhập"
@@ -340,15 +394,25 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     marginBottom: 20,
   },
+  optionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   rememberMeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
   },
   rememberMeText: {
     fontSize: 14,
     color: '#64748B',
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: ORANGE,
+    fontWeight: '600',
   },
   primaryButton: {
     marginBottom: 20,

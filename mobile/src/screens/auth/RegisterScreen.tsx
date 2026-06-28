@@ -20,7 +20,10 @@ type RegisterNavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>
 const ORANGE = '#FF6B35';
 
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-const isValidPhone  = (v: string) => /^(0[3|5|7|8|9])[0-9]{8}$/.test(v.trim());
+const isValidPhone  = (v: string) => {
+  const clean = v.replace(/\s+/g, '');
+  return /^(0[3|5|7|8|9])[0-9]{8}$/.test(clean);
+};
 
 interface Errors {
   name?: string;
@@ -156,7 +159,11 @@ export const RegisterScreen: React.FC = () => {
               label="Số điện thoại"
               placeholder="VD: 0912345678 (không bắt buộc)"
               value={phone}
-              onChangeText={(t) => { setPhone(t); clearError('phone'); }}
+              onChangeText={(t) => {
+                const clean = t.replace(/[^0-9]/g, '');
+                setPhone(clean);
+                clearError('phone');
+              }}
               keyboardType="phone-pad"
               maxLength={10}
               error={errors.phone}

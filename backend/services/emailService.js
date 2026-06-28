@@ -1,5 +1,6 @@
 function isEmailDebugOtpEnabled() {
-  return process.env.EMAIL_DEBUG_OTP === 'true';
+  const isDev = process.env.NODE_ENV !== 'production' && process.env.AUTH_MODE === 'dev';
+  return isDev && process.env.EMAIL_DEBUG_OTP === 'true';
 }
 
 async function sendVerificationEmail(to, name, token) {

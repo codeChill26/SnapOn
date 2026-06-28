@@ -62,6 +62,15 @@ pool.query('ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS created_at TIMES
     console.error('⚠️ Failed to ensure created_at column in assigned_tasks:', err.message);
   });
 
+// Tự động kiểm tra và bổ sung cột is_id_verified vào bảng users (nếu chưa có) để phục vụ xác thực CCCD
+pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_id_verified BOOLEAN DEFAULT false')
+  .then(() => {
+    console.log('✅ Checked/Added is_id_verified column in users table');
+  })
+  .catch((err) => {
+    console.error('⚠️ Failed to ensure is_id_verified column in users:', err.message);
+  });
+
 pool.on('error', (err) => {
   console.error('⚠️ Unexpected error on idle PostgreSQL client:', err.message);
 });
