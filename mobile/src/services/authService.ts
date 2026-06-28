@@ -112,4 +112,19 @@ export const authService = {
     const response = await api.post<any>('/auth/resend-verification', { email });
     return response.data;
   },
+
+  async forgotPassword(email: string): Promise<{ message: string; debugOtp?: string }> {
+    const response = await api.post<any>('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  async verifyForgotPasswordOtp(email: string, otp: string): Promise<{ resetToken: string }> {
+    const response = await api.post<any>('/auth/verify-forgot-password-otp', { email, otp });
+    return response.data;
+  },
+
+  async resetPassword(resetToken: string, newPassword: string): Promise<{ message: string }> {
+    const response = await api.post<any>('/auth/reset-password', { resetToken, newPassword });
+    return response.data;
+  },
 };

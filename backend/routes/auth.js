@@ -9,7 +9,7 @@ const prisma = require('../db/prisma');
 const redis = require('../config/redis');
 const rateLimiter = require('../middleware/rateLimiter');
 const { sendVerificationEmail, isEmailDebugOtpEnabled } = require('../services/emailService');
-const { verifyEmail, resendVerification, generateVerificationToken } = require('../controllers/auth');
+const { verifyEmail, resendVerification, generateVerificationToken, forgotPassword, verifyForgotPasswordOtp, resetPassword } = require('../controllers/auth');
 
 // Enforce JWT secrets on startup
 if (!process.env.JWT_ACCESS_SECRET) {
@@ -752,5 +752,10 @@ router.post('/logout', async (req, res) => {
 // Verification routes
 router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerification);
+
+// Forgot Password routes
+router.post('/forgot-password', forgotPassword);
+router.post('/verify-forgot-password-otp', verifyForgotPasswordOtp);
+router.post('/reset-password', resetPassword);
 
 module.exports = router;

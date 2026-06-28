@@ -64,48 +64,8 @@ export const LoginScreen: React.FC = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleForgotPassword = async () => {
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setErrors(prev => ({ ...prev, email: 'Vui lòng nhập địa chỉ email để khôi phục mật khẩu' }));
-      Alert.alert('Nhập email', 'Vui lòng nhập địa chỉ email của bạn vào ô Email để hệ thống gửi liên kết đặt lại mật khẩu.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ' }));
-      Alert.alert('Email không hợp lệ', 'Vui lòng nhập địa chỉ email hợp lệ (VD: example@gmail.com).');
-      return;
-    }
-
-    Alert.alert(
-      'Khôi phục mật khẩu',
-      `SnapOn sẽ gửi liên kết đặt lại mật khẩu tới hòm thư:\n${cleanEmail}\n\nBạn có muốn tiếp tục không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Gửi yêu cầu',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await sendPasswordResetEmail(auth, cleanEmail);
-              Alert.alert(
-                'Đã gửi email khôi phục',
-                'Liên kết đặt lại mật khẩu đã được gửi thành công. Vui lòng kiểm tra hộp thư đến (và cả mục Thư rác/Spam) của bạn để đặt lại mật khẩu mới.'
-              );
-            } catch (error: any) {
-              console.error('Send password reset email error:', error);
-              if (error.code === 'auth/user-not-found') {
-                Alert.alert('Thất bại', 'Email này chưa được đăng ký tài khoản trên hệ thống SnapOn.');
-              } else {
-                Alert.alert('Thất bại', 'Không thể gửi email khôi phục. Vui lòng thử lại sau.');
-              }
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
+  const handleForgotPassword = () => {
+    navigation.navigate('ForgotPassword');
   };
 
   const handleLogin = async () => {
