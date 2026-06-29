@@ -456,10 +456,24 @@ const resetPassword = async (req, res) => {
     const hashedPassword = crypto.createHash('sha256').update(newPassword).digest('hex');
 
     // Update user password
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { email: tokenRecord.email },
       data: { password: hashedPassword }
     });
+
+    // Sync to Firebase Authentication if enabled
+    const admin = require('firebase-admin');
+    if (admin.apps.length > 0 && updatedUser.firebaseUid) {
+      try {
+        console.log(`[FORGOT PASSWORD] Syncing new password to Firebase Auth for uid: ${updatedUser.firebaseUid}`);
+        await admin.auth().updateUser(updatedUser.firebaseUid, {
+          password: newPassword
+        });
+      } catch (fbError) {
+        console.error('❌ Failed to update password in Firebase Auth:', fbError);
+        return res.status(500).json({ message: 'Failed to sync password reset with Firebase Authentication: ' + fbError.message });
+      }
+    }
 
     // Invalidate reset token
     await prisma.passwordResetToken.update({
