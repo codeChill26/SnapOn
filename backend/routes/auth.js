@@ -8,7 +8,7 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../db/prisma');
 const redis = require('../config/redis');
 const rateLimiter = require('../middleware/rateLimiter');
-const { sendVerificationEmail, isEmailDebugOtpEnabled } = require('../services/emailService');
+const { sendVerificationEmail, sendDeletionOtpEmail, isEmailDebugOtpEnabled } = require('../services/emailService');
 const { verifyEmail, resendVerification, generateVerificationToken, forgotPassword, verifyForgotPasswordOtp, resetPassword } = require('../controllers/auth');
 
 // Enforce JWT secrets on startup
@@ -757,5 +757,164 @@ router.post('/resend-verification', resendVerification);
 router.post('/forgot-password', forgotPassword);
 router.post('/verify-forgot-password-otp', verifyForgotPasswordOtp);
 router.post('/reset-password', resetPassword);
+
+// Account Deletion Request routes
+router.post('/deletion-request/send-otp', rateLimiter('send-deletion-otp', 3, 60), async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Verify user exists in system
+    const user = await prisma.user.findUnique({
+      where: { email: cleanEmail }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản với email này.' });
+    }
+
+    // 2. Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpData = {
+      otp: otp,
+      retryCount: 0,
+      retryLimit: 3
+    };
+
+    // 3. Cache OTP in Redis or in-memory map
+    const key = `deletion-otp:${cleanEmail}`;
+    if (redis.isActive()) {
+      await redis.set(key, JSON.stringify(otpData), 300); // 5 minutes TTL
+    } else {
+      otpData.expiresAt = Date.now() + 300 * 1000;
+      inMemoryOtpCache.set(key, otpData);
+    }
+
+    // 4. Send email
+    const isDev = process.env.NODE_ENV !== 'production' && process.env.AUTH_MODE === 'dev';
+    console.log(`✉️ [DELETION OTP] Generating OTP for ${cleanEmail}: ${otp}`);
+
+    const mailResult = await sendDeletionOtpEmail(cleanEmail, user.fullName, otp);
+
+    const responsePayload = {
+      success: true,
+      message: 'Mã OTP xác thực xóa tài khoản đã được gửi vào email của bạn.'
+    };
+
+    if (isDev || isEmailDebugOtpEnabled()) {
+      responsePayload.debugOtp = otp;
+    }
+
+    if (mailResult.success) {
+      return res.status(200).json(responsePayload);
+    }
+
+    // Fallback debug OTP in dev mode if email service fails
+    if (isDev || isEmailDebugOtpEnabled()) {
+      responsePayload.warning = 'Không gửi được email nhưng trả OTP debug để test: ' + mailResult.message;
+      return res.status(200).json(responsePayload);
+    }
+
+    return res.status(500).json({ success: false, message: 'Không thể gửi email OTP lúc này. Vui lòng thử lại sau.' });
+
+  } catch (err) {
+    console.error('❌ Send deletion OTP error:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
+  }
+});
+
+router.post('/deletion-request', async (req, res) => {
+  try {
+    const { fullName, email, reason, otp } = req.body;
+    if (!fullName || !email || !otp) {
+      return res.status(400).json({ success: false, message: 'fullName, email, and otp are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otp.trim();
+
+    // 1. Verify OTP
+    const key = `deletion-otp:${cleanEmail}`;
+    let cachedOtpData = null;
+
+    if (redis.isActive()) {
+      const data = await redis.get(key);
+      cachedOtpData = data ? JSON.parse(data) : null;
+    } else {
+      const data = inMemoryOtpCache.get(key);
+      if (data && Date.now() <= data.expiresAt) {
+        cachedOtpData = data;
+      } else {
+        inMemoryOtpCache.delete(key);
+      }
+    }
+
+    if (!cachedOtpData) {
+      return res.status(400).json({ success: false, message: 'Mã OTP đã hết hạn hoặc không tồn tại. Vui lòng yêu cầu mã mới.' });
+    }
+
+    if (cachedOtpData.retryCount >= cachedOtpData.retryLimit) {
+      if (redis.isActive()) {
+        await redis.del(key);
+      } else {
+        inMemoryOtpCache.delete(key);
+      }
+      return res.status(400).json({ success: false, message: 'Mã OTP đã bị khóa do nhập sai quá nhiều lần.' });
+    }
+
+    if (cachedOtpData.otp !== cleanOtp) {
+      cachedOtpData.retryCount += 1;
+      if (cachedOtpData.retryCount >= cachedOtpData.retryLimit) {
+        if (redis.isActive()) {
+          await redis.del(key);
+        } else {
+          inMemoryOtpCache.delete(key);
+        }
+        return res.status(400).json({ success: false, message: 'Nhập sai quá số lần cho phép. Mã OTP đã bị vô hiệu hóa.' });
+      } else {
+        if (redis.isActive()) {
+          await redis.set(key, JSON.stringify(cachedOtpData), 300);
+        } else {
+          inMemoryOtpCache.set(key, cachedOtpData);
+        }
+        return res.status(400).json({
+          success: false,
+          message: `Mã OTP không hợp lệ. Còn lại ${cachedOtpData.retryLimit - cachedOtpData.retryCount} lần nhập.`
+        });
+      }
+    }
+
+    // OTP is valid! Clear it
+    if (redis.isActive()) {
+      await redis.del(key);
+    } else {
+      inMemoryOtpCache.delete(key);
+    }
+
+    // Create the deletion request record
+    const deletionRequest = await prisma.accountDeletionRequest.create({
+      data: {
+        fullName: fullName.trim(),
+        email: cleanEmail,
+        reason: reason ? reason.trim() : null,
+        status: 'PENDING'
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Account deletion request submitted successfully.',
+      data: deletionRequest
+    });
+
+  } catch (err) {
+    console.error('❌ Account deletion request error:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
+  }
+});
 
 module.exports = router;

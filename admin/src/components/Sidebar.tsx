@@ -11,7 +11,8 @@ import {
   Flag, 
   Image, 
   Wallet,
-  ShieldCheck
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/banners', label: 'Banners', icon: Image },
   { href: '/reports', label: 'Reports', icon: Flag },
   { href: '/withdraws', label: 'Withdrawals', icon: Wallet },
+  { href: '/deletions', label: 'Deletions', icon: Trash2 },
 ];
 
 export default function Sidebar() {
