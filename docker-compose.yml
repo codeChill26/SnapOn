@@ -114,5 +114,22 @@ services:
       # Override to local postgres instead of Supabase
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/snapon
 
+  # ============================================================
+  # Mobile Build — Build Android .aab in Docker
+  # Usage: docker compose run --rm mobile-build
+  # Output: ./build-output/SnapOn.aab
+  # ============================================================
+  mobile-build:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: snapon-mobile-build
+    volumes:
+      - ./mobile:/app:ro
+      - ./build-output:/output
+    environment:
+      - EXPO_TOKEN=${EXPO_TOKEN:-}
+      - AAB_OUTPUT_NAME=${AAB_OUTPUT_NAME:-SnapOn.aab}
+
 volumes:
   pgdata:
