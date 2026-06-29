@@ -34,6 +34,17 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .map(o => o.trim())
   .filter(o => o.length > 0);
 
+// Always allow Vercel policy web origins to bypass CORS on backend
+const complianceOrigins = [
+  'https://snapon-policy.vercel.app',
+  'https://snapon.vercel.app'
+];
+complianceOrigins.forEach(origin => {
+  if (!allowedOrigins.includes(origin)) {
+    allowedOrigins.push(origin);
+  }
+});
+
 if (allowedOrigins.length === 0) {
   throw new Error('CRITICAL: ALLOWED_ORIGINS environment variable is missing or empty. App cannot start.');
 }
