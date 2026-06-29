@@ -5,7 +5,7 @@ const taskerProfileModel = require('../models/taskerProfileModel');
 const assignedTaskModel = require('../models/assignedTaskModel');
 const escrowService = require('../services/escrowService');
 const pool = require('../config/db');
-const { success, error } = require('../utils/responseHandler');
+const { success, error, paginated } = require('../utils/responseHandler');
 const { TASK_STATUS, APPLICATION_STATUS, ASSIGNED_BY } = require('../utils/constants');
 const { toDbTaskStatus, toDbApplicationStatus, toDbAssignedTaskStatus } = require('../utils/dbEnum');
 

@@ -1,5 +1,5 @@
 const prisma = require('../db/prisma');
-const { success, error } = require('../utils/responseHandler');
+const { success, error, paginated } = require('../utils/responseHandler');
 const cloudinary = require('../utils/cloudinary');
 const { sendExpoPushNotification } = require('../utils/pushNotification');
 
