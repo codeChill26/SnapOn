@@ -1,6 +1,4 @@
 # Ignore everything in scratch by default
 *
-# Allow tracking of this .gitignore and essential tests
+# Allow tracking of this .gitignore only
 !.gitignore
-!test-otp-security.js
-!test-password-migration.js

@@ -206,9 +206,8 @@ PostgreSQL Database
 ```
 
 ### Cấu hình kết nối
-- API Base URL: `http://localhost:3000/api` (có thể đổi qua `constants/config.ts`)
-- Auth: Firebase token → sync user → nhận JWT → gắn vào header
-- Dev mode: Backend hỗ trợ `AUTH_MODE=dev` với header `x-user-id`
+- API Base URL: Lấy động dựa trên `API_BASE_URL` trong `mobile/src/utils/backendDetector.ts` (thử nghiệm local IP trước, fallback sang URL production trên Render).
+- Auth: Xác thực qua Firebase ID Token hoặc Phone OTP để nhận backend JWT (accessToken, refreshToken) -> Gắn JWT vào header `Authorization: Bearer <token>` của tất cả API requests.
 
 ---
 

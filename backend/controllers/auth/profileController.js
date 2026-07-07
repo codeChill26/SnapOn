@@ -1,7 +1,6 @@
 const prisma = require('../../db/prisma');
 const response = require('../../utils/responseHandler');
-const redis = require('../../config/redis');
-const { sendDeletionOtpEmail, isEmailDebugOtpEnabled } = require('../../services/emailService');
+const { sendDeletionOtpEmail } = require('../../services/emailService');
 const { setOtpCache, getOtpCache, delOtpCache } = require('./otpCacheHelper');
 const { AUTH_CONFIG } = require('../../utils/constants');
 const { localGenerateVerificationToken } = require('./authHelpers');

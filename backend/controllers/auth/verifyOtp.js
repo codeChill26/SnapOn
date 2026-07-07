@@ -36,6 +36,8 @@ async function verifyOtp(req, res) {
     }
 
     // OTP verified successfully, clear cache
+    // NOTE: If Redis becomes unavailable here, delOtpCache will throw 503, causing the request to fail
+    // and rolling back the user creation/transaction below, keeping the DB and cache synchronized.
     await delOtpCache(phone);
 
     await client.query('BEGIN');
@@ -53,7 +55,7 @@ async function verifyOtp(req, res) {
       
       const host = req.get('host');
       const protocol = req.protocol;
-      const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
+      const avatarUrl = `${protocol}://${host}/uploads/default-avatar.png`;
 
       // Check if email already exists (edge case)
       const emailCheck = await client.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -82,7 +84,7 @@ async function verifyOtp(req, res) {
         finalEmail,
         fullName,
         phone,
-        defaultAvatar
+        avatarUrl
       ]);
       user = userResult.rows[0];
 

@@ -1,6 +1,9 @@
 # EXE202 (monorepo)
 # Common ignore rules for the whole project (backend_SO + frontend_SO)
 
+# Scratch folders
+backend/scratch/
+
 # ==========================================
 # Node / JS
 # ==========================================

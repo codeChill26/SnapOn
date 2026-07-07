@@ -77,7 +77,15 @@ const AUTH_CONFIG = {
   PASSWORD_RESET_TOKEN_EXPIRY_MS: 10 * 60 * 1000,
   CLEANUP_INTERVAL_MS: 60000,
   BCRYPT_SALT_ROUNDS: 10,
+  
+  // NOTE: Password Migration Plan (SHA-256 to Bcrypt)
+  // - Phase 1 (Current): ALLOW_SHA256_FALLBACK = true. Users logging in with legacy SHA-256 hashes
+  //   will have their password automatically migrated/re-hashed to Bcrypt upon successful verification.
+  // - Phase 2 (Planned): ALLOW_SHA256_FALLBACK = false. Deny legacy SHA-256 logins. This flag will be set to false
+  //   after verification that the majority of active users have logged in once and been migrated.
+  // - Phase 3 (Planned): Delete fallback verification logic completely from passwordController.js.
   ALLOW_SHA256_FALLBACK: true,
+  
   ALLOW_DEBUG_OTP: process.env.ALLOW_DEBUG_OTP === 'true',
 };
 

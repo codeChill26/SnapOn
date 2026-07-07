@@ -239,6 +239,16 @@ async function verifyPassword(password, storedHash, email = null) {
     return await bcrypt.compare(password, storedHash);
   }
 
+  // NOTE: Password Migration Plan (SHA-256 to Bcrypt)
+  //
+  // - Phase 1 (Current): ALLOW_SHA256_FALLBACK = true. Users logging in with legacy SHA-256 hashes
+  //   will have their password automatically migrated/re-hashed to Bcrypt upon successful verification.
+  // - Phase 2 (Planned): ALLOW_SHA256_FALLBACK = false. Deny legacy SHA-256 logins. This flag will be set to false
+  //   after verification that the majority of active users have logged in once and been migrated.
+  // - Phase 3 (Planned): Delete fallback verification logic completely from passwordController.js.
+  //
+  // TODO: Delete the entire block below (from line 254 to the end of verifyPassword) once ALLOW_SHA256_FALLBACK is permanently set to false.
+
   // 2. Otherwise, check if SHA-256 fallback is allowed
   if (!AUTH_CONFIG.ALLOW_SHA256_FALLBACK) {
     console.warn('[PASSWORD AUTH] Rejected legacy SHA-256 hash because ALLOW_SHA256_FALLBACK is disabled.');

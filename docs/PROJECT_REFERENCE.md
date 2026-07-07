@@ -35,7 +35,7 @@
 - **Runtime:** Node.js, Express 4.21
 - **Database:** PostgreSQL via Supabase (connection pooling)
 - **ORM:** Prisma 5.22 (schema management)
-- **Auth:** Firebase Admin SDK (token verification) + dev bypass (x-user-id header)
+- **Auth:** Firebase Admin SDK (token verification) + Phone OTP authentication
 - **Real-time:** Socket.io 4.8
 - **Payment:** PayOS (Vietnam payment gateway)
 - **File Storage:** Cloudinary (images)
@@ -59,7 +59,7 @@ backend/
 ├── services/               # Business logic (matching, escrow, notification)
 ├── models/                 # DB query wrappers (raw SQL via pg)
 ├── middleware/
-│   ├── auth.js             # Firebase token verification OR dev bypass
+│   ├── auth.js             # Firebase token verification
 │   ├── socketAuth.js       # Socket.io auth middleware
 │   └── validate.js         # express-validator error handler
 ├── validators/             # express-validator schemas
@@ -73,9 +73,12 @@ backend/
 #### Auth (`/api/auth`)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/auth/sync-user` | Sync Firebase user to DB |
-| POST | `/auth/login` | Email/password login |
-| POST | `/auth/register` | Register new user |
+| POST | `/auth/sync-user` | Sync Firebase user to DB and receive backend JWT |
+| POST | `/auth/token-login` | Verify Firebase ID Token and receive backend JWT |
+| POST | `/auth/send-otp` | Send verification OTP to phone |
+| POST | `/auth/verify-otp` | Verify phone OTP, register/login user and receive backend JWT |
+| POST | `/auth/logout` | Revoke/delete refresh token |
+| POST | `/auth/refresh` | Issue new access token using refresh token |
 
 #### Users (`/api/users`)
 | Method | Path | Description |
@@ -540,7 +543,6 @@ API_BASE_URL: __DEV__ ? LOCAL_API_URL : DEPLOYED_API_URL
 
 ```
 VITE_API_BASE_URL=https://snapon.onrender.com/api
-VITE_AUTH_MODE=dev
 ```
 
 ---

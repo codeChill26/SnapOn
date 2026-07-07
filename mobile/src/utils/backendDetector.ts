@@ -1,6 +1,9 @@
 import axios from 'axios';
 import Config from '../constants/config';
 
+const DEPLOYED_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon.onrender.com/api';
+const LOCAL_API_URL = `http://${process.env.EXPO_PUBLIC_LOCAL_IP || 'localhost'}:3000/api`;
+
 let detectedUrl: string | null = null;
 let detectionPromise: Promise<string> | null = null;
 
@@ -9,35 +12,35 @@ let detectionPromise: Promise<string> | null = null;
  * Kết quả được cache lại — chỉ detect 1 lần duy nhất.
  */
 export function detectBackend(): Promise<string> {
-  if (detectedUrl !== null) return Promise.resolve(detectedUrl);
+  if (detectedUrl !== null) return Promise.resolve(detectedUrl as string);
   if (detectionPromise) return detectionPromise;
 
-  const configuredUrl = Config.API_BASE_URL || Config.DEPLOYED_API_URL;
+  const configuredUrl = Config.API_BASE_URL || DEPLOYED_API_URL;
 
   if (!__DEV__) {
     detectedUrl = configuredUrl;
     Config.API_BASE_URL = detectedUrl;
-    return Promise.resolve(detectedUrl);
+    return Promise.resolve(detectedUrl as string);
   }
 
-  if (configuredUrl !== Config.LOCAL_API_URL) {
+  if (configuredUrl !== LOCAL_API_URL) {
     detectedUrl = configuredUrl;
     Config.API_BASE_URL = detectedUrl;
     console.log('[Backend] Configured:', detectedUrl);
-    return Promise.resolve(detectedUrl);
+    return Promise.resolve(detectedUrl as string);
   }
 
   detectionPromise = (async () => {
     try {
-      await axios.get(`${Config.LOCAL_API_URL}/health`, {
+      await axios.get(`${LOCAL_API_URL}/health`, {
         timeout: 2500,
         // Bỏ qua lỗi HTTP (401, 404...) — chỉ cần server phản hồi là được
         validateStatus: () => true,
       });
-      detectedUrl = Config.LOCAL_API_URL;
+      detectedUrl = LOCAL_API_URL;
       console.log('[Backend] ✅ Local:', detectedUrl);
     } catch {
-      detectedUrl = Config.DEPLOYED_API_URL;
+      detectedUrl = DEPLOYED_API_URL;
       console.log('[Backend] ☁️ Deployed:', detectedUrl);
     }
     Config.API_BASE_URL = detectedUrl!;

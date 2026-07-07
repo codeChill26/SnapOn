@@ -4,8 +4,6 @@ const redis = require('../../config/redis');
 const response = require('../../utils/responseHandler');
 const { generateAccessToken, generateRefreshToken } = require('../../utils/jwtHelper');
 const { saveRefreshToken, sendVerificationEmailInBackground } = require('./authHelper');
-const { generateVerificationToken } = require('../auth'); // re-use from old controller if needed, or define locally
-const { isEmailDebugOtpEnabled } = require('../../services/emailService');
 const { AUTH_CONFIG } = require('../../utils/constants');
 const { localGenerateVerificationToken } = require('./authHelpers');
 

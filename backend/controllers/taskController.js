@@ -16,43 +16,41 @@ const crypto = require('crypto');
  */
 async function invalidateTaskCache(taskId, categoryId) {
   try {
-    if (taskId) {
-      await cacheService.del(`tasks:detail:${taskId}`).catch(() => {});
-      
-      let catId = categoryId;
-      if (!catId) {
-        const res = await pool.query(
-          'SELECT category_id FROM tasks WHERE id = $1',
-          [taskId]
-        );
-        if (res.rows[0]) {
-          catId = res.rows[0].category_id;
+    if (!taskId) {
+      return; // Safe fallback guard
+    }
+
+    await cacheService.del(`tasks:detail:${taskId}`).catch(() => {});
+    
+    let catId = categoryId;
+    if (!catId) {
+      const res = await pool.query(
+        'SELECT category_id FROM tasks WHERE id = $1',
+        [taskId]
+      );
+      if (res.rows[0]) {
+        catId = res.rows[0].category_id;
+      }
+    }
+
+    if (redis.isActive()) {
+      // 1. Invalidate category-specific lists
+      if (catId) {
+        const catIndexKey = `tasks:list:index:cat:${catId}`;
+        const catKeys = await redis.smembers(catIndexKey).catch(() => []);
+        if (catKeys && catKeys.length > 0) {
+          await Promise.all(catKeys.map(key => cacheService.del(key))).catch(() => {});
         }
+        await redis.del(catIndexKey).catch(() => {});
       }
 
-      if (redis.isActive()) {
-        // 1. Invalidate category-specific lists
-        if (catId) {
-          const catIndexKey = `tasks:list:index:cat:${catId}`;
-          const catKeys = await redis.smembers(catIndexKey).catch(() => []);
-          if (catKeys && catKeys.length > 0) {
-            await Promise.all(catKeys.map(key => cacheService.del(key))).catch(() => {});
-          }
-          await redis.del(catIndexKey).catch(() => {});
-        }
-
-        // 2. Invalidate global list caches (category 'all')
-        const allIndexKey = 'tasks:list:index:cat:all';
-        const allKeys = await redis.smembers(allIndexKey).catch(() => []);
-        if (allKeys && allKeys.length > 0) {
-          await Promise.all(allKeys.map(key => cacheService.del(key))).catch(() => {});
-        }
-        await redis.del(allIndexKey).catch(() => {});
+      // 2. Invalidate global list caches (category 'all')
+      const allIndexKey = 'tasks:list:index:cat:all';
+      const allKeys = await redis.smembers(allIndexKey).catch(() => []);
+      if (allKeys && allKeys.length > 0) {
+        await Promise.all(allKeys.map(key => cacheService.del(key))).catch(() => {});
       }
-    } else {
-      if (redis.isActive()) {
-        await cacheService.delByPattern('tasks:list:*').catch(() => {});
-      }
+      await redis.del(allIndexKey).catch(() => {});
     }
   } catch (err) {
     console.error('Failed to invalidate task cache:', err);
