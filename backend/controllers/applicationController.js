@@ -256,26 +256,23 @@ const applicationController = {
         }
       }
 
-      // Check busy flag
-      const allApps = await taskApplicationModel.findByTaskerId(taskerId);
-      const isBusy = allApps.some(
-        (app) =>
-          app.status === APPLICATION_STATUS.ACCEPTED &&
-          app.task_status === TASK_STATUS.IN_PROGRESS
+      // Check busy flag using a highly optimized database query
+      const busyRes = await pool.query(
+        `SELECT EXISTS (
+          SELECT 1 FROM task_applications ta
+          JOIN tasks t ON ta.task_id = t.id
+          WHERE ta.tasker_id = $1 AND ta.status = 'ACCEPTED' AND t.status = 'IN_PROGRESS'
+        ) AS is_busy`,
+        [taskerId]
       );
+      const isBusy = busyRes.rows[0].is_busy;
 
-      return res.status(200).json({
-        success: true,
-        message: 'My applications retrieved successfully.',
-        data: result.rows,
-        pagination: {
-          page: currentPage,
-          limit: currentLimit,
-          total,
-          totalPages: Math.ceil(total / currentLimit)
-        },
-        is_busy: isBusy,
-      });
+      return paginated(res, result.rows, {
+        page: currentPage,
+        limit: currentLimit,
+        total,
+        totalPages: Math.ceil(total / currentLimit)
+      }, 'My applications retrieved successfully.', { is_busy: isBusy });
     } catch (err) {
       console.error('Get my applications error:', err);
       return error(res, 'Failed to retrieve your applications.', 500);

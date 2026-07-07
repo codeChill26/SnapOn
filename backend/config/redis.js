@@ -110,20 +110,63 @@ const redisService = {
   },
 
   /**
-   * Delete keys matching a pattern
+   * Delete keys matching a pattern using non-blocking SCAN
    * @param {string} pattern
    */
   async delByPattern(pattern) {
     if (!this.isActive()) return false;
     try {
-      const keys = await client.keys(pattern);
-      if (keys && keys.length > 0) {
-        await client.del(keys);
+      const keys = [];
+      for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+        keys.push(key);
+      }
+      if (keys.length > 0) {
+        // Delete in chunks of 100 to prevent event loop blocking
+        const chunkSize = 100;
+        for (let i = 0; i < keys.length; i += chunkSize) {
+          const chunk = keys.slice(i, i + chunkSize);
+          await client.del(chunk);
+        }
       }
       return true;
     } catch (err) {
       console.error(`❌ Redis delByPattern error for pattern ${pattern}:`, err.message);
       return false;
+    }
+  },
+
+  /**
+   * Get multiple values from Redis by keys in a single network round-trip
+   * @param {string[]} keys 
+   * @returns {Promise<(string|null)[]>}
+   */
+  async mget(keys) {
+    if (!this.isActive() || !keys || keys.length === 0) return [];
+    try {
+      return await client.mGet(keys);
+    } catch (err) {
+      console.error(`❌ Redis MGET error for keys:`, err.message);
+      return keys.map(() => null);
+    }
+  },
+
+  /**
+   * Increment a key atomically and set an optional TTL
+   * @param {string} key 
+   * @param {number} ttlSeconds 
+   * @returns {Promise<number|null>}
+   */
+  async incr(key, ttlSeconds) {
+    if (!this.isActive()) return null;
+    try {
+      const val = await client.incr(key);
+      if (val === 1 && ttlSeconds) {
+        await client.expire(key, ttlSeconds);
+      }
+      return val;
+    } catch (err) {
+      console.error(`❌ Redis INCR error for key ${key}:`, err.message);
+      return null;
     }
   },
 

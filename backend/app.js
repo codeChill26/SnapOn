@@ -112,8 +112,16 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   app.use(logger('dev'));
 }
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: false }));
+// Route-specific large body limits (up to 10MB for image/document uploads)
+app.use('/api/tasks/upload-images', express.json({ limit: '10mb' }));
+app.use('/api/chat/attachments/image', express.json({ limit: '10mb' }));
+app.use('/api/users/upload-avatar', express.json({ limit: '10mb' }));
+app.use('/api/users/upload-cover', express.json({ limit: '10mb' }));
+app.use('/api/users/verify', express.json({ limit: '10mb' }));
+
+// Global body limit for all other routes to protect against DoS
+app.use(express.json({ limit: '200kb' }));
+app.use(express.urlencoded({ limit: '200kb', extended: false }));
 app.use(cookieParser());
 
 // Static uploads folder
@@ -126,16 +134,27 @@ app.use('/uploads', express.static(uploadDir));
 // ==========================================
 // SWAGGER UI
 // ==========================================
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'SnapOn API Documentation',
-  swaggerOptions: {
-    persistAuthorization: true,
-  },
-}));
+const isProductionOrStaging = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
-// Root → redirect to Swagger
+if (!isProductionOrStaging) {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'SnapOn API Documentation',
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  }));
+}
+
+// Root → redirect to Swagger in dev, or return status message in prod/staging
 app.get('/', (req, res) => {
+  if (isProductionOrStaging) {
+    return res.status(200).json({
+      success: true,
+      message: 'SnapOn API is running',
+      timestamp: new Date().toISOString()
+    });
+  }
   res.redirect('/api-docs');
 });
 

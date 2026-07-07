@@ -7,13 +7,12 @@ const { verifyTokenForSocket } = require('./auth');
 module.exports = async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-    const xUserId = socket.handshake.auth?.xUserId || socket.handshake.query?.xUserId || socket.handshake.headers?.['x-user-id'];
 
-    if (!token && !xUserId) {
-      return next(new Error('Authentication error: No token or user ID provided.'));
+    if (!token) {
+      return next(new Error('Authentication error: No token provided.'));
     }
 
-    const user = await verifyTokenForSocket(token, xUserId);
+    const user = await verifyTokenForSocket(token);
     
     // Attach authenticated user to the socket object
     socket.user = user;

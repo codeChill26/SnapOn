@@ -45,24 +45,23 @@ const matchingService = {
     const statsMap = {};
     const misses = [];
 
-    // 1. Thử lấy dữ liệu từ Redis trước
+    // 1. Thử lấy dữ liệu từ Redis trước (gộp các truy vấn bằng MGET để giảm network round-trip)
     const redisService = require('../config/redis');
     if (redisService.isActive()) {
-      await Promise.all(
-        taskerIds.map(async (id) => {
-          const key = `tasker:stats:${id}`;
-          try {
-            const cached = await redisService.get(key);
-            if (cached) {
-              statsMap[id] = JSON.parse(cached);
-            } else {
-              misses.push(id);
-            }
-          } catch (e) {
+      const keys = taskerIds.map((id) => `tasker:stats:${id}`);
+      try {
+        const cachedValues = await redisService.mget(keys);
+        taskerIds.forEach((id, index) => {
+          const cached = cachedValues[index];
+          if (cached) {
+            statsMap[id] = JSON.parse(cached);
+          } else {
             misses.push(id);
           }
-        })
-      );
+        });
+      } catch (e) {
+        misses.push(...taskerIds);
+      }
     } else {
       misses.push(...taskerIds);
     }

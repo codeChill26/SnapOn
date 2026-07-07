@@ -78,7 +78,6 @@ services:
       args:
         # Point to relative /api so nginx can proxy to backend container
         VITE_API_BASE_URL: /api
-        VITE_AUTH_MODE: firebase
         VITE_FIREBASE_API_KEY: AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ
         VITE_FIREBASE_AUTH_DOMAIN: hcm202-2d75e.firebaseapp.com
         VITE_FIREBASE_PROJECT_ID: hcm202-2d75e

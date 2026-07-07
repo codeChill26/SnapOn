@@ -115,20 +115,7 @@ export const LoginScreen: React.FC = () => {
       if (error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry')) {
         Alert.alert(
           'Chế độ Phát triển (Expo Go)',
-          'Không tìm thấy module Google Native. Dùng tài khoản giả lập để test API?',
-          [
-            { text: 'Hủy', style: 'cancel' },
-            {
-              text: 'Đồng ý (Test)',
-              onPress: async () => {
-                try {
-                  await login('mock-firebase-token:developer-google@example.com');
-                } catch (e: any) {
-                  Alert.alert('Lỗi', e.message);
-                }
-              },
-            },
-          ]
+          'Đăng nhập Google Native yêu cầu chạy bằng Development Build thay vì Expo Go.'
         );
         return;
       }

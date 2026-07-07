@@ -14,12 +14,14 @@
     "prisma:studio": "prisma studio",
     "migrate:chat-message-features": "node scripts/migration-chat-message-features.js",
     "migrate:saved-tasks": "node scripts/migration-saved-tasks.js",
-    "migrate:auth-tokens": "node scripts/migration-auth-tokens.js"
+    "migrate:auth-tokens": "node scripts/migration-auth-tokens.js",
+    "migrate:assigned-tasks-and-users": "node scripts/migration-assigned-tasks-and-users.js"
   },
   "dependencies": {
     "@payos/node": "^2.0.5",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cookie-parser": "~1.4.4",
     "cors": "^2.8.6",

@@ -31,28 +31,44 @@ const rateLimiter = (keyPrefix, maxRequests, windowSeconds) => {
 
     if (redis.isActive()) {
       try {
-        const currentVal = await redis.get(cacheKey);
-        if (currentVal === null) {
-          await redis.set(cacheKey, '1', windowSeconds);
+        const count = await redis.incr(cacheKey, windowSeconds);
+        if (count === null) {
+          throw new Error('Redis INCR returned null');
+        }
+
+        if (count > maxRequests) {
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please try again later.'
+          });
+        }
+        return next();
+      } catch (err) {
+        console.warn(`[RATE LIMITER WARNING] Redis rate limiter failed. Falling back to local in-memory degraded mode. Key: ${cacheKey}. Error: ${err.message}`);
+        // Fail-over to in-memory store
+        const now = Date.now();
+        const clientData = inMemoryStore.get(cacheKey);
+
+        if (!clientData || now > clientData.resetTime) {
+          inMemoryStore.set(cacheKey, {
+            count: 1,
+            resetTime: now + windowSeconds * 1000
+          });
           return next();
         }
 
-        const count = parseInt(currentVal, 10);
-        if (count >= maxRequests) {
+        if (clientData.count >= maxRequests) {
           return res.status(429).json({
             success: false,
             message: 'Too many requests. Please try again later.'
           });
         }
 
-        // Increment count and maintain same TTL window
-        await redis.set(cacheKey, String(count + 1), windowSeconds);
+        clientData.count += 1;
         return next();
-      } catch (err) {
-        console.error(`Rate Limiter error on key ${cacheKey}:`, err);
-        return next(); // Fail-open: proceed on error
       }
     } else {
+      console.warn(`[RATE LIMITER DEGRADED] Redis is offline. Enforcing local in-memory rate limiting for key: ${cacheKey}`);
       // In-memory fallback
       const now = Date.now();
       const clientData = inMemoryStore.get(cacheKey);

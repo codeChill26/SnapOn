@@ -3,23 +3,375 @@ const cloudinary = require('../utils/cloudinary');
 const escrowService = require('../services/escrowService');
 const pool = require('../config/db');
 const { success, error, paginated } = require('../utils/responseHandler');
-const { TASK_STATUS } = require('../utils/constants');
+const { TASK_STATUS, CACHE_CONFIG } = require('../utils/constants');
 const { fromDbTaskStatus } = require('../utils/dbEnum');
 const cacheService = require('../services/cacheService');
+const redis = require('../config/redis');
+const crypto = require('crypto');
 
 /**
  * Utility to invalidate task-related cache keys (details, lists, and searches)
  * @param {string} [taskId] - Option task ID to invalidate a specific detail view cache
+ * @param {string} [categoryId] - Optional category ID to selectively invalidate related list views
  */
-async function invalidateTaskCache(taskId) {
+async function invalidateTaskCache(taskId, categoryId) {
   try {
     if (taskId) {
       await cacheService.del(`tasks:detail:${taskId}`).catch(() => {});
+      
+      let catId = categoryId;
+      if (!catId) {
+        const res = await pool.query(
+          'SELECT category_id FROM tasks WHERE id = $1',
+          [taskId]
+        );
+        if (res.rows[0]) {
+          catId = res.rows[0].category_id;
+        }
+      }
+
+      if (redis.isActive()) {
+        // 1. Invalidate category-specific lists
+        if (catId) {
+          const catIndexKey = `tasks:list:index:cat:${catId}`;
+          const catKeys = await redis.smembers(catIndexKey).catch(() => []);
+          if (catKeys && catKeys.length > 0) {
+            await Promise.all(catKeys.map(key => cacheService.del(key))).catch(() => {});
+          }
+          await redis.del(catIndexKey).catch(() => {});
+        }
+
+        // 2. Invalidate global list caches (category 'all')
+        const allIndexKey = 'tasks:list:index:cat:all';
+        const allKeys = await redis.smembers(allIndexKey).catch(() => []);
+        if (allKeys && allKeys.length > 0) {
+          await Promise.all(allKeys.map(key => cacheService.del(key))).catch(() => {});
+        }
+        await redis.del(allIndexKey).catch(() => {});
+      }
+    } else {
+      if (redis.isActive()) {
+        await cacheService.delByPattern('tasks:list:*').catch(() => {});
+      }
     }
-    await cacheService.delByPattern('tasks:list:*').catch(() => {});
   } catch (err) {
     console.error('Failed to invalidate task cache:', err);
   }
+}
+
+/**
+ * Safe integer parsing utility that checks for NaN
+ * @param {any} val 
+ * @returns {number|null}
+ */
+function parseInteger(val) {
+  if (val === undefined || val === null || val === '') return null;
+  const parsed = parseInt(val, 10);
+  if (isNaN(parsed)) return null;
+  return parsed;
+}
+
+/**
+ * Check permission for task updates
+ */
+function checkTaskPermission(task, userId) {
+  if (!task) {
+    return { hasPermission: false, message: 'Task not found.', status: 404 };
+  }
+  if (task.poster_id !== userId) {
+    return { hasPermission: false, message: 'You can only update your own tasks.', status: 403 };
+  }
+  if (task.status !== TASK_STATUS.OPEN) {
+    return { hasPermission: false, message: 'You can only update open tasks.', status: 400 };
+  }
+  return { hasPermission: true };
+}
+
+/**
+ * Validate input payload for task creation or update
+ */
+async function validateTaskInput(body, currentTask, finalCategoryId) {
+  const {
+    title,
+    description,
+    category_id,
+    post_type,
+    work_mode,
+    people_needed,
+    contact_phone,
+    start_date,
+    min_age,
+    max_age,
+    min_height_cm,
+    max_height_cm,
+    location,
+    skill_ids,
+    application_deadline
+  } = body;
+
+  // Verify application deadline if provided
+  if (application_deadline) {
+    const parsedDeadline = new Date(application_deadline);
+    if (isNaN(parsedDeadline.getTime())) {
+      return { isValid: false, message: 'Invalid application deadline format.', status: 400 };
+    }
+    if (parsedDeadline <= new Date()) {
+      return { isValid: false, message: 'Application deadline must be in the future.', status: 400 };
+    }
+  }
+
+  // Merge fields for validation
+  const merged = {
+    title: title !== undefined ? title : (currentTask ? currentTask.title : null),
+    description: description !== undefined ? description : (currentTask ? currentTask.description : null),
+    category_id: category_id !== undefined ? finalCategoryId : (currentTask ? currentTask.category_id : null),
+    post_type: post_type !== undefined ? post_type : (currentTask ? currentTask.post_type : 'RECRUITMENT'),
+    work_mode: work_mode !== undefined ? work_mode : (currentTask ? currentTask.work_mode : 'ONSITE'),
+    people_needed: people_needed !== undefined ? people_needed : (currentTask ? currentTask.people_needed : 1),
+    contact_phone: contact_phone !== undefined ? contact_phone : (currentTask ? currentTask.contact_phone : null),
+    start_date: start_date !== undefined ? start_date : (currentTask ? currentTask.start_date : null),
+    min_age: min_age !== undefined ? min_age : (currentTask ? currentTask.min_age : null),
+    max_age: max_age !== undefined ? max_age : (currentTask ? currentTask.max_age : null),
+    min_height_cm: min_height_cm !== undefined ? min_height_cm : (currentTask ? currentTask.min_height_cm : null),
+    max_height_cm: max_height_cm !== undefined ? max_height_cm : (currentTask ? currentTask.max_height_cm : null),
+    location: location !== undefined ? location : (currentTask && currentTask.locations && currentTask.locations[0] ? currentTask.locations[0] : null),
+  };
+
+  if (!merged.title || typeof merged.title !== 'string' || merged.title.trim().length === 0) {
+    return { isValid: false, message: currentTask ? 'Title cannot be empty.' : 'Title is required.', status: 400 };
+  }
+  if (!merged.description || typeof merged.description !== 'string' || merged.description.trim().length === 0) {
+    return { isValid: false, message: currentTask ? 'Description cannot be empty.' : 'Description is required.', status: 400 };
+  }
+  if (!merged.category_id) {
+    return { isValid: false, message: 'Field (category_id) is required.', status: 400 };
+  }
+
+  // Validate subcategories / skill_ids belong to the category_id
+  const finalSkillIds = skill_ids !== undefined ? skill_ids : (currentTask ? (currentTask.required_skills || []).map(s => s.id) : []);
+  if (finalSkillIds && finalSkillIds.length > 0) {
+    const skillsQuery = await pool.query(
+      'SELECT category_id FROM skills WHERE id = ANY($1::uuid[])',
+      [finalSkillIds]
+    );
+    for (const skill of skillsQuery.rows) {
+      if (skill.category_id !== merged.category_id) {
+        return { isValid: false, message: 'One or more subcategories do not belong to the selected field.', status: 400 };
+      }
+    }
+  }
+
+  if (merged.work_mode === 'ONSITE' && (!merged.location || !merged.location.address || merged.location.address.trim().length === 0)) {
+    return { isValid: false, message: 'Location address is required for ONSITE work mode.', status: 400 };
+  }
+
+  // Validate age range
+  const parsedMinAge = parseInteger(merged.min_age);
+  const parsedMaxAge = parseInteger(merged.max_age);
+
+  if (merged.min_age !== undefined && merged.min_age !== null && parsedMinAge === null) {
+    return { isValid: false, message: 'Minimum age must be a valid integer.', status: 400 };
+  }
+  if (merged.max_age !== undefined && merged.max_age !== null && parsedMaxAge === null) {
+    return { isValid: false, message: 'Maximum age must be a valid integer.', status: 400 };
+  }
+  if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
+    return { isValid: false, message: 'Minimum age cannot be greater than maximum age.', status: 400 };
+  }
+
+  // Validate height range
+  const parsedMinHeight = parseInteger(merged.min_height_cm);
+  const parsedMaxHeight = parseInteger(merged.max_height_cm);
+
+  if (merged.min_height_cm !== undefined && merged.min_height_cm !== null && parsedMinHeight === null) {
+    return { isValid: false, message: 'Minimum height must be a valid integer.', status: 400 };
+  }
+  if (merged.max_height_cm !== undefined && merged.max_height_cm !== null && parsedMaxHeight === null) {
+    return { isValid: false, message: 'Maximum height must be a valid integer.', status: 400 };
+  }
+  if (parsedMinHeight !== null && parsedMaxHeight !== null && parsedMinHeight > parsedMaxHeight) {
+    return { isValid: false, message: 'Minimum height cannot be greater than maximum height.', status: 400 };
+  }
+
+  if (merged.post_type === 'RECRUITMENT') {
+    const parsedPeopleNeeded = parseInteger(merged.people_needed);
+    if (parsedPeopleNeeded === null || parsedPeopleNeeded < 1) {
+      return { isValid: false, message: 'People needed must be at least 1 for RECRUITMENT.', status: 400 };
+    }
+    if (!merged.contact_phone || merged.contact_phone.trim().length === 0) {
+      return { isValid: false, message: 'Contact phone is required for RECRUITMENT.', status: 400 };
+    }
+    if (!merged.start_date) {
+      return { isValid: false, message: 'Start date is required for RECRUITMENT.', status: 400 };
+    }
+    const parsedStartDate = new Date(merged.start_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (parsedStartDate < today) {
+      return { isValid: false, message: 'Start date cannot be in the past.', status: 400 };
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Execute DB update queries for task details, skills, and location
+ */
+/**
+ * Load the task and check ownership/status permissions
+ */
+async function loadTask(id, userId) {
+  const task = await taskModel.findById(id);
+  const permCheck = checkTaskPermission(task, userId);
+  return { task, permCheck };
+}
+
+/**
+ * Resolve category UUID if needed, then validate input fields
+ */
+async function validateUpdateInput(body, task) {
+  const { category_id } = body;
+  let finalCategoryId = category_id;
+  if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
+    const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
+    if (catRes.rows[0]) {
+      finalCategoryId = catRes.rows[0].id;
+    }
+  }
+  const validation = await validateTaskInput(body, task, finalCategoryId);
+  return {
+    isValid: validation.isValid,
+    message: validation.message,
+    status: validation.status,
+    finalCategoryId
+  };
+}
+
+/**
+ * Construct the payload of fields to update based on the current task state
+ */
+function applyTaskUpdates(body, currentTask, finalCategoryId) {
+  const {
+    title,
+    description,
+    task_type,
+    budget_min,
+    budget_max,
+    deadline_start,
+    deadline_end,
+    allow_insurance,
+    images,
+    post_type,
+    work_mode,
+    salary_unit,
+    employment_type,
+    people_needed,
+    contact_phone,
+    start_date,
+    experience_level,
+    education_level,
+    gender_requirement,
+    min_age,
+    max_age,
+    min_height_cm,
+    max_height_cm,
+    hashtags,
+    application_deadline,
+    skill_ids,
+    location
+  } = body;
+
+  const cleanHashtags = hashtags !== undefined 
+    ? (hashtags || []).map(h => h.replace(/^#+/, '').trim()).filter(h => h.length > 0)
+    : currentTask.hashtags;
+
+  const updatedFields = {
+    categoryId: finalCategoryId !== undefined ? finalCategoryId : currentTask.category_id,
+    title: title !== undefined ? title : currentTask.title,
+    description: description !== undefined ? description : currentTask.description,
+    taskType: task_type !== undefined ? task_type : currentTask.task_type,
+    budgetMin: budget_min !== undefined ? budget_min : currentTask.budget_min,
+    budgetMax: budget_max !== undefined ? budget_max : currentTask.budget_max,
+    deadlineStart: deadline_start !== undefined ? deadline_start : currentTask.deadline_start,
+    deadlineEnd: deadline_end !== undefined ? deadline_end : currentTask.deadline_end,
+    allowInsurance: allow_insurance !== undefined ? allow_insurance : currentTask.allow_insurance,
+    images: images !== undefined ? images : currentTask.images,
+    postType: post_type !== undefined ? post_type : currentTask.post_type,
+    workMode: work_mode !== undefined ? work_mode : currentTask.work_mode,
+    salaryUnit: salary_unit !== undefined ? salary_unit : currentTask.salary_unit,
+    employmentType: employment_type !== undefined ? employment_type : currentTask.employment_type,
+    peopleNeeded: post_type === 'SERVICE_OFFER' ? null : (people_needed !== undefined ? people_needed : currentTask.people_needed),
+    contactPhone: contact_phone !== undefined ? contact_phone : currentTask.contact_phone,
+    startDate: start_date !== undefined ? start_date : currentTask.start_date,
+    experienceLevel: experience_level !== undefined ? experience_level : currentTask.experience_level,
+    educationLevel: education_level !== undefined ? education_level : currentTask.education_level,
+    genderRequirement: post_type === 'SERVICE_OFFER' ? 'NO_REQUIREMENT' : (gender_requirement !== undefined ? gender_requirement : currentTask.gender_requirement),
+    minAge: post_type === 'SERVICE_OFFER' ? null : (min_age !== undefined ? min_age : currentTask.min_age),
+    maxAge: post_type === 'SERVICE_OFFER' ? null : (max_age !== undefined ? max_age : currentTask.max_age),
+    minHeightCm: post_type === 'SERVICE_OFFER' ? null : (min_height_cm !== undefined ? min_height_cm : currentTask.min_height_cm),
+    maxHeightCm: post_type === 'SERVICE_OFFER' ? null : (max_height_cm !== undefined ? max_height_cm : currentTask.max_height_cm),
+    hashtags: cleanHashtags,
+    applicationDeadline: application_deadline !== undefined ? application_deadline : currentTask.application_deadline,
+  };
+
+  return { updatedFields, skill_ids, location };
+}
+
+/**
+ * Execute DB update queries for task details, skills, and location
+ */
+async function updateDatabase(id, updatePayload) {
+  const { updatedFields, skill_ids, location } = updatePayload;
+  await taskModel.update(id, updatedFields);
+
+  if (skill_ids !== undefined) {
+    await pool.query('DELETE FROM task_required_skills WHERE task_id = $1', [id]);
+    if (skill_ids && skill_ids.length > 0) {
+      await taskModel.addRequiredSkills(id, skill_ids);
+    }
+  }
+
+  if (location !== undefined) {
+    await pool.query('DELETE FROM task_locations WHERE task_id = $1', [id]);
+    if (location && location.address) {
+      await taskModel.addLocation(id, {
+        locationType: location.location_type || 'TASK_LOCATION',
+        address: location.address,
+        latitude: location.latitude || null,
+        longitude: location.longitude || null,
+      });
+    }
+  }
+}
+
+/**
+ * Invalidate the task detail and list cache keys
+ */
+async function invalidateCache(id, finalCategoryId) {
+  await invalidateTaskCache(id, finalCategoryId);
+}
+
+/**
+ * Handle notification events for updated tasks
+ */
+function handleNotifications(fullUpdatedTask) {
+  sendTaskUpdateNotification(fullUpdatedTask);
+}
+
+/**
+ * Construct and send the JSON response
+ */
+function buildResponse(res, fullUpdatedTask) {
+  return success(res, fullUpdatedTask, 'Task updated successfully.');
+}
+
+/**
+ * Placeholder/trigger for task updates notifications
+ */
+function sendTaskUpdateNotification(task) {
+  // Can be hooked to push notification service / socket notifications
+  console.log(`[NOTIFICATION] Task ${task.id} updated successfully.`);
 }
 
 /**
@@ -87,23 +439,37 @@ const taskController = {
         return error(res, 'Location address is required for ONSITE work mode.', 400);
       }
 
-      if (min_age !== undefined && min_age !== null && max_age !== undefined && max_age !== null) {
-        if (parseInt(min_age) > parseInt(max_age)) {
-          return error(res, 'Minimum age cannot be greater than maximum age.', 400);
-        }
+      const parsedMinAge = parseInteger(min_age);
+      const parsedMaxAge = parseInteger(max_age);
+
+      if (min_age !== undefined && min_age !== null && parsedMinAge === null) {
+        return error(res, 'Minimum age must be a valid integer.', 400);
+      }
+      if (max_age !== undefined && max_age !== null && parsedMaxAge === null) {
+        return error(res, 'Maximum age must be a valid integer.', 400);
+      }
+      if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
+        return error(res, 'Minimum age cannot be greater than maximum age.', 400);
       }
 
-      if (min_height_cm !== undefined && min_height_cm !== null && max_height_cm !== undefined && max_height_cm !== null) {
-        if (parseInt(min_height_cm) > parseInt(max_height_cm)) {
-          return error(res, 'Minimum height cannot be greater than maximum height.', 400);
-        }
+      const parsedMinHeight = parseInteger(min_height_cm);
+      const parsedMaxHeight = parseInteger(max_height_cm);
+
+      if (min_height_cm !== undefined && min_height_cm !== null && parsedMinHeight === null) {
+        return error(res, 'Minimum height must be a valid integer.', 400);
+      }
+      if (max_height_cm !== undefined && max_height_cm !== null && parsedMaxHeight === null) {
+        return error(res, 'Maximum height must be a valid integer.', 400);
+      }
+      if (parsedMinHeight !== null && parsedMaxHeight !== null && parsedMinHeight > parsedMaxHeight) {
+        return error(res, 'Minimum height cannot be greater than maximum height.', 400);
       }
 
       // Check conditional validations for RECRUITMENT vs SERVICE_OFFER
       if (post_type === 'RECRUITMENT') {
-        const parsedPeopleNeeded = parseInt(people_needed);
-        if (isNaN(parsedPeopleNeeded) || parsedPeopleNeeded < 1) {
-          return error(res, 'People needed must be at least 1 for RECRUITMENT.', 400);
+        const parsedPeopleNeeded = parseInteger(people_needed);
+        if (parsedPeopleNeeded === null || parsedPeopleNeeded < 1) {
+          return error(res, 'People needed must be a valid integer and at least 1 for RECRUITMENT.', 400);
         }
         if (!contact_phone || contact_phone.trim().length === 0) {
           return error(res, 'Contact phone is required for RECRUITMENT.', 400);
@@ -245,11 +611,15 @@ const taskController = {
 
       let result;
       if (isPage1) {
-        // Tạo key cache duy nhất dựa trên các bộ lọc cho trang 1
-        const cacheKey = `tasks:list:${JSON.stringify({
-          status: status || '',
-          category_id: category_id || '',
-          field_id: field_id || '',
+        const categoryFilter = finalCategoryId || 'all';
+        const fieldFilter = finalFieldId || 'all';
+        const statusFilter = status || 'all';
+
+        // Collect all query filters to build a deterministic query object
+        const queryObj = {
+          category_id: categoryFilter,
+          field_id: fieldFilter,
+          status: statusFilter,
           task_type: task_type || '',
           search: search || '',
           limit: limitNum,
@@ -257,10 +627,21 @@ const taskController = {
           work_mode: work_mode || '',
           salary_unit: salary_unit || '',
           currentUserId: req.user.id
-        })}`;
+        };
 
-        // Cache danh sách trang 1 trong 30 giây
-        result = await cacheService.getOrFetch(cacheKey, 30, async () => {
+        const sortedKeys = Object.keys(queryObj).sort();
+        const sortedObj = {};
+        for (const key of sortedKeys) {
+          sortedObj[key] = queryObj[key] === undefined ? '' : String(queryObj[key]);
+        }
+        const serialized = JSON.stringify(sortedObj);
+        
+        // Calculate the full SHA-256 hash
+        const filterHash = crypto.createHash('sha256').update(serialized).digest('hex');
+        const cacheKey = `tasks:list:v1:${filterHash}:${pageNum}`;
+
+        // Cache page 1 list view
+        result = await cacheService.getOrFetch(cacheKey, CACHE_CONFIG.TASK_LIST_TTL, async () => {
           return await taskModel.findAll({
             status,
             categoryId: finalCategoryId,
@@ -275,6 +656,13 @@ const taskController = {
             currentUserId: req.user.id,
           });
         });
+
+        // Add to Redis index set for precise invalidation
+        if (redis.isActive()) {
+          const indexKey = `tasks:list:index:cat:${categoryFilter}`;
+          await redis.sadd(indexKey, cacheKey).catch(() => {});
+          await redis.expire(indexKey, CACHE_CONFIG.TASK_LIST_TTL * 2).catch(() => {});
+        }
       } else {
         result = await taskModel.findAll({
           status,
@@ -330,7 +718,7 @@ const taskController = {
       const cacheKey = `tasks:detail:${id}`;
 
       // Cache thông tin chi tiết task (không chứa trạng thái is_saved của user cụ thể) trong 2 phút
-      const task = await cacheService.getOrFetch(cacheKey, 120, async () => {
+      const task = await cacheService.getOrFetch(cacheKey, CACHE_CONFIG.TASK_DETAIL_TTL, async () => {
         // Truy vấn với user ID là null để is_saved trong cache luôn là false
         const fetchedTask = await taskModel.findById(id, null);
         if (!fetchedTask) {
@@ -453,210 +841,34 @@ const taskController = {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const {
-        title,
-        description,
-        category_id,
-        task_type,
-        budget_min,
-        budget_max,
-        deadline_start,
-        deadline_end,
-        allow_insurance,
-        skill_ids,
-        location,
-        images,
-        post_type,
-        work_mode,
-        salary_unit,
-        employment_type,
-        people_needed,
-        contact_phone,
-        start_date,
-        experience_level,
-        education_level,
-        gender_requirement,
-        min_age,
-        max_age,
-        min_height_cm,
-        max_height_cm,
-        hashtags,
-        application_deadline,
-      } = req.body;
 
-      // 1. Check task exists
-      const task = await taskModel.findById(id);
-      if (!task) {
-        return error(res, 'Task not found.', 404);
+      // 1. Load task and check permissions
+      const { task, permCheck } = await loadTask(id, userId);
+      if (!permCheck.hasPermission) {
+        return error(res, permCheck.message, permCheck.status);
       }
 
-      // 2. Check ownership
-      if (task.poster_id !== userId) {
-        return error(res, 'You can only update your own tasks.', 403);
+      // 2. Validate input
+      const validation = await validateUpdateInput(req.body, task);
+      if (!validation.isValid) {
+        return error(res, validation.message, validation.status);
       }
 
-      // 3. Check status is OPEN (cannot update tasks once matched or completed)
-      if (task.status !== TASK_STATUS.OPEN) {
-        return error(res, 'You can only update open tasks.', 400);
-      }
+      const { finalCategoryId } = validation;
 
-      // Resolve category UUID if slug is sent
-      let finalCategoryId = category_id;
-      if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
-        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
-        if (catRes.rows[0]) {
-          finalCategoryId = catRes.rows[0].id;
-        }
-      }
+      // 3. Apply updates and write to Database
+      const updatePayload = applyTaskUpdates(req.body, task, finalCategoryId);
+      await updateDatabase(id, updatePayload);
 
-      // Verify application deadline if provided in update
-      if (application_deadline) {
-        const parsedDeadline = new Date(application_deadline);
-        if (isNaN(parsedDeadline.getTime())) {
-          return error(res, 'Invalid application deadline format.', 400);
-        }
-        if (parsedDeadline <= new Date()) {
-          return error(res, 'Application deadline must be in the future.', 400);
-        }
-      }
+      // 4. Invalidate Cache
+      await invalidateCache(id, finalCategoryId);
 
-      // Merge current fields for validation
-      const merged = {
-        title: title !== undefined ? title : task.title,
-        description: description !== undefined ? description : task.description,
-        category_id: category_id !== undefined ? finalCategoryId : task.category_id,
-        budget_min: budget_min !== undefined ? budget_min : task.budget_min,
-        budget_max: budget_max !== undefined ? budget_max : task.budget_max,
-        post_type: post_type !== undefined ? post_type : task.post_type,
-        work_mode: work_mode !== undefined ? work_mode : task.work_mode,
-        salary_unit: salary_unit !== undefined ? salary_unit : task.salary_unit,
-        employment_type: employment_type !== undefined ? employment_type : task.employment_type,
-        people_needed: people_needed !== undefined ? people_needed : task.people_needed,
-        contact_phone: contact_phone !== undefined ? contact_phone : task.contact_phone,
-        start_date: start_date !== undefined ? start_date : task.start_date,
-        min_age: min_age !== undefined ? min_age : task.min_age,
-        max_age: max_age !== undefined ? max_age : task.max_age,
-        min_height_cm: min_height_cm !== undefined ? min_height_cm : task.min_height_cm,
-        max_height_cm: max_height_cm !== undefined ? max_height_cm : task.max_height_cm,
-        location: location !== undefined ? location : (task.locations && task.locations[0] ? task.locations[0] : null),
-        application_deadline: application_deadline !== undefined ? application_deadline : task.application_deadline,
-      };
-
-      if (!merged.title || typeof merged.title !== 'string' || merged.title.trim().length === 0) {
-        return error(res, 'Title cannot be empty.', 400);
-      }
-      if (!merged.description || typeof merged.description !== 'string' || merged.description.trim().length === 0) {
-        return error(res, 'Description cannot be empty.', 400);
-      }
-      if (!merged.category_id) {
-        return error(res, 'Field (category_id) is required.', 400);
-      }
-
-      // Validate that skill_ids belong to the category_id
-      const finalSkillIds = skill_ids !== undefined ? skill_ids : (task.required_skills || []).map(s => s.id);
-      if (finalSkillIds && finalSkillIds.length > 0) {
-        const skillsQuery = await pool.query(
-          'SELECT category_id FROM skills WHERE id = ANY($1::uuid[])',
-          [finalSkillIds]
-        );
-        for (const skill of skillsQuery.rows) {
-          if (skill.category_id !== merged.category_id) {
-            return error(res, 'One or more subcategories do not belong to the selected field.', 400);
-          }
-        }
-      }
-
-      if (merged.work_mode === 'ONSITE' && (!merged.location || !merged.location.address || merged.location.address.trim().length === 0)) {
-        return error(res, 'Location address is required for ONSITE work mode.', 400);
-      }
-
-      if (merged.min_age !== undefined && merged.min_age !== null && merged.max_age !== undefined && merged.max_age !== null) {
-        if (parseInt(merged.min_age) > parseInt(merged.max_age)) {
-          return error(res, 'Minimum age cannot be greater than maximum age.', 400);
-        }
-      }
-
-      if (merged.min_height_cm !== undefined && merged.min_height_cm !== null && merged.max_height_cm !== undefined && merged.max_height_cm !== null) {
-        if (parseInt(merged.min_height_cm) > parseInt(merged.max_height_cm)) {
-          return error(res, 'Minimum height cannot be greater than maximum height.', 400);
-        }
-      }
-
-      if (merged.post_type === 'RECRUITMENT') {
-        const parsedPeopleNeeded = parseInt(merged.people_needed);
-        if (isNaN(parsedPeopleNeeded) || parsedPeopleNeeded < 1) {
-          return error(res, 'People needed must be at least 1 for RECRUITMENT.', 400);
-        }
-        if (!merged.contact_phone || merged.contact_phone.trim().length === 0) {
-          return error(res, 'Contact phone is required for RECRUITMENT.', 400);
-        }
-        if (!merged.start_date) {
-          return error(res, 'Start date is required for RECRUITMENT.', 400);
-        }
-      }
-
-      // Clean hashtags if provided
-      const cleanHashtags = hashtags !== undefined 
-        ? (hashtags || []).map(h => h.replace(/^#+/, '').trim()).filter(h => h.length > 0)
-        : task.hashtags;
-
-      // 4. Perform update
-      const updatedTask = await taskModel.update(id, {
-        categoryId: finalCategoryId !== undefined ? finalCategoryId : task.category_id,
-        title: title !== undefined ? title : task.title,
-        description: description !== undefined ? description : task.description,
-        taskType: task_type !== undefined ? task_type : task.task_type,
-        budgetMin: budget_min !== undefined ? budget_min : task.budget_min,
-        budgetMax: budget_max !== undefined ? budget_max : task.budget_max,
-        deadlineStart: deadline_start !== undefined ? deadline_start : task.deadline_start,
-        deadlineEnd: deadline_end !== undefined ? deadline_end : task.deadline_end,
-        allowInsurance: allow_insurance !== undefined ? allow_insurance : task.allow_insurance,
-        images: images !== undefined ? images : task.images,
-        postType: post_type !== undefined ? post_type : task.post_type,
-        workMode: work_mode !== undefined ? work_mode : task.work_mode,
-        salaryUnit: salary_unit !== undefined ? salary_unit : task.salary_unit,
-        employmentType: employment_type !== undefined ? employment_type : task.employment_type,
-        peopleNeeded: post_type === 'SERVICE_OFFER' ? null : (people_needed !== undefined ? people_needed : task.people_needed),
-        contactPhone: contact_phone !== undefined ? contact_phone : task.contact_phone,
-        startDate: start_date !== undefined ? start_date : task.start_date,
-        experienceLevel: experience_level !== undefined ? experience_level : task.experience_level,
-        educationLevel: education_level !== undefined ? education_level : task.education_level,
-        genderRequirement: post_type === 'SERVICE_OFFER' ? 'NO_REQUIREMENT' : (gender_requirement !== undefined ? gender_requirement : task.gender_requirement),
-        minAge: post_type === 'SERVICE_OFFER' ? null : (min_age !== undefined ? min_age : task.min_age),
-        maxAge: post_type === 'SERVICE_OFFER' ? null : (max_age !== undefined ? max_age : task.max_age),
-        minHeightCm: post_type === 'SERVICE_OFFER' ? null : (min_height_cm !== undefined ? min_height_cm : task.min_height_cm),
-        maxHeightCm: post_type === 'SERVICE_OFFER' ? null : (max_height_cm !== undefined ? max_height_cm : task.max_height_cm),
-        hashtags: cleanHashtags,
-        applicationDeadline: application_deadline !== undefined ? application_deadline : task.application_deadline,
-      });
-
-      // Update skills if skill_ids provided
-      if (skill_ids !== undefined) {
-        await pool.query('DELETE FROM task_required_skills WHERE task_id = $1', [id]);
-        if (skill_ids && skill_ids.length > 0) {
-          await taskModel.addRequiredSkills(id, skill_ids);
-        }
-      }
-
-      // Update location if location provided
-      if (location !== undefined) {
-        await pool.query('DELETE FROM task_locations WHERE task_id = $1', [id]);
-        if (location && location.address) {
-          await taskModel.addLocation(id, {
-            locationType: location.location_type || 'TASK_LOCATION',
-            address: location.address,
-            latitude: location.latitude || null,
-            longitude: location.longitude || null,
-          });
-        }
-      }
-
-      // Clear task cache
-      await invalidateTaskCache(id);
-
+      // 5. Handle Notifications
       const fullUpdatedTask = await taskModel.findById(id);
+      handleNotifications(fullUpdatedTask);
 
-      return success(res, fullUpdatedTask, 'Task updated successfully.');
+      // 6. Build and send response
+      return buildResponse(res, fullUpdatedTask);
     } catch (err) {
       console.error('Update task error:', err);
       return error(res, 'Failed to update task.', 500);
@@ -683,11 +895,13 @@ const taskController = {
         return error(res, 'You can only delete your own tasks.', 403);
       }
 
+      const categoryId = task.category_id;
+
       // 3. Perform delete
       await taskModel.delete(id);
 
       // Clear task cache
-      await invalidateTaskCache(id);
+      await invalidateTaskCache(id, categoryId);
 
       return success(res, null, 'Task deleted successfully.');
     } catch (err) {

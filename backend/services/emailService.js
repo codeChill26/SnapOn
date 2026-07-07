@@ -1,5 +1,5 @@
 function isEmailDebugOtpEnabled() {
-  const isDev = process.env.NODE_ENV !== 'production' && process.env.AUTH_MODE === 'dev';
+  const isDev = process.env.NODE_ENV === 'development';
   return isDev && process.env.EMAIL_DEBUG_OTP === 'true';
 }
 
@@ -10,7 +10,7 @@ async function sendVerificationEmail(to, name, token) {
     }
 
     const payload = {
-      sender: { name: 'SnapOn App', email: 'tuankietpro04@gmail.com' },
+      sender: { name: 'SnapOn App', email: process.env.SENDER_EMAIL || 'tuankietpro04@gmail.com' },
       to: [
         {
           email: to,
@@ -117,7 +117,7 @@ async function sendResetPasswordEmail(to, otp) {
     }
 
     const payload = {
-      sender: { name: 'SnapOn App', email: 'tuankietpro04@gmail.com' },
+      sender: { name: 'SnapOn App', email: process.env.SENDER_EMAIL || 'tuankietpro04@gmail.com' },
       to: [
         {
           email: to,
@@ -218,7 +218,7 @@ async function sendDeletionOtpEmail(to, name, otp) {
     }
 
     const payload = {
-      sender: { name: 'SnapOn App', email: 'tuankietpro04@gmail.com' },
+      sender: { name: 'SnapOn App', email: process.env.SENDER_EMAIL || 'tuankietpro04@gmail.com' },
       to: [
         {
           email: to,

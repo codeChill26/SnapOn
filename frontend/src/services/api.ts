@@ -13,15 +13,6 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  const appUserStr = localStorage.getItem('appUser');
-  if (appUserStr) {
-    try {
-      const appUser = JSON.parse(appUserStr);
-      if (appUser.id) {
-        config.headers['x-user-id'] = appUser.id;
-      }
-    } catch {}
-  }
   return config;
 });
 

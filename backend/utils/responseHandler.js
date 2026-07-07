@@ -21,12 +21,13 @@ const error = (res, message = 'Internal Server Error', statusCode = 500, errors 
   return res.status(statusCode).json(response);
 };
 
-const paginated = (res, data, pagination, message = 'Success') => {
+const paginated = (res, data, pagination, message = 'Success', extra = {}) => {
   return res.status(200).json({
     success: true,
     message,
     data,
     pagination,
+    ...extra
   });
 };
 

@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../../imports/firebase';
 import api from '../../services/api';
 
-const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'firebase';
+
 
 export interface Job {
   id: string;
@@ -303,7 +303,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      if (AUTH_MODE !== 'dev' && auth) {
+      if (auth) {
         await signOut(auth);
       }
       localStorage.removeItem('firebaseToken');
@@ -324,7 +324,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('firebaseToken');
       if (!token) {
         setDbUser(null);
-        if (AUTH_MODE === 'dev') setFirebaseUser(null);
+        // no-op
         _setUserRole('hirer');
         setHirerWallet(0);
         setWorkerWallet(0);
@@ -341,9 +341,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const data = res.data;
       if (data.success && data.user) {
         setDbUser(data.user);
-        if (AUTH_MODE === 'dev') {
-          setFirebaseUser({ uid: data.user.firebase_uid || 'dev-user', email: data.user.email });
-        }
+        // no-op
         localStorage.setItem('appUser', JSON.stringify(data.user));
         const dbRole = data.user.role;
         const mappedRole = dbRole === 'tasker' ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
@@ -374,19 +372,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Listen to Firebase auth state changes and sync profile/tokens
   useEffect(() => {
-    if (AUTH_MODE === 'dev' || !auth) {
+    if (!auth) {
       setAuthLoading(false);
-      const token = localStorage.getItem('firebaseToken');
-      if (token) {
-        const stored = localStorage.getItem('appUser');
-        if (stored) {
-          try {
-            const u = JSON.parse(stored);
-            setFirebaseUser({ uid: u.firebase_uid || u.firebaseUid || 'dev-user', email: u.email });
-          } catch {}
-        }
-        fetchProfile();
-      }
       return;
     }
 
