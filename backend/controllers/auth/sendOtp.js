@@ -3,10 +3,7 @@
 const response = require('../../utils/responseHandler');
 const { setOtpCache } = require('./otpCacheHelper');
 const { AUTH_CONFIG } = require('../../utils/constants');
-
-function generateRandomOTP() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+const { localGenerateVerificationToken } = require('./authHelpers');
 
 async function sendOtp(req, res) {
   try {
@@ -15,7 +12,7 @@ async function sendOtp(req, res) {
       return response.error(res, 'Phone number is required', 400);
     }
 
-    const otp = generateRandomOTP();
+    const otp = localGenerateVerificationToken();
     const otpData = {
       otp: otp,
       retryCount: 0,

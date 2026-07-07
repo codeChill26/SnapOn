@@ -4,6 +4,7 @@ const redis = require('../../config/redis');
 const { sendDeletionOtpEmail, isEmailDebugOtpEnabled } = require('../../services/emailService');
 const { setOtpCache, getOtpCache, delOtpCache } = require('./otpCacheHelper');
 const { AUTH_CONFIG } = require('../../utils/constants');
+const { localGenerateVerificationToken } = require('./authHelpers');
 
 module.exports = {
   async sendDeletionOtp(req, res) {
@@ -25,7 +26,7 @@ module.exports = {
       }
 
       // 2. Generate 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = localGenerateVerificationToken();
       const otpData = {
         otp: otp,
         retryCount: 0,

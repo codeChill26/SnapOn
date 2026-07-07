@@ -206,17 +206,45 @@ app.use('/api/admin', adminRoutes);
 // error handler — returns JSON for API requests
 app.use(function(err, req, res, next) {
   const statusCode = err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  
+  // Always log full error details internally for container logs/audits
+  console.error('Error handled by global handler:', err);
 
-  if (req.app.get('env') === 'development') {
-    console.error('Error:', err);
+  const isDev = req.app.get('env') === 'development' || process.env.NODE_ENV === 'development';
+
+  if (isDev) {
+    res.status(statusCode).json({
+      success: false,
+      message: err.message || 'Internal Server Error',
+      stack: err.stack,
+    });
+  } else {
+    // Production/Staging/Safe Mode
+    let cleanMessage = 'Internal Server Error';
+
+    // Allow error messages for client-side errors (4xx) ONLY if they don't leak internals
+    if (statusCode < 500) {
+      const rawMessage = err.message || '';
+      
+      // Regex check to detect SQL/Database/Prisma terms
+      const isDbOrSqlLeak = /prisma|sql|database|query|relation|constraint|table|select|update|insert|delete|foreign key|unique constraint|pg_|postgres/i.test(rawMessage) ||
+                            (err.name && err.name.includes('Prisma')) ||
+                            (err.code && typeof err.code === 'string' && err.code.startsWith('P'));
+      
+      // Regex check to detect system paths (slashes, node_modules, drive letters)
+      const isPathLeak = /\\|\/|:\/|:\\|node_modules|usr\/src|app\//i.test(rawMessage) || 
+                         err.code === 'ENOENT' || err.code === 'EACCES';
+
+      if (!isDbOrSqlLeak && !isPathLeak) {
+        cleanMessage = rawMessage;
+      }
+    }
+
+    res.status(statusCode).json({
+      success: false,
+      message: cleanMessage,
+    });
   }
-
-  res.status(statusCode).json({
-    success: false,
-    message: message,
-    ...(req.app.get('env') === 'development' && { stack: err.stack }),
-  });
 });
 
 module.exports = app;

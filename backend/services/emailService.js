@@ -9,8 +9,13 @@ async function sendVerificationEmail(to, name, token) {
       throw new Error('BREVO_API_KEY is not configured');
     }
 
+    const senderEmail = process.env.SENDER_EMAIL || process.env.BREVO_SENDER_EMAIL;
+    if (!senderEmail) {
+      throw new Error('Sender email is not configured (SENDER_EMAIL or BREVO_SENDER_EMAIL is missing)');
+    }
+
     const payload = {
-      sender: { name: 'SnapOn App', email: process.env.SENDER_EMAIL || 'tuankietpro04@gmail.com' },
+      sender: { name: 'SnapOn App', email: senderEmail },
       to: [
         {
           email: to,
@@ -116,8 +121,13 @@ async function sendResetPasswordEmail(to, otp) {
       throw new Error('BREVO_API_KEY is not configured');
     }
 
+    const senderEmail = process.env.SENDER_EMAIL || process.env.BREVO_SENDER_EMAIL;
+    if (!senderEmail) {
+      throw new Error('Sender email is not configured (SENDER_EMAIL or BREVO_SENDER_EMAIL is missing)');
+    }
+
     const payload = {
-      sender: { name: 'SnapOn App', email: process.env.SENDER_EMAIL || 'tuankietpro04@gmail.com' },
+      sender: { name: 'SnapOn App', email: senderEmail },
       to: [
         {
           email: to,
@@ -217,8 +227,13 @@ async function sendDeletionOtpEmail(to, name, otp) {
       throw new Error('BREVO_API_KEY is not configured');
     }
 
+    const senderEmail = process.env.SENDER_EMAIL || process.env.BREVO_SENDER_EMAIL;
+    if (!senderEmail) {
+      throw new Error('Sender email is not configured (SENDER_EMAIL or BREVO_SENDER_EMAIL is missing)');
+    }
+
     const payload = {
-      sender: { name: 'SnapOn App', email: process.env.SENDER_EMAIL || 'tuankietpro04@gmail.com' },
+      sender: { name: 'SnapOn App', email: senderEmail },
       to: [
         {
           email: to,

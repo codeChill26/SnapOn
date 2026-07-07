@@ -7,7 +7,7 @@ const { saveRefreshToken, sendVerificationEmailInBackground } = require('./authH
 const { generateVerificationToken } = require('../auth'); // re-use from old controller if needed, or define locally
 const { isEmailDebugOtpEnabled } = require('../../services/emailService');
 const { AUTH_CONFIG } = require('../../utils/constants');
-const { localGenerateVerificationToken, buildDebugOtpPayload } = require('./authHelpers');
+const { localGenerateVerificationToken } = require('./authHelpers');
 
 module.exports = {
   async syncUser(req, res) {
@@ -115,7 +115,6 @@ module.exports = {
         wallet,
         accessToken,
         refreshToken,
-        ...buildDebugOtpPayload(debugOtp),
       }, 'User synced successfully');
     } catch (error) {
       console.error('❌ Sync user error:', error);

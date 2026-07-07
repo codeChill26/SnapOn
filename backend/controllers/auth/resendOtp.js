@@ -4,6 +4,7 @@ const prisma = require('../../db/prisma');
 const response = require('../../utils/responseHandler');
 const emailService = require('../../services/emailService');
 const { AUTH_CONFIG } = require('../../utils/constants');
+const { localGenerateVerificationToken } = require('./authHelpers');
 
 async function resendVerification(req, res) {
   try {
@@ -26,7 +27,7 @@ async function resendVerification(req, res) {
     }
 
     // Generate new token and set expiration to 15 minutes
-    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const token = localGenerateVerificationToken();
     const expiresAt = new Date(Date.now() + AUTH_CONFIG.EMAIL_OTP_EXPIRY_MS); // 15 mins
 
     await prisma.user.update({
