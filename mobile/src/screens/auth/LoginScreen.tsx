@@ -112,7 +112,8 @@ export const LoginScreen: React.FC = () => {
       const uc          = await signInWithCredential(auth, credential);
       await login(await uc.user.getIdToken());
     } catch (error: any) {
-      if (error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry')) {
+      const isDebugAlert = error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry');
+      if (isDebugAlert && (__DEV__ || Config.DEBUG_LOGIN)) {
         Alert.alert(
           'Chế độ Phát triển (Expo Go)',
           'Đăng nhập Google Native yêu cầu chạy bằng Development Build thay vì Expo Go.'

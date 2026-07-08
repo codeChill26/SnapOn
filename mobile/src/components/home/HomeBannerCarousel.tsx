@@ -222,18 +222,13 @@ export const HomeBannerCarousel: React.FC<HomeBannerCarouselProps> = React.memo(
     const load = async () => {
       try {
         setError(false);
-        // SWR: Sử dụng callback onUpdate để cập nhật ngay khi có cache hoặc API mới
-        const data = await bannerService.getHomeBanners((updatedBanners) => {
+        // Exclusively set state via onUpdate callback to prevent double renders
+        await bannerService.getHomeBanners((updatedBanners) => {
           if (isMounted) {
             setBanners(updatedBanners);
             setLoading(false); // Ẩn loading ngay khi có dữ liệu từ cache/API
           }
         });
-
-        if (isMounted && data.length > 0) {
-          setBanners(data);
-          setLoading(false);
-        }
       } catch (err) {
         console.error('Failed to load home banners:', err);
 
@@ -666,4 +661,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeBannerCarousel;
+export default React.memo(HomeBannerCarousel);

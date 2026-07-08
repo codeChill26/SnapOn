@@ -7,6 +7,7 @@ const pool = require('../config/db');
 const { success, error } = require('../utils/responseHandler');
 const { TASK_STATUS, APPLICATION_STATUS, ASSIGNED_BY } = require('../utils/constants');
 const { toDbTaskStatus, toDbApplicationStatus } = require('../utils/dbEnum');
+const withDbTx = require('../utils/withDbTx');
 
 /**
  * Matching Controller — Handles task matching (auto & manual)
@@ -52,22 +53,19 @@ const matchingController = {
       }
 
       // 5-9. Atomic: HOLD escrow + assign + update task + accept/reject
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-
+      const { assignedTask, escrow, lockedTask, application } = await withDbTx(async (client) => {
         // Lock task to prevent concurrent matches
         const lockedTaskRes = await client.query(
           'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
           [taskId]
         );
-        const lockedTask = lockedTaskRes.rows[0];
-        if (!lockedTask) {
+        const lockedTaskVal = lockedTaskRes.rows[0];
+        if (!lockedTaskVal) {
           const e = new Error('Task not found.');
           e.statusCode = 404;
           throw e;
         }
-        if (lockedTask.status !== toDbTaskStatus(TASK_STATUS.OPEN)) {
+        if (lockedTaskVal.status !== toDbTaskStatus(TASK_STATUS.OPEN)) {
           const e = new Error('Task is not in OPEN status. Cannot match.');
           e.statusCode = 400;
           throw e;
@@ -88,32 +86,32 @@ const matchingController = {
           'SELECT * FROM task_applications WHERE id = $1 FOR UPDATE',
           [bestMatch.applicationId]
         );
-        const application = appRes.rows[0];
-        if (!application || application.task_id !== taskId) {
+        const applicationVal = appRes.rows[0];
+        if (!applicationVal || applicationVal.task_id !== taskId) {
           const e = new Error('Application not found for this task.');
           e.statusCode = 404;
           throw e;
         }
-        if (application.status !== toDbApplicationStatus(APPLICATION_STATUS.PENDING)) {
+        if (applicationVal.status !== toDbApplicationStatus(APPLICATION_STATUS.PENDING)) {
           const e = new Error('Selected application is no longer pending.');
           e.statusCode = 409;
           throw e;
         }
 
-        const { escrow } = await escrowService.holdForMatch(
+        const { escrow: escrowVal } = await escrowService.holdForMatch(
           {
             taskId,
-            posterId: lockedTask.poster_id,
-            taskerId: application.tasker_id,
-            amount: application.bid_price,
+            posterId: lockedTaskVal.poster_id,
+            taskerId: applicationVal.tasker_id,
+            amount: applicationVal.bid_price,
           },
           client
         );
 
-        const assignedTask = await assignedTaskModel.create(
+        const assignedTaskVal = await assignedTaskModel.create(
           {
             taskId,
-            taskerId: application.tasker_id,
+            taskerId: applicationVal.tasker_id,
             applicationId: bestMatch.applicationId,
             assignedBy: ASSIGNED_BY.AUTO_MATCH,
           },
@@ -121,33 +119,28 @@ const matchingController = {
         );
 
         await taskModel.updateStatus(taskId, TASK_STATUS.IN_PROGRESS, client);
-        await taskModel.updateFinalPrice(taskId, application.bid_price, client);
+        await taskModel.updateFinalPrice(taskId, applicationVal.bid_price, client);
 
         await taskApplicationModel.updateStatus(bestMatch.applicationId, APPLICATION_STATUS.ACCEPTED, client);
         await taskApplicationModel.rejectAllExcept(taskId, bestMatch.applicationId, client);
 
-        await client.query('COMMIT');
+        return { assignedTask: assignedTaskVal, escrow: escrowVal, lockedTask: lockedTaskVal, application: applicationVal };
+      });
 
-        // Broadcast to the accepted worker (tasker) via Socket.io
-        const io = req.app.get('io');
-        if (io) {
-          io.to(application.tasker_id).emit('task_assigned', {
-            taskId,
-            taskTitle: lockedTask.title,
-          });
-        }
-
-        return success(
-          res,
-          { assignedTask, matchedTasker: bestMatch, escrow },
-          'Auto-match completed successfully.'
-        );
-      } catch (txErr) {
-        try { await client.query('ROLLBACK'); } catch {}
-        throw txErr;
-      } finally {
-        client.release();
+      // Broadcast to the accepted worker (tasker) via Socket.io
+      const io = req.app.get('io');
+      if (io && application && lockedTask) {
+        io.to(application.tasker_id).emit('task_assigned', {
+          taskId,
+          taskTitle: lockedTask.title,
+        });
       }
+
+      return success(
+        res,
+        { assignedTask, matchedTasker: bestMatch, escrow },
+        'Auto-match completed successfully.'
+      );
     } catch (err) {
       console.error('Auto-match error:', err);
       const status = err.statusCode || 500;
@@ -197,21 +190,18 @@ const matchingController = {
       }
 
       // 4-8. Atomic: HOLD escrow + assign + update task + accept/reject
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-
+      const { assignedTask, escrow, lockedApp, lockedTask } = await withDbTx(async (client) => {
         const lockedTaskRes = await client.query(
           'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
           [taskId]
         );
-        const lockedTask = lockedTaskRes.rows[0];
-        if (!lockedTask) {
+        const lockedTaskVal = lockedTaskRes.rows[0];
+        if (!lockedTaskVal) {
           const e = new Error('Task not found.');
           e.statusCode = 404;
           throw e;
         }
-        if (lockedTask.status !== toDbTaskStatus(TASK_STATUS.OPEN)) {
+        if (lockedTaskVal.status !== toDbTaskStatus(TASK_STATUS.OPEN)) {
           const e = new Error('Task is not in OPEN status. Cannot match.');
           e.statusCode = 400;
           throw e;
@@ -231,32 +221,32 @@ const matchingController = {
           'SELECT * FROM task_applications WHERE id = $1 FOR UPDATE',
           [application_id]
         );
-        const lockedApp = appRes.rows[0];
-        if (!lockedApp || lockedApp.task_id !== taskId) {
+        const lockedAppVal = appRes.rows[0];
+        if (!lockedAppVal || lockedAppVal.task_id !== taskId) {
           const e = new Error('Application not found for this task.');
           e.statusCode = 404;
           throw e;
         }
-        if (lockedApp.status !== toDbApplicationStatus(APPLICATION_STATUS.PENDING)) {
-          const e = new Error(`Cannot select an application with status: ${lockedApp.status}.`);
+        if (lockedAppVal.status !== toDbApplicationStatus(APPLICATION_STATUS.PENDING)) {
+          const e = new Error(`Cannot select an application with status: ${lockedAppVal.status}.`);
           e.statusCode = 409;
           throw e;
         }
 
-        const { escrow } = await escrowService.holdForMatch(
+        const { escrow: escrowVal } = await escrowService.holdForMatch(
           {
             taskId,
-            posterId: lockedTask.poster_id,
-            taskerId: lockedApp.tasker_id,
-            amount: lockedApp.bid_price,
+            posterId: lockedTaskVal.poster_id,
+            taskerId: lockedAppVal.tasker_id,
+            amount: lockedAppVal.bid_price,
           },
           client
         );
 
-        const assignedTask = await assignedTaskModel.create(
+        const assignedTaskVal = await assignedTaskModel.create(
           {
             taskId,
-            taskerId: lockedApp.tasker_id,
+            taskerId: lockedAppVal.tasker_id,
             applicationId: application_id,
             assignedBy: ASSIGNED_BY.MANUAL,
           },
@@ -264,33 +254,28 @@ const matchingController = {
         );
 
         await taskModel.updateStatus(taskId, TASK_STATUS.IN_PROGRESS, client);
-        await taskModel.updateFinalPrice(taskId, lockedApp.bid_price, client);
+        await taskModel.updateFinalPrice(taskId, lockedAppVal.bid_price, client);
 
         await taskApplicationModel.updateStatus(application_id, APPLICATION_STATUS.ACCEPTED, client);
         await taskApplicationModel.rejectAllExcept(taskId, application_id, client);
 
-        await client.query('COMMIT');
+        return { assignedTask: assignedTaskVal, escrow: escrowVal, lockedApp: lockedAppVal, lockedTask: lockedTaskVal };
+      });
 
-        // Broadcast to the accepted worker (tasker) via Socket.io
-        const io = req.app.get('io');
-        if (io) {
-          io.to(lockedApp.tasker_id).emit('task_assigned', {
-            taskId,
-            taskTitle: lockedTask.title,
-          });
-        }
-
-        return success(
-          res,
-          { assignedTask, selectedApplication: application, escrow },
-          'Manual match completed successfully.'
-        );
-      } catch (txErr) {
-        try { await client.query('ROLLBACK'); } catch {}
-        throw txErr;
-      } finally {
-        client.release();
+      // Broadcast to the accepted worker (tasker) via Socket.io
+      const io = req.app.get('io');
+      if (io && lockedApp && lockedTask) {
+        io.to(lockedApp.tasker_id).emit('task_assigned', {
+          taskId,
+          taskTitle: lockedTask.title,
+        });
       }
+
+      return success(
+        res,
+        { assignedTask, selectedApplication: application, escrow },
+        'Manual match completed successfully.'
+      );
     } catch (err) {
       console.error('Manual-match error:', err);
       const status = err.statusCode || 500;

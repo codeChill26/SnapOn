@@ -5,23 +5,11 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 
-const DEFAULT_ACCESS_SECRET = 'snapon_jwt_access_secret_key_2026_secure';
-const DEFAULT_REFRESH_SECRET = 'snapon_jwt_refresh_secret_key_2026_secure';
-
 if (!JWT_ACCESS_SECRET) {
   throw new Error("CRITICAL: JWT_ACCESS_SECRET environment variable is missing. App cannot start.");
 }
 if (!JWT_REFRESH_SECRET) {
   throw new Error("CRITICAL: JWT_REFRESH_SECRET environment variable is missing. App cannot start.");
-}
-
-if (process.env.NODE_ENV === 'production') {
-  if (JWT_ACCESS_SECRET === DEFAULT_ACCESS_SECRET) {
-    throw new Error("CRITICAL: JWT_ACCESS_SECRET cannot be the default fallback key in production.");
-  }
-  if (JWT_REFRESH_SECRET === DEFAULT_REFRESH_SECRET) {
-    throw new Error("CRITICAL: JWT_REFRESH_SECRET cannot be the default fallback key in production.");
-  }
 }
 
 module.exports = {
@@ -52,10 +40,10 @@ module.exports = {
   },
 
   verifyAccessToken(token) {
-    return jwt.verify(token, JWT_ACCESS_SECRET);
+    return jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ['HS256'] });
   },
 
   verifyRefreshToken(token) {
-    return jwt.verify(token, JWT_REFRESH_SECRET);
+    return jwt.verify(token, JWT_REFRESH_SECRET, { algorithms: ['HS256'] });
   }
 };

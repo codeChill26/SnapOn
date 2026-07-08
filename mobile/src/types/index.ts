@@ -1,4 +1,4 @@
-export type UserRole = 'USER' | 'ADMIN' | 'hirer' | 'worker' | 'admin';
+export type UserRole = 'USER' | 'ADMIN';
 
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'CLOSED' | 'EXPIRED';
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { Colors } from '../../constants/colors';
 import { Task } from '../../types';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,6 +55,11 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = React.memo(({ tas
           <Image 
             source={{ uri: imageUrl }} 
             style={styles.thumbnail} 
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+            recyclingKey={imageUrl}
+            placeholder="#F1F5F9"
             onError={() => setImageError(true)}
           />
         ) : (
@@ -104,7 +110,7 @@ export const ProfileEmptyState: React.FC<{
       <Image
         source={require('../../../assets/mascot_sunglasses.png')}
         style={{ width: mascotMd, height: mascotMd * 1.1, marginBottom: 16 }}
-        resizeMode="contain"
+        contentFit="contain"
       />
       <Text style={[styles.emptyTitle, { fontSize: 16 * fontScale }]}>{title}</Text>
       {subtitle && <Text style={[styles.emptySubtitle, { fontSize: 13 * fontScale }]}>{subtitle}</Text>}

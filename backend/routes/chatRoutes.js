@@ -3,6 +3,8 @@ const router = express.Router();
 const chatController = require('../controllers/chatController');
 const authenticate = require('../middleware/auth');
 const rateLimiter = require('../middleware/rateLimiter');
+const chatValidator = require('../validators/chatValidator');
+const validate = require('../middleware/validate');
 
 // All chat routes require authentication
 router.use(authenticate);
@@ -48,7 +50,7 @@ router.get('/conversations', chatController.getConversations);
  *       200:
  *         description: Conversation started or retrieved successfully
  */
-router.post('/conversations/start', chatController.startConversation);
+router.post('/conversations/start', chatValidator.startConversation, validate, chatController.startConversation);
 
 /**
  * @swagger
@@ -71,7 +73,7 @@ router.post('/conversations/start', chatController.startConversation);
  *       200:
  *         description: List of messages
  */
-router.get('/conversations/:id/messages', chatController.getMessages);
+router.get('/conversations/:id/messages', chatValidator.getMessages, validate, chatController.getMessages);
 
 /**
  * @swagger
@@ -106,12 +108,12 @@ router.get('/conversations/:id/messages', chatController.getMessages);
  *       201:
  *         description: Message sent successfully
  */
-router.post('/conversations/:id/messages', chatController.sendMessage);
+router.post('/conversations/:id/messages', chatValidator.sendMessage, validate, chatController.sendMessage);
 
 // Upload chat image attachment
 router.post('/attachments/image', rateLimiter('chat-upload', 10, 60), chatController.uploadChatImage);
 
 // Mark conversation as read
-router.post('/conversations/:id/read', chatController.markConversationAsRead);
+router.post('/conversations/:id/read', chatValidator.markAsRead, validate, chatController.markConversationAsRead);
 
 module.exports = router;

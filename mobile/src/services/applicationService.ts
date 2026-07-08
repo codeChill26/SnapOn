@@ -30,7 +30,14 @@ export const mapApplicationFromApi = (data: any): TaskApplication => {
 };
 
 
+let myApplicationsCache: { data: TaskApplication[]; timestamp: number } | null = null;
+const CACHE_TTL = 10000; // 10 seconds
+
 export const applicationService = {
+  invalidateCache(): void {
+    myApplicationsCache = null;
+  },
+
   async createApplication(
     taskId: string,
     payload?: { bid_price?: number; estimated_time?: string | null; message?: string | null }
@@ -39,6 +46,7 @@ export const applicationService = {
       `/tasks/${taskId}/applications`,
       payload || {}
     );
+    this.invalidateCache();
     return mapApplicationFromApi(response.data.data);
   },
 
@@ -51,12 +59,16 @@ export const applicationService = {
     return (response.data.data || []).map(mapApplicationFromApi);
   },
 
-  async getMyApplications(): Promise<TaskApplication[]> {
-    // Returns all applications submitted by the current user (as worker)
+  async getMyApplications(forceRefresh = false): Promise<TaskApplication[]> {
+    if (!forceRefresh && myApplicationsCache && Date.now() - myApplicationsCache.timestamp < CACHE_TTL) {
+      return myApplicationsCache.data;
+    }
     const response = await api.get<ApiResponse<any[]>>(
       '/applications/my-applications'
     );
-    return (response.data.data || []).map(mapApplicationFromApi);
+    const apps = (response.data.data || []).map(mapApplicationFromApi);
+    myApplicationsCache = { data: apps, timestamp: Date.now() };
+    return apps;
   },
 
   async getMyApplicationForTask(
@@ -72,6 +84,7 @@ export const applicationService = {
     const response = await api.patch<ApiResponse<any>>(
       `/applications/${id}/withdraw`
     );
+    this.invalidateCache();
     return mapApplicationFromApi(response.data.data);
   },
 
@@ -83,22 +96,27 @@ export const applicationService = {
       `/applications/${id}/status`,
       { status }
     );
+    this.invalidateCache();
     return mapApplicationFromApi(response.data.data);
   },
 
   async acceptAssignment(id: string): Promise<void> {
     await api.patch(`/assignments/${id}/accept`);
+    this.invalidateCache();
   },
 
   async declineAssignment(id: string): Promise<void> {
     await api.patch(`/assignments/${id}/decline`);
+    this.invalidateCache();
   },
 
   async completeAssignment(id: string): Promise<void> {
     await api.patch(`/assignments/${id}/complete`);
+    this.invalidateCache();
   },
 
   async cancelAssignment(id: string): Promise<void> {
     await api.patch(`/assignments/${id}/cancel`);
+    this.invalidateCache();
   },
 };

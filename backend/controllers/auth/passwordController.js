@@ -8,7 +8,7 @@ const bcrypt = require('bcrypt');
 const emailService = require('../../services/emailService');
 const { AUTH_CONFIG } = require('../../utils/constants');
 const admin = require('firebase-admin');
-const { localGenerateVerificationToken } = require('./authHelpers');
+const { localGenerateVerificationToken } = require('./authHelper');
 
 async function forgotPassword(req, res) {
   try {
@@ -81,7 +81,7 @@ async function forgotPassword(req, res) {
     console.log(`[FORGOT PASSWORD] Sending reset OTP email to ${cleanEmail}`);
     const mailResult = await emailService.sendResetPasswordEmail(cleanEmail, otp);
     
-    const isDev = process.env.NODE_ENV === 'development';
+    const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'staging';
     const allowDebugOtp = AUTH_CONFIG.ALLOW_DEBUG_OTP;
     if (isDev && allowDebugOtp) {
       console.log(`[FORGOT PASSWORD] Generating OTP for ${cleanEmail}: ${otp.slice(0, 3)}***`);
@@ -255,9 +255,19 @@ async function verifyPassword(password, storedHash, email = null) {
     return false;
   }
 
-  // 3. Verify legacy SHA-256 hash
+  // 3. Verify legacy SHA-256 hash using constant-time comparison to prevent timing attacks
   const sha256Hash = crypto.createHash('sha256').update(password).digest('hex');
-  const isMatch = sha256Hash === storedHash;
+  
+  let isMatch = false;
+  try {
+    const buffer1 = Buffer.from(sha256Hash, 'hex');
+    const buffer2 = Buffer.from(storedHash, 'hex');
+    if (buffer1.length === buffer2.length) {
+      isMatch = crypto.timingSafeEqual(buffer1, buffer2);
+    }
+  } catch (err) {
+    isMatch = false;
+  }
 
   if (isMatch && email) {
     try {

@@ -4,6 +4,7 @@ const withDbTx = require('../utils/withDbTx');
 const payos = require('../config/payos');
 const pool = require('../config/db');
 const crypto = require('crypto');
+const CustomError = require('../utils/CustomError');
 
 function generateNumericOrderCode() {
   const uuid = crypto.randomUUID();
@@ -35,9 +36,7 @@ const walletService = {
   async topupMock(userId, amount) {
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      const err = new Error('Amount must be a positive number');
-      err.statusCode = 400;
-      throw err;
+      throw new CustomError('Amount must be a positive number', 400);
     }
 
     return withDbTx(async (db) => {
@@ -138,9 +137,7 @@ const walletService = {
   async createPayOSPaymentSession(userId, amount) {
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      const err = new Error('Amount must be a positive number');
-      err.statusCode = 400;
-      throw err;
+      throw new CustomError('Amount must be a positive number', 400);
     }
 
     const wallet = await walletModel.createIfNotExists(userId);
@@ -194,9 +191,7 @@ const walletService = {
   async createPayOSPayment(userId, amount) {
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt < 1000) {
-      const err = new Error('Amount must be at least 1,000 VND');
-      err.statusCode = 400;
-      throw err;
+      throw new CustomError('Amount must be at least 1,000 VND', 400);
     }
 
     const wallet = await walletModel.createIfNotExists(userId);
@@ -248,9 +243,7 @@ const walletService = {
       if (txRecord) {
         await pool.query('DELETE FROM wallet_transactions WHERE id = $1', [txRecord.id]).catch(() => {});
       }
-      const error = new Error('Failed to create payment link: ' + err.message);
-      error.statusCode = 500;
-      throw error;
+      throw new CustomError('Failed to create payment link: ' + err.message, 500);
     }
   },
 
@@ -262,9 +255,7 @@ const walletService = {
     try {
       webhookData = await payos.webhooks.verify(webhookBody);
     } catch (err) {
-      const error = new Error('Invalid signature');
-      error.statusCode = 401;
-      throw error;
+      throw new CustomError('Invalid signature', 401);
     }
     const { orderCode, amount, code } = webhookData;
 
@@ -308,18 +299,14 @@ const walletService = {
   async checkPayOSPaymentStatus(orderCode) {
     const orderCodeNum = Number(orderCode);
     if (!Number.isFinite(orderCodeNum)) {
-      const err = new Error('Invalid order code');
-      err.statusCode = 400;
-      throw err;
+      throw new CustomError('Invalid order code', 400);
     }
 
     return withDbTx(async (db) => {
       // Find transaction in DB
       const transaction = await walletTransactionModel.findByOrderCode(orderCodeNum, db);
       if (!transaction) {
-        const err = new Error(`Transaction not found for order code ${orderCode}`);
-        err.statusCode = 404;
-        throw err;
+        throw new CustomError(`Transaction not found for order code ${orderCode}`, 404);
       }
 
       if (transaction.status !== 'PENDING') {
@@ -368,9 +355,7 @@ const walletService = {
       // Fixed bug: pass orderCode directly instead of wallet.id as first argument
       const tx = await walletTransactionModel.findByOrderCode(orderCode, db);
       if (!tx) {
-        const err = new Error('Transaction not found');
-        err.statusCode = 404;
-        throw err;
+        throw new CustomError('Transaction not found', 404);
       }
 
       if (tx.status !== 'PENDING') {
@@ -393,9 +378,7 @@ const walletService = {
         paymentInfo = await payos.paymentRequests.get(orderCode);
       } catch (err) {
         console.error('PayOS verify link error:', err);
-        const error = new Error('Failed to verify payment with PayOS');
-        error.statusCode = 500;
-        throw error;
+        throw new CustomError('Failed to verify payment with PayOS', 500);
       }
 
       if (paymentInfo.status !== 'PAID') {

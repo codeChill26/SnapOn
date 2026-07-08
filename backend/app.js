@@ -113,11 +113,11 @@ if (process.env.NODE_ENV === 'production') {
   app.use(logger('dev'));
 }
 // Route-specific large body limits (up to 10MB for image/document uploads)
-app.use('/api/tasks/upload-images', express.json({ limit: '10mb' }));
-app.use('/api/chat/attachments/image', express.json({ limit: '10mb' }));
-app.use('/api/users/upload-avatar', express.json({ limit: '10mb' }));
-app.use('/api/users/upload-cover', express.json({ limit: '10mb' }));
-app.use('/api/users/verify', express.json({ limit: '10mb' }));
+app.use(['/api/tasks/upload-images', '/api/v1/tasks/upload-images'], express.json({ limit: '10mb' }));
+app.use(['/api/chat/attachments/image', '/api/v1/chat/attachments/image'], express.json({ limit: '10mb' }));
+app.use(['/api/users/upload-avatar', '/api/v1/users/upload-avatar'], express.json({ limit: '10mb' }));
+app.use(['/api/users/upload-cover', '/api/v1/users/upload-cover'], express.json({ limit: '10mb' }));
+app.use(['/api/users/verify', '/api/v1/users/verify'], express.json({ limit: '10mb' }));
 
 // Global body limit for all other routes to protect against DoS
 app.use(express.json({ limit: '200kb' }));
@@ -162,7 +162,12 @@ app.get('/', (req, res) => {
 // ROUTES
 // ==========================================
 
-// Health check
+const v1Router = require('./routes/v1');
+
+// API v1 versioned routes
+app.use('/api/v1', v1Router);
+
+// Health check (Legacy/Backward Compatibility)
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
@@ -171,28 +176,28 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes — Flow A: Posting → Bidding → Matching
+// API Routes (Legacy/Backward Compatibility) — Flow A: Posting → Bidding → Matching
 app.use('/api/tasks', taskRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api', applicationRoutes);
 app.use('/api', matchingRoutes);
 
-// Wallet routes
+// Wallet routes (Legacy/Backward Compatibility)
 app.use('/api/wallet', walletRoutes);
 
-// Escrow routes
+// Escrow routes (Legacy/Backward Compatibility)
 app.use('/api/escrows', escrowRoutes);
 
-// Chat routes
+// Chat routes (Legacy/Backward Compatibility)
 app.use('/api/chat', chatRoutes);
 
-// Banner routes
+// Banner routes (Legacy/Backward Compatibility)
 app.use('/api', bannerRoutes);
 
-// Category routes
+// Category routes (Legacy/Backward Compatibility)
 app.use('/api', categoryRoutes);
 
-// User & Auth routes
+// User & Auth routes (Legacy/Backward Compatibility)
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
 app.use('/api/assignments', assignmentRoutes);
@@ -205,19 +210,38 @@ app.use('/api/admin', adminRoutes);
 
 // error handler — returns JSON for API requests
 app.use(function(err, req, res, next) {
-  const statusCode = err.status || 500;
+  const statusCode = err.statusCode || err.status || 500;
   
   // Always log full error details internally for container logs/audits
   console.error('Error handled by global handler:', err);
 
   const isDev = req.app.get('env') === 'development' || process.env.NODE_ENV === 'development';
 
+  let cleanCode = err.code || 'INTERNAL_SERVER_ERROR';
+  if (cleanCode === 'INTERNAL_SERVER_ERROR') {
+    if (statusCode === 400) cleanCode = 'BAD_REQUEST';
+    else if (statusCode === 401) cleanCode = 'AUTH_REQUIRED';
+    else if (statusCode === 403) cleanCode = 'FORBIDDEN';
+    else if (statusCode === 404) cleanCode = 'NOT_FOUND';
+    else if (statusCode === 429) cleanCode = 'RATE_LIMIT_EXCEEDED';
+  }
+
+  const responseBody = {
+    success: false,
+    code: cleanCode,
+    message: 'Internal Server Error'
+  };
+
+  const details = err.details || err.errors;
+  if (details) {
+    responseBody.details = details;
+    responseBody.errors = details; // Backwards compatibility
+  }
+
   if (isDev) {
-    res.status(statusCode).json({
-      success: false,
-      message: err.message || 'Internal Server Error',
-      stack: err.stack,
-    });
+    responseBody.message = err.message || 'Internal Server Error';
+    responseBody.stack = err.stack;
+    res.status(statusCode).json(responseBody);
   } else {
     // Production/Staging/Safe Mode
     let cleanMessage = 'Internal Server Error';
@@ -240,10 +264,8 @@ app.use(function(err, req, res, next) {
       }
     }
 
-    res.status(statusCode).json({
-      success: false,
-      message: cleanMessage,
-    });
+    responseBody.message = cleanMessage;
+    res.status(statusCode).json(responseBody);
   }
 });
 

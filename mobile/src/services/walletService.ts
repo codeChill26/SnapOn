@@ -40,10 +40,22 @@ const mapTransaction = (raw: any): WalletTransaction => {
   };
 };
 
+let walletCache: { data: Wallet; timestamp: number } | null = null;
+const CACHE_TTL = 10000; // 10 seconds
+
 export const walletService = {
-  async getMyWallet(): Promise<Wallet> {
+  invalidateCache(): void {
+    walletCache = null;
+  },
+
+  async getMyWallet(forceRefresh = false): Promise<Wallet> {
+    if (!forceRefresh && walletCache && Date.now() - walletCache.timestamp < CACHE_TTL) {
+      return walletCache.data;
+    }
     const response = await api.get<ApiResponse<Wallet>>('/wallet/me');
-    return mapWallet(response.data.data);
+    const wallet = mapWallet(response.data.data);
+    walletCache = { data: wallet, timestamp: Date.now() };
+    return wallet;
   },
 
   async getTransactions(cursor?: string): Promise<{
@@ -65,6 +77,7 @@ export const walletService = {
 
   async topupMock(amount: number): Promise<Wallet> {
     const response = await api.post<ApiResponse<Wallet>>('/wallet/topup/mock', { amount });
+    this.invalidateCache();
     return mapWallet(response.data.data);
   },
 
@@ -75,11 +88,17 @@ export const walletService = {
 
   async confirmPayOSPayment(orderCode: number): Promise<{ wallet: Wallet; alreadyProcessed: boolean; success?: boolean; message?: string }> {
     const response = await api.post<ApiResponse<{ wallet: any; alreadyProcessed: boolean; success?: boolean; message?: string }>>('/wallet/topup/payos/confirm', { orderCode });
+    this.invalidateCache();
     return {
       wallet: mapWallet(response.data.data.wallet),
       alreadyProcessed: response.data.data.alreadyProcessed,
       success: response.data.data.success,
       message: response.data.data.message,
     };
+  },
+
+  async withdraw(payload: { amount: number; bankName: string; bankAccountNumber: string }): Promise<void> {
+    await api.post('/wallet/withdraw', payload);
+    this.invalidateCache();
   },
 };

@@ -71,9 +71,13 @@ export const PostJobHeader: React.FC<PostJobHeaderProps> = ({
           accessibilityLabel={isEditMode ? 'Cập nhật bài viết' : 'Đăng bài viết mới'}
         >
           {loading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={theme.colors.text.inverse} />
           ) : (
-            <Text style={[styles.submitBtnText, isFormValid && { color: '#FFFFFF' }]}>
+            <Text style={[
+              styles.submitBtnText,
+              { color: theme.colors.text.disabled },
+              isFormValid && { color: theme.colors.text.inverse }
+            ]}>
               {isEditMode ? 'Cập nhật' : 'Đăng bài'}
             </Text>
           )}
@@ -116,6 +120,5 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontSize: 14,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.6)',
   },
 });

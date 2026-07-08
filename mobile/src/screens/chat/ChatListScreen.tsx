@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FlatList,
   Platform,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useAppNavigation } from '../../hooks/useAppNavigation';
+import { useTheme } from '../../theme';
 import { UserAvatar } from '../../components/common/UserAvatar';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { chatService, ChatConversation, ChatMessage } from '../../services/chatService';
@@ -71,6 +72,7 @@ interface ConversationItemProps {
 }
 
 const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, currentUserId }) => {
+  const theme = useTheme();
   const unreadCount = item.unreadCount || 0;
   const hasUnread = unreadCount > 0;
   const hasDraft = Boolean(item.draft?.text.trim());
@@ -81,7 +83,7 @@ const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, cur
 
   return (
     <TouchableOpacity
-      style={styles.conversationItem}
+      style={[styles.conversationItem, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.subtle }]}
       onPress={() => onPress(item)}
       activeOpacity={0.7}
     >
@@ -91,15 +93,15 @@ const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, cur
           avatarUrl={item.otherUser.avatarUrl}
           size={50}
         />
-        {hasUnread && <View style={styles.avatarUnreadDot} />}
+        {hasUnread && <View style={[styles.avatarUnreadDot, { backgroundColor: theme.colors.brand.primary, borderColor: theme.colors.background.secondary }]} />}
       </View>
 
       <View style={styles.contentContainer}>
         <View style={styles.headerRow}>
-          <Text style={[styles.nameText, hasUnread && styles.unreadNameText]} numberOfLines={1}>
+          <Text style={[styles.nameText, { color: theme.colors.text.primary }, hasUnread && styles.unreadNameText]} numberOfLines={1}>
             {item.otherUser.fullName}
           </Text>
-          <Text style={[styles.timeText, hasUnread && styles.unreadTimeText]}>
+          <Text style={[styles.timeText, { color: theme.colors.text.secondary }, hasUnread && [styles.unreadTimeText, { color: theme.colors.brand.primary }]]}>
             {hasDraft
               ? formatMessageTime(item.draft?.updatedAt || '')
               : item.lastMessage ? formatMessageTime(item.lastMessage.createdAt) : ''}
@@ -111,15 +113,16 @@ const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, cur
             <Ionicons
               name="image-outline"
               size={15}
-              color={hasUnread ? '#FF6B35' : '#64748B'}
+              color={hasUnread ? theme.colors.brand.primary : theme.colors.text.secondary}
               style={styles.previewIcon}
             />
           )}
           <Text
             style={[
               styles.messageText,
-              hasUnread && styles.unreadMessageText,
-              hasDraft && styles.draftMessageText,
+              { color: theme.colors.text.secondary },
+              hasUnread && [styles.unreadMessageText, { color: theme.colors.text.primary }],
+              hasDraft && [styles.draftMessageText, { color: theme.colors.brand.primary }],
             ]}
             numberOfLines={1}
           >
@@ -130,19 +133,20 @@ const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, cur
               <Ionicons
                 name={readStateIcon}
                 size={14}
-                color={item.lastMessage?.status === 'READ' ? '#FF6B35' : '#94A3B8'}
+                color={item.lastMessage?.status === 'READ' ? theme.colors.brand.primary : theme.colors.text.muted}
               />
               <Text style={[
                 styles.readStateText,
-                item.lastMessage?.status === 'READ' && styles.readStateTextRead,
+                { color: theme.colors.text.muted },
+                item.lastMessage?.status === 'READ' && [styles.readStateTextRead, { color: theme.colors.brand.primary }],
               ]}>
                 {readStateLabel}
               </Text>
             </View>
           )}
           {hasUnread && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>
+            <View style={[styles.unreadBadge, { backgroundColor: theme.colors.brand.primary }]}>
+              <Text style={[styles.unreadBadgeText, { color: theme.colors.background.secondary }]}>
                 {unreadCount > 9 ? '9+' : unreadCount}
               </Text>
             </View>
@@ -167,6 +171,7 @@ const ConversationItem = React.memo<ConversationItemProps>(({ item, onPress, cur
 });
 
 export const ChatListScreen: React.FC = () => {
+  const theme = useTheme();
   const navigation = useAppNavigation();
   const isFocused = useIsFocused();
   const { user } = useAuth();
@@ -203,33 +208,79 @@ export const ChatListScreen: React.FC = () => {
     }
   }, []);
 
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const activeSearchRef = useRef<string>('');
+
   const handlePhoneSearch = useCallback(async (phoneToSearch: string) => {
-    if (!phoneToSearch) return;
+    const trimmed = phoneToSearch.trim();
+    if (!trimmed) return;
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+
+    activeSearchRef.current = trimmed;
     setIsSearchingPhone(true);
     setPhoneSearchError('');
     setHasSearchedPhone(true);
     try {
-      const userFound = await authService.searchUserByPhone(phoneToSearch);
-      setSearchResultUser(userFound);
-      if (!userFound) {
-        setPhoneSearchError('Không tìm thấy người dùng với số điện thoại này.');
+      const userFound = await authService.searchUserByPhone(trimmed);
+      if (activeSearchRef.current === trimmed) {
+        setSearchResultUser(userFound);
+        if (!userFound) {
+          setPhoneSearchError('Không tìm thấy người dùng với số điện thoại này.');
+        }
       }
     } catch (error: any) {
       console.error('Failed to search phone:', error);
-      setPhoneSearchError('Đã xảy ra lỗi khi tìm kiếm số điện thoại.');
+      if (activeSearchRef.current === trimmed) {
+        setPhoneSearchError('Đã xảy ra lỗi khi tìm kiếm số điện thoại.');
+      }
     } finally {
-      setIsSearchingPhone(false);
+      if (activeSearchRef.current === trimmed) {
+        setIsSearchingPhone(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResultUser(null);
+      setHasSearchedPhone(false);
+      setPhoneSearchError('');
+      activeSearchRef.current = '';
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      return;
+    }
+
     if (isPhoneQuery) {
-      handlePhoneSearch(searchQuery.trim());
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      searchTimeoutRef.current = setTimeout(() => {
+        handlePhoneSearch(searchQuery.trim());
+      }, 400);
     } else {
       setSearchResultUser(null);
       setHasSearchedPhone(false);
       setPhoneSearchError('');
+      activeSearchRef.current = '';
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
     }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [isPhoneQuery, searchQuery, handlePhoneSearch]);
 
   useEffect(() => {
@@ -353,19 +404,25 @@ export const ChatListScreen: React.FC = () => {
     );
   }, [handleConversationPress, user?.id]);
 
+  const getItemLayout = useCallback((_data: any, index: number) => ({
+    length: 78,
+    offset: 78 * index,
+    index,
+  }), []);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tin nhắn</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.subtle }]}>
+        <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Tin nhắn</Text>
       </View>
 
-      <View style={styles.searchContainer}>
-        <View style={styles.searchWrapper}>
-          <Ionicons name="search-outline" size={18} color="#64748B" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.subtle }]}>
+        <View style={[styles.searchWrapper, { backgroundColor: theme.colors.surface.input, borderColor: theme.colors.border.subtle }]}>
+          <Ionicons name="search-outline" size={18} color={theme.colors.text.secondary} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.colors.text.primary }]}
             placeholder="Tìm người nhắn hoặc tin nhắn..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={theme.colors.text.muted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={() => {
@@ -377,25 +434,25 @@ export const ChatListScreen: React.FC = () => {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearIcon}>
-              <Ionicons name="close-circle" size={16} color="#64748B" />
+              <Ionicons name="close-circle" size={16} color={theme.colors.text.secondary} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
       {isPhoneQuery && (
-        <View style={styles.phoneSearchContainer}>
+        <View style={[styles.phoneSearchContainer, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.subtle }]}>
           {isSearchingPhone ? (
             <View style={styles.phoneSearchLoading}>
               <LoadingSpinner message="Đang tìm kiếm..." />
             </View>
           ) : searchResultUser ? (
             <TouchableOpacity
-              style={styles.phoneSearchResultCard}
+              style={[styles.phoneSearchResultCard, { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle }]}
               onPress={() => handleStartChatWithSearchResult(searchResultUser.id)}
               activeOpacity={0.8}
             >
-              <Text style={styles.phoneSearchResultHeader}>Kết quả tìm kiếm số điện thoại</Text>
+              <Text style={[styles.phoneSearchResultHeader, { color: theme.colors.text.secondary }]}>Kết quả tìm kiếm số điện thoại</Text>
               <View style={styles.phoneSearchResultRow}>
                 <UserAvatar
                   name={searchResultUser.fullName}
@@ -403,27 +460,27 @@ export const ChatListScreen: React.FC = () => {
                   size={46}
                 />
                 <View style={styles.phoneSearchResultInfo}>
-                  <Text style={styles.phoneSearchResultName} numberOfLines={1}>
+                  <Text style={[styles.phoneSearchResultName, { color: theme.colors.text.primary }]} numberOfLines={1}>
                     {searchResultUser.fullName}
                   </Text>
-                  <Text style={styles.phoneSearchResultPhone}>
+                  <Text style={[styles.phoneSearchResultPhone, { color: theme.colors.text.secondary }]}>
                     SĐT: {searchResultUser.phone}
                   </Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.phoneSearchChatBtn}
+                  style={[styles.phoneSearchChatBtn, { backgroundColor: theme.colors.brand.primary }]}
                   onPress={() => handleStartChatWithSearchResult(searchResultUser.id)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chatbubble-ellipses" size={18} color="#FFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.phoneSearchChatBtnText}>Nhắn tin</Text>
+                  <Ionicons name="chatbubble-ellipses" size={18} color={theme.colors.text.inverse} style={{ marginRight: 4 }} />
+                  <Text style={[styles.phoneSearchChatBtnText, { color: theme.colors.text.inverse }]}>Nhắn tin</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ) : hasSearchedPhone ? (
-            <View style={styles.phoneSearchEmpty}>
-              <Ionicons name="alert-circle-outline" size={20} color="#64748B" />
-              <Text style={styles.phoneSearchEmptyText}>
+            <View style={[styles.phoneSearchEmpty, { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle }]}>
+              <Ionicons name="alert-circle-outline" size={20} color={theme.colors.text.secondary} />
+              <Text style={[styles.phoneSearchEmptyText, { color: theme.colors.text.secondary }]}>
                 {phoneSearchError || 'Không tìm thấy người dùng với số điện thoại này.'}
               </Text>
             </View>
@@ -435,9 +492,9 @@ export const ChatListScreen: React.FC = () => {
         <LoadingSpinner message="Đang tải các cuộc hội thoại..." />
       ) : filteredConversations.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#94A3B8" style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Chưa có tin nhắn nào</Text>
-          <Text style={styles.emptySubtitle}>Bắt đầu trò chuyện từ trang cá nhân hoặc tìm kiếm bằng số điện thoại.</Text>
+          <Ionicons name="chatbubbles-outline" size={64} color={theme.colors.text.muted} style={{ marginBottom: 16 }} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>Chưa có tin nhắn nào</Text>
+          <Text style={[styles.emptySubtitle, { color: theme.colors.text.secondary }]}>Bắt đầu trò chuyện từ trang cá nhân hoặc tìm kiếm bằng số điện thoại.</Text>
         </View>
       ) : (
         <FlatList
@@ -447,10 +504,11 @@ export const ChatListScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
-          windowSize={10}
-          removeClippedSubviews={Platform.OS === 'android'}
+          windowSize={11}
+          removeClippedSubviews={true}
+          getItemLayout={getItemLayout}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B35" colors={["#FF6B35"]} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.brand.primary} colors={[theme.colors.brand.primary]} />
           }
         />
       )}
@@ -461,36 +519,28 @@ export const ChatListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
   },
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
     borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   searchIcon: {
     marginRight: 8,
@@ -499,7 +549,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#0F172A',
   },
   clearIcon: {
     padding: 2,
@@ -511,9 +560,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
     alignItems: 'center',
   },
   avatarWrap: {
@@ -526,9 +573,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FF6B35',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
   },
   contentContainer: {
     flex: 1,
@@ -544,7 +589,6 @@ const styles = StyleSheet.create({
   nameText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
     flex: 1,
     marginRight: 8,
   },
@@ -553,10 +597,8 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: '#64748B',
   },
   unreadTimeText: {
-    color: '#FF6B35',
     fontWeight: '800',
   },
   messageRow: {
@@ -578,56 +620,44 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
   },
-  readStateTextRead: {
-    color: '#FF6B35',
-  },
+  readStateTextRead: {},
   messageText: {
     fontSize: 14,
-    color: '#64748B',
     flex: 1,
     marginRight: 8,
   },
   unreadMessageText: {
     fontWeight: '700',
-    color: '#0F172A',
   },
   draftMessageText: {
-    color: '#FF6B35',
     fontWeight: '700',
   },
   unreadBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#FF6B35',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
   },
   unreadBadgeText: {
-    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
   },
   phoneSearchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   phoneSearchLoading: {
     paddingVertical: 10,
     alignItems: 'center',
   },
   phoneSearchResultCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -637,7 +667,6 @@ const styles = StyleSheet.create({
   phoneSearchResultHeader: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
     textTransform: 'uppercase',
     marginBottom: 10,
     letterSpacing: 0.5,
@@ -654,17 +683,14 @@ const styles = StyleSheet.create({
   phoneSearchResultName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
     marginBottom: 2,
   },
   phoneSearchResultPhone: {
     fontSize: 13,
-    color: '#64748B',
   },
   phoneSearchChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF6B35',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
@@ -672,21 +698,17 @@ const styles = StyleSheet.create({
   phoneSearchChatBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#FFF',
   },
   phoneSearchEmpty: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   phoneSearchEmptyText: {
     fontSize: 13,
-    color: '#64748B',
     marginLeft: 8,
     flex: 1,
   },
@@ -700,12 +722,10 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
     marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
   },

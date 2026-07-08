@@ -41,5 +41,9 @@ module.exports = {
     // Run in parallel for maximum speed
     const [dbToken, _] = await Promise.all([dbPromise, redisPromise]);
     return dbToken;
+  },
+
+  localGenerateVerificationToken() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
 };

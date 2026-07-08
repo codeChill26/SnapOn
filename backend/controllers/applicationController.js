@@ -8,6 +8,7 @@ const pool = require('../config/db');
 const { success, error, paginated } = require('../utils/responseHandler');
 const { TASK_STATUS, APPLICATION_STATUS, ASSIGNED_BY } = require('../utils/constants');
 const { toDbTaskStatus, toDbApplicationStatus, toDbAssignedTaskStatus } = require('../utils/dbEnum');
+const withDbTx = require('../utils/withDbTx');
 
 /**
  * Application Controller — Handles bidding operations
@@ -18,102 +19,101 @@ const applicationController = {
    * Tasker creates a bid on a task
    */
   async createApplication(req, res) {
-    const client = await pool.connect();
     try {
       const { taskId } = req.params;
       const taskerId = req.user.id;
       const { bid_price, estimated_time, message } = req.body;
 
-      await client.query('BEGIN');
+      const { application, task } = await withDbTx(async (client) => {
+        // 1. Lock task row
+        const lockedTaskRes = await client.query(
+          'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
+          [taskId]
+        );
+        const dbTask = lockedTaskRes.rows[0];
+        if (!dbTask) {
+          const err = new Error('Task not found.');
+          err.statusCode = 404;
+          throw err;
+        }
+        
+        const { fromDbTaskStatus } = require('../utils/dbEnum');
+        const taskVal = {
+          ...dbTask,
+          status: fromDbTaskStatus(dbTask.status),
+        };
 
-      // 1. Lock task row
-      const lockedTaskRes = await client.query(
-        'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
-        [taskId]
-      );
-      const dbTask = lockedTaskRes.rows[0];
-      if (!dbTask) {
-        await client.query('ROLLBACK');
-        return error(res, 'Task not found.', 404);
-      }
-      
-      const { fromDbTaskStatus } = require('../utils/dbEnum');
-      const task = {
-        ...dbTask,
-        status: fromDbTaskStatus(dbTask.status),
-      };
-
-      if (task.status !== TASK_STATUS.OPEN) {
-        await client.query('ROLLBACK');
-        return error(res, 'This task is no longer accepting applications.', 400);
-      }
-
-      // 2. Lock and check assignments
-      const assignments = await assignedTaskModel.findListByTaskId(taskId, client);
-      const hasActiveAssignment = assignments.some(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
-      if (hasActiveAssignment) {
-        await client.query('ROLLBACK');
-        return error(res, 'Công việc này đã chọn được người làm và không nhận thêm ứng tuyển mới.', 400);
-      }
-
-      // 3. Check tasker is not the poster
-      if (task.poster_id === taskerId) {
-        await client.query('ROLLBACK');
-        return error(res, 'You cannot bid on your own task.', 400);
-      }
-
-      // 4. Check tasker hasn't already applied
-      const existingApplication = await taskApplicationModel.findByTaskerAndTask(taskerId, taskId, client);
-      if (existingApplication) {
-        await client.query('ROLLBACK');
-        return error(res, 'You have already applied to this task.', 409);
-      }
-
-      // Check active jobs count limit (max 3 concurrent IN_PROGRESS)
-      const activeJobsCount = await assignedTaskModel.countActiveByTaskerId(taskerId, client);
-      if (activeJobsCount >= 3) {
-        await client.query('ROLLBACK');
-        return error(res, 'Bạn không thể ứng tuyển thêm công việc mới vì hiện tại bạn đang có 3 hoặc nhiều hơn công việc ở trạng thái đang làm.', 400);
-      }
-
-      // 5. Check bid_price boundaries only if provided
-      if (bid_price !== undefined && bid_price !== null) {
-        if (task.budget_max !== null && task.budget_max !== undefined && parseFloat(bid_price) > parseFloat(task.budget_max)) {
-          await client.query('ROLLBACK');
-          return error(
-            res,
-            `Bid price cannot exceed the maximum budget of ${task.budget_max}.`,
-            400
-          );
+        if (taskVal.status !== TASK_STATUS.OPEN) {
+          const err = new Error('This task is no longer accepting applications.');
+          err.statusCode = 400;
+          throw err;
         }
 
-        if (task.budget_min !== null && task.budget_min !== undefined && parseFloat(bid_price) < parseFloat(task.budget_min)) {
-          await client.query('ROLLBACK');
-          return error(
-            res,
-            `Bid price cannot be less than the minimum budget of ${task.budget_min}.`,
-            400
-          );
+        // 2. Lock and check assignments
+        const assignments = await assignedTaskModel.findListByTaskId(taskId, client);
+        const hasActiveAssignment = assignments.some(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
+        if (hasActiveAssignment) {
+          const err = new Error('Công việc này đã chọn được người làm và không nhận thêm ứng tuyển mới.');
+          err.statusCode = 400;
+          throw err;
         }
-      }
 
-      // 6. Auto-create a minimal tasker profile if the worker doesn't have one yet.
-      await taskerProfileModel.createIfNotExists(taskerId, client);
+        // 3. Check tasker is not the poster
+        if (taskVal.poster_id === taskerId) {
+          const err = new Error('You cannot bid on your own task.');
+          err.statusCode = 400;
+          throw err;
+        }
 
-      // 7. Create the application
-      const application = await taskApplicationModel.create({
-        taskId,
-        taskerId,
-        bidPrice: bid_price !== undefined ? bid_price : null,
-        estimatedTime: estimated_time || null,
-        message: message || null,
-      }, client);
+        // 4. Check tasker hasn't already applied
+        const existingApplication = await taskApplicationModel.findByTaskerAndTask(taskerId, taskId, client);
+        if (existingApplication) {
+          const err = new Error('You have already applied to this task.');
+          err.statusCode = 409;
+          throw err;
+        }
 
-      await client.query('COMMIT');
+        // Check active jobs count limit (max 3 concurrent IN_PROGRESS)
+        const activeJobsCount = await assignedTaskModel.countActiveByTaskerId(taskerId, client);
+        if (activeJobsCount >= 3) {
+          const err = new Error('Bạn không thể ứng tuyển thêm công việc mới vì hiện tại bạn đang có 3 hoặc nhiều hơn công việc ở trạng thái đang làm.');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        // 5. Check bid_price boundaries only if provided
+        if (bid_price !== undefined && bid_price !== null) {
+          if (taskVal.budget_max !== null && taskVal.budget_max !== undefined && parseFloat(bid_price) > parseFloat(taskVal.budget_max)) {
+            const err = new Error(`Bid price cannot exceed the maximum budget of ${taskVal.budget_max}.`);
+            err.statusCode = 400;
+            throw err;
+          }
+
+          if (taskVal.budget_min !== null && taskVal.budget_min !== undefined && parseFloat(bid_price) < parseFloat(taskVal.budget_min)) {
+            const err = new Error(`Bid price cannot be less than the minimum budget of ${taskVal.budget_min}.`);
+            err.statusCode = 400;
+            throw err;
+          }
+        }
+
+        // 6. Auto-create a minimal tasker profile if the worker doesn't have one yet.
+        await taskerProfileModel.createIfNotExists(taskerId, client);
+
+        // 7. Create the application
+        const applicationVal = await taskApplicationModel.create({
+          taskId,
+          taskerId,
+          bidPrice: bid_price !== undefined ? bid_price : null,
+          estimatedTime: estimated_time || null,
+          message: message || null,
+        }, client);
+
+        return { application: applicationVal, task: taskVal };
+      });
 
       // Broadcast new application via Socket.io to the task poster (outside transaction)
       const io = req.app.get('io');
-      if (io) {
+      if (io && task) {
         io.to(task.poster_id).emit('application_joined', {
           taskId,
           taskTitle: task.title,
@@ -124,11 +124,9 @@ const applicationController = {
 
       return success(res, application, 'Application submitted successfully.', 201);
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Create application error:', err);
-      return error(res, 'Failed to submit application.', 500);
-    } finally {
-      client.release();
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to submit application.', status);
     }
   },
 
@@ -203,9 +201,7 @@ const applicationController = {
 
   /**
    * GET /api/applications/my-applications
-   * Tasker (worker) retrieves all their own applications across all tasks.
-   * Also exposes `is_busy` flag: true when worker has an ACCEPTED application
-   * on a task that is currently IN_PROGRESS — meaning they cannot take new jobs.
+   * Get applications submitted by current tasker
    */
   async getMyApplications(req, res) {
     try {
@@ -223,31 +219,25 @@ const applicationController = {
       );
       const total = parseInt(countRes.rows[0].total);
 
-      // Paginated query
+      // Query detailed bids
       const result = await pool.query(
         `SELECT ta.*,
-                t.title        AS task_title,
-                t.status       AS task_status,
-                t.post_type    AS task_post_type,
-                t.salary_unit  AS task_salary_unit,
-                t.budget_min,
-                t.budget_max,
-                t.deadline_end,
-                u.full_name    AS tasker_name,
-                u.avatar_url   AS tasker_avatar,
-                at.id          AS assignment_id,
-                at.status      AS assignment_status
+                t.title AS task_title, t.budget_min, t.budget_max, t.status AS task_status,
+                t.post_type, t.work_mode, t.salary_unit, t.application_deadline,
+                u.full_name AS poster_name, u.avatar_url AS poster_avatar,
+                at.id AS assignment_id,
+                at.status AS assignment_status
          FROM task_applications ta
-         JOIN tasks             t  ON ta.task_id  = t.id
-         JOIN users             u  ON ta.tasker_id = u.id
+         JOIN tasks t ON ta.task_id = t.id
+         JOIN users u ON t.poster_id = u.id
          LEFT JOIN assigned_tasks at ON at.application_id = ta.id
          WHERE ta.tasker_id = $1
-         ORDER BY t.created_at DESC
+         ORDER BY ta.created_at DESC
          LIMIT $2 OFFSET $3`,
         [taskerId, currentLimit, offset]
       );
 
-      const { fromDbApplicationStatus, fromDbAssignedTaskStatus, fromDbTaskStatus } = require('../utils/dbEnum');
+      const { fromDbApplicationStatus, fromDbTaskStatus, fromDbAssignedTaskStatus } = require('../utils/dbEnum');
       for (const r of result.rows) {
         r.status = fromDbApplicationStatus(r.status);
         r.task_status = fromDbTaskStatus(r.task_status);
@@ -256,41 +246,28 @@ const applicationController = {
         }
       }
 
-      // Check busy flag using a highly optimized database query
-      const busyRes = await pool.query(
-        `SELECT EXISTS (
-          SELECT 1 FROM task_applications ta
-          JOIN tasks t ON ta.task_id = t.id
-          WHERE ta.tasker_id = $1 AND ta.status = 'ACCEPTED' AND t.status = 'IN_PROGRESS'
-        ) AS is_busy`,
-        [taskerId]
-      );
-      const isBusy = busyRes.rows[0].is_busy;
-
       return paginated(res, result.rows, {
         page: currentPage,
         limit: currentLimit,
         total,
         totalPages: Math.ceil(total / currentLimit)
-      }, 'My applications retrieved successfully.', { is_busy: isBusy });
+      }, 'Your applications retrieved successfully.');
     } catch (err) {
       console.error('Get my applications error:', err);
       return error(res, 'Failed to retrieve your applications.', 500);
     }
   },
 
-
   /**
-   * PATCH /api/applications/:id/withdraw
-   * Tasker withdraws their application
+   * DELETE /api/applications/:id
+   * Tasker withdraws their application (Pending status only)
    */
   async withdrawApplication(req, res) {
-
     try {
       const { id } = req.params;
       const taskerId = req.user.id;
 
-      // Find the application
+      // Fetch the application
       const application = await taskApplicationModel.findById(id);
       if (!application) {
         return error(res, 'Application not found.', 404);
@@ -301,14 +278,14 @@ const applicationController = {
         return error(res, 'You can only withdraw your own applications.', 403);
       }
 
-      // Check if application is still pending
+      // Can only withdraw if still pending
       if (application.status !== APPLICATION_STATUS.PENDING) {
-        return error(res, `Cannot withdraw an application with status: ${application.status}.`, 400);
+        return error(res, `Cannot withdraw an application in ${application.status} status.`, 400);
       }
 
-      const updatedApplication = await taskApplicationModel.updateStatus(id, APPLICATION_STATUS.WITHDRAWN);
+      await taskApplicationModel.delete(id);
 
-      return success(res, updatedApplication, 'Application withdrawn successfully.');
+      return success(res, null, 'Application withdrawn successfully.');
     } catch (err) {
       console.error('Withdraw application error:', err);
       return error(res, 'Failed to withdraw application.', 500);
@@ -316,125 +293,17 @@ const applicationController = {
   },
 
   /**
-   * PATCH /api/applications/:id
-   * Update application bid details (Tasker only — owner check)
-   */
-  async updateApplication(req, res) {
-    try {
-      const { id } = req.params;
-      const taskerId = req.user.id;
-      const { bid_price, estimated_time, message } = req.body;
-
-      // 1. Check application exists
-      const application = await taskApplicationModel.findById(id);
-      if (!application) {
-        return error(res, 'Application not found.', 404);
-      }
-
-      // 2. Check ownership
-      if (application.tasker_id !== taskerId) {
-        return error(res, 'You can only update your own applications.', 403);
-      }
-
-      // 3. Check application is PENDING
-      if (application.status !== APPLICATION_STATUS.PENDING) {
-        return error(res, 'You can only update pending applications.', 400);
-      }
-
-      // 4. Check parent task is still OPEN
-      const task = await taskModel.findById(application.task_id);
-      if (!task || task.status !== TASK_STATUS.OPEN) {
-        return error(res, 'The parent task is no longer accepting bids.', 400);
-      }
-
-      // 5. Check price boundaries if updating bid price
-      if (bid_price) {
-        if (task.budget_max !== null && task.budget_max !== undefined && parseFloat(bid_price) > parseFloat(task.budget_max)) {
-          return error(res, `Bid price cannot exceed the maximum budget of ${task.budget_max}.`, 400);
-        }
-        if (task.budget_min !== null && task.budget_min !== undefined && parseFloat(bid_price) < parseFloat(task.budget_min)) {
-          return error(res, `Bid price cannot be less than the minimum budget of ${task.budget_min}.`, 400);
-        }
-      }
-
-      // 6. Perform update
-      const updatedApplication = await taskApplicationModel.update(id, {
-        bidPrice: bid_price,
-        estimatedTime: estimated_time,
-        message,
-      });
-
-      return success(res, updatedApplication, 'Application updated successfully.');
-    } catch (err) {
-      console.error('Update application error:', err);
-      return error(res, 'Failed to update application.', 500);
-    }
-  },
-
-  /**
-   * DELETE /api/applications/:id
-   * Delete application bid (Tasker only — owner check)
-   */
-  async deleteApplication(req, res) {
-    try {
-      const { id } = req.params;
-      const taskerId = req.user.id;
-
-      // 1. Check application exists
-      const application = await taskApplicationModel.findById(id);
-      if (!application) {
-        return error(res, 'Application not found.', 404);
-      }
-
-      // 2. Check ownership
-      if (application.tasker_id !== taskerId) {
-        return error(res, 'You can only delete your own applications.', 403);
-      }
-
-      // 3. Check application is PENDING
-      if (application.status !== APPLICATION_STATUS.PENDING) {
-        return error(res, 'You can only delete pending applications.', 400);
-      }
-
-      // 4. Perform delete
-      await taskApplicationModel.delete(id);
-
-      return success(res, null, 'Application deleted successfully.');
-    } catch (err) {
-      console.error('Delete application error:', err);
-      return error(res, 'Failed to delete application.', 500);
-    }
-  },
-
-  /**
-   * GET /api/tasks/:taskId/my-application
-   * Get application of the logged in user for a specific task
-   */
-  async getMyApplicationForTask(req, res) {
-    try {
-      const { taskId } = req.params;
-      const taskerId = req.user.id;
-
-      const application = await taskApplicationModel.findByTaskerAndTask(taskerId, taskId);
-      return success(res, application || null, 'My application retrieved successfully.');
-    } catch (err) {
-      console.error('Get my application for task error:', err);
-      return error(res, 'Failed to retrieve your application.', 500);
-    }
-  },
-
-  /**
    * PATCH /api/applications/:id/status
-   * Accept or Reject an application (Poster only)
+   * Poster updates application status (ACCEPT or REJECT)
    */
   async updateApplicationStatus(req, res) {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status } = req.body; // 'ACCEPTED' or 'REJECTED'
       const userId = req.user.id;
 
       if (!['ACCEPTED', 'REJECTED'].includes(status)) {
-        return error(res, 'Status must be ACCEPTED or REJECTED.', 400);
+        return error(res, 'Invalid status update payload.', 400);
       }
 
       // 1. Get the application and its task
@@ -468,94 +337,93 @@ const applicationController = {
         return error(res, 'Task is no longer open for matching.', 400);
       }
 
-      const client = await pool.connect();
       try {
-        await client.query('BEGIN');
+        const { assignedTask, escrow, lockedApp, lockedTask } = await withDbTx(async (client) => {
+          // Lock task row
+          const lockedTaskRes = await client.query(
+            'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
+            [task.id]
+          );
+          const lockedTaskVal = lockedTaskRes.rows[0];
+          if (!lockedTaskVal) {
+            const e = new Error('Task not found.');
+            e.statusCode = 404;
+            throw e;
+          }
+          if (lockedTaskVal.status !== toDbTaskStatus(TASK_STATUS.OPEN)) {
+            const e = new Error('Task is not in OPEN status. Cannot match.');
+            e.statusCode = 400;
+            throw e;
+          }
 
-        // Lock task row
-        const lockedTaskRes = await client.query(
-          'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
-          [task.id]
-        );
-        const lockedTask = lockedTaskRes.rows[0];
-        if (!lockedTask) {
-          const e = new Error('Task not found.');
-          e.statusCode = 404;
-          throw e;
-        }
-        if (lockedTask.status !== toDbTaskStatus(TASK_STATUS.OPEN)) {
-          const e = new Error('Task is not in OPEN status. Cannot match.');
-          e.statusCode = 400;
-          throw e;
-        }
+          // Lock application row
+          const appRes = await client.query(
+            'SELECT * FROM task_applications WHERE id = $1 FOR UPDATE',
+            [id]
+          );
+          const lockedAppVal = appRes.rows[0];
+          if (!lockedAppVal) {
+            const e = new Error('Application not found.');
+            e.statusCode = 404;
+            throw e;
+          }
+          if (lockedAppVal.status !== toDbApplicationStatus(APPLICATION_STATUS.PENDING)) {
+            const e = new Error('Application is no longer pending.');
+            e.statusCode = 409;
+            throw e;
+          }
 
-        // Lock application row
-        const appRes = await client.query(
-          'SELECT * FROM task_applications WHERE id = $1 FOR UPDATE',
-          [id]
-        );
-        const lockedApp = appRes.rows[0];
-        if (!lockedApp) {
-          const e = new Error('Application not found.');
-          e.statusCode = 404;
-          throw e;
-        }
-        if (lockedApp.status !== toDbApplicationStatus(APPLICATION_STATUS.PENDING)) {
-          const e = new Error('Application is no longer pending.');
-          e.statusCode = 409;
-          throw e;
-        }
+          // Check if the same worker is already assigned to this task (not cancelled status)
+          const dbCancelledStatus = toDbAssignedTaskStatus('CANCELLED');
+          const existingAssignmentRes = await client.query(
+            'SELECT id FROM assigned_tasks WHERE task_id = $1 AND tasker_id = $2 AND status != $3 FOR UPDATE',
+            [task.id, lockedAppVal.tasker_id, dbCancelledStatus]
+          );
+          if (existingAssignmentRes.rows.length > 0) {
+            const e = new Error('Người dùng này đã được giao công việc này.');
+            e.statusCode = 409;
+            throw e;
+          }
 
-        // Check if the same worker is already assigned to this task (not cancelled status)
-        const dbCancelledStatus = toDbAssignedTaskStatus('CANCELLED');
-        const existingAssignmentRes = await client.query(
-          'SELECT id FROM assigned_tasks WHERE task_id = $1 AND tasker_id = $2 AND status != $3 FOR UPDATE',
-          [task.id, lockedApp.tasker_id, dbCancelledStatus]
-        );
-        if (existingAssignmentRes.rows.length > 0) {
-          const e = new Error('Người dùng này đã được giao công việc này.');
-          e.statusCode = 409;
-          throw e;
-        }
+          // Escrow price selection: bid_price or budget_max
+          const escrowAmount = lockedAppVal.bid_price !== null && lockedAppVal.bid_price !== undefined
+            ? parseFloat(lockedAppVal.bid_price)
+            : parseFloat(lockedTaskVal.budget_max);
 
-        // Escrow price selection: bid_price or budget_max
-        const escrowAmount = lockedApp.bid_price !== null && lockedApp.bid_price !== undefined
-          ? parseFloat(lockedApp.bid_price)
-          : parseFloat(lockedTask.budget_max);
+          if (isNaN(escrowAmount) || escrowAmount <= 0) {
+            const e = new Error('Invalid match amount / task budget.');
+            e.statusCode = 400;
+            throw e;
+          }
 
-        if (isNaN(escrowAmount) || escrowAmount <= 0) {
-          const e = new Error('Invalid match amount / task budget.');
-          e.statusCode = 400;
-          throw e;
-        }
+          const { escrow: escrowVal } = await escrowService.holdForMatch(
+            {
+              taskId: task.id,
+              posterId: lockedTaskVal.poster_id,
+              taskerId: lockedAppVal.tasker_id,
+              amount: escrowAmount,
+            },
+            client
+          );
 
-        const { escrow } = await escrowService.holdForMatch(
-          {
-            taskId: task.id,
-            posterId: lockedTask.poster_id,
-            taskerId: lockedApp.tasker_id,
-            amount: escrowAmount,
-          },
-          client
-        );
+          const assignedTaskVal = await assignedTaskModel.create(
+            {
+              taskId: task.id,
+              taskerId: lockedAppVal.tasker_id,
+              applicationId: id,
+              assignedBy: ASSIGNED_BY.MANUAL,
+            },
+            client
+          );
 
-        const assignedTask = await assignedTaskModel.create(
-          {
-            taskId: task.id,
-            taskerId: lockedApp.tasker_id,
-            applicationId: id,
-            assignedBy: ASSIGNED_BY.MANUAL,
-          },
-          client
-        );
+          // Keep task status as OPEN (do not transition to IN_PROGRESS yet)
+          await taskModel.updateFinalPrice(task.id, escrowAmount, client);
 
-        // Keep task status as OPEN (do not transition to IN_PROGRESS yet)
-        await taskModel.updateFinalPrice(task.id, escrowAmount, client);
+          await taskApplicationModel.updateStatus(id, APPLICATION_STATUS.ACCEPTED, client);
+          // Do NOT reject other applicants yet, keeping them pending.
 
-        await taskApplicationModel.updateStatus(id, APPLICATION_STATUS.ACCEPTED, client);
-        // Do NOT reject other applicants yet, keeping them pending.
-
-        await client.query('COMMIT');
+          return { assignedTask: assignedTaskVal, escrow: escrowVal, lockedApp: lockedAppVal, lockedTask: lockedTaskVal };
+        });
 
         // Broadcast notification via Socket.io
         const io = req.app.get('io');
@@ -579,10 +447,10 @@ const applicationController = {
           'Application accepted and task assigned successfully.'
         );
       } catch (txErr) {
-        try { await client.query('ROLLBACK'); } catch {}
-        throw txErr;
-      } finally {
-        client.release();
+        console.error('Inner accept transaction error:', txErr);
+        const status = txErr.statusCode || 500;
+        const message = txErr.message || 'Failed to accept application.';
+        return error(res, message, status);
       }
     } catch (err) {
       console.error('Update application status error:', err);

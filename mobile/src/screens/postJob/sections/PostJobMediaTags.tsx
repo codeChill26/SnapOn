@@ -96,7 +96,7 @@ export const PostJobMediaTags: React.FC<PostJobMediaTagsProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Thêm hashtag hiện tại"
           >
-            <Text style={styles.hashtagAddText}>Thêm</Text>
+            <Text style={[styles.hashtagAddText, { color: theme.colors.text.inverse }]}>Thêm</Text>
           </TouchableOpacity>
         </View>
         <View style={[styles.hashtagChipsRow, { gap: theme.spacing.xs }]}>
@@ -178,7 +178,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hashtagAddText: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
   },

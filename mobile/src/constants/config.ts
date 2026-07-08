@@ -44,6 +44,7 @@ const Config = {
     COMPLETION_RATE: 0.15,
     RESPONSE_TIME: 0.10,
   },
+  DEBUG_LOGIN: process.env.EXPO_PUBLIC_DEBUG_LOGIN === 'true' || false,
 };
 
 export default Config;

@@ -8,7 +8,11 @@ const escrowController = {
   async getMyEscrows(req, res) {
     try {
       const userId = req.user.id;
-      const { role, status, limit, cursor } = req.query;
+      let { role, status, limit, cursor } = req.query;
+
+      if (status) {
+        status = status.toUpperCase();
+      }
 
       const escrows = await escrowModel.listByUserId(userId, { role, status, limit, cursor });
 
@@ -76,8 +80,8 @@ const escrowController = {
         return error(res, 'You are not allowed to delete this escrow.', 403);
       }
 
-      // Only allow deletion if status is 'holding' (not released/refunded/disputed)
-      if (escrow.status !== 'holding') {
+      // Only allow deletion if status is 'HOLDING' (not released/refunded/disputed)
+      if (escrow.status !== 'HOLDING') {
         return error(res, 'You can only delete escrows in holding status.', 400);
       }
 

@@ -32,7 +32,7 @@ export const authService = {
 
   async getProfile(): Promise<User> {
     const response = await api.get<any>('/users/profile');
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async updateProfile(profileData: {
@@ -45,28 +45,28 @@ export const authService = {
     skills?: string[];
   }): Promise<User> {
     const response = await api.put<any>('/users/profile', profileData);
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async uploadAvatar(base64Image: string): Promise<string> {
     const response = await api.post<any>('/users/upload-avatar', {
       base64Image,
     });
-    return response.data.avatarUrl;
+    return response.data.data.avatarUrl;
   },
 
   async uploadCover(base64Image: string): Promise<string> {
     const response = await api.post<any>('/users/upload-cover', {
       base64Image,
     });
-    return response.data.coverUrl;
+    return response.data.data.coverUrl;
   },
 
   async searchUserByPhone(phone: string): Promise<User | null> {
     const response = await api.get<any>('/users/search', {
       params: { phone },
     });
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async tokenLogin(): Promise<{ user: User; wallet: any }> {
@@ -90,7 +90,7 @@ export const authService = {
       backImage,
       selfieImage,
     });
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async sendOtp(phone: string): Promise<{ success: boolean; message: string; otp?: string }> {

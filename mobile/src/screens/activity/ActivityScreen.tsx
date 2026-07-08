@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -45,25 +45,29 @@ export const ActivityScreen: React.FC = () => {
   const navigation = useAppNavigation();
 
   const {
-    activeTab,
-    statusFilter,
-    searchInput,
-    setSearchInput,
-    searchQuery,
-    activities,
-    summary,
-    loading,
-    loadingMore,
-    refreshing,
-    errorMessage,
-    completionRate,
-    firstName,
-    focusItem,
-    handleRefresh,
-    handleLoadMore,
-    handleTabChange,
-    handleStatCardPress,
-    handleResetFilters,
+    state: {
+      activeTab,
+      statusFilter,
+      searchInput,
+      searchQuery,
+      activities,
+      summary,
+      loading,
+      loadingMore,
+      refreshing,
+      errorMessage,
+      completionRate,
+      firstName,
+      focusItem,
+    },
+    actions: {
+      setSearchInput,
+      handleRefresh,
+      handleLoadMore,
+      handleTabChange,
+      handleStatCardPress,
+      handleResetFilters,
+    }
   } = useActivityData();
 
   const activeFilters = activeTab === 'POSTED' ? POSTED_FILTERS : PARTICIPATING_FILTERS;
@@ -118,10 +122,10 @@ export const ActivityScreen: React.FC = () => {
     >
       <View style={styles.headerInner}>
         <View style={styles.headerCopy}>
-          <Text style={[styles.headerEyebrow, { color: theme.colors.brand.primary, marginBottom: theme.spacing.xs }]}>
+          <Text style={[styles.headerEyebrow, theme.typography.eyebrow, { color: theme.colors.brand.primary, marginBottom: theme.spacing.xs }]}>
             THEO DÕI TIẾN ĐỘ
           </Text>
-          <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Hoạt động</Text>
+          <Text style={[styles.headerTitle, theme.typography.screenTitle, { color: theme.colors.text.primary }]}>Hoạt động</Text>
         </View>
         <View style={[styles.headerBadge, { backgroundColor: theme.colors.brand.primarySoft, borderColor: theme.colors.brand.primarySoft }]}>
           <Ionicons name="pulse-outline" size={20} color={theme.colors.brand.primary} />
@@ -317,13 +321,13 @@ export const ActivityScreen: React.FC = () => {
     </View>
   );
 
-  const renderItem = ({ item }: { item: ActivityItem }) => {
+  const renderItem = useCallback(({ item }: { item: ActivityItem }) => {
     if (item.activityType === 'POSTED') {
       return <PostedActivityCard task={item.post} applicantCount={item.stats?.applicantCount || 0} />;
     } else {
       return <ParticipatingActivityCard task={item.post} participation={item.participation!} />;
     }
-  };
+  }, []);
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -394,6 +398,8 @@ export const ActivityScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
+          windowSize={11}
+          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -589,34 +595,5 @@ const styles = StyleSheet.create({
   resetButtonText: {
     fontSize: 13,
     fontWeight: '800',
-  },
-  errorCard: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginVertical: 8,
-  },
-  errorDescription: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-    minHeight: 44,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
   },
 });

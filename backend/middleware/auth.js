@@ -202,15 +202,24 @@ const verifyTokenForSocket = async (token) => {
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
-      return error(res, 'Access denied. User not authenticated.', 401);
+      return error(res, 'Authentication required.', 401);
     }
 
-    const hasRole = allowedRoles.some(role => {
-      return String(req.user.role).toUpperCase() === String(role).toUpperCase();
-    });
+    // If no specific roles required, just check authentication
+    if (allowedRoles.length === 0) {
+      return next();
+    }
 
-    if (!hasRole) {
-      return error(res, 'Bạn không có quyền thực hiện hành động này.', 403);
+    const userRole = req.user.role;
+    const normalizedUserRole = userRole ? userRole.toUpperCase() : '';
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toUpperCase());
+
+    if (!normalizedUserRole || !normalizedAllowedRoles.includes(normalizedUserRole)) {
+      return error(
+        res,
+        'Access denied. You do not have permission to perform this action.',
+        403
+      );
     }
 
     next();

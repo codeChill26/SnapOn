@@ -68,12 +68,19 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
     }
+    this.listeners = {};
   }
 
   on<T = unknown>(event: string, callback: SocketCallback<T>) {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
+    
+    // Prevent duplicate listeners
+    if (this.listeners[event].includes(callback as SocketCallback)) {
+      return;
+    }
+    
     this.listeners[event].push(callback as SocketCallback);
 
     if (this.socket) {

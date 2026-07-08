@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
-import { useApp } from '../../context/AppContext';
+import { useWallet } from '../../context/AppContext';
 import { walletService } from '../../services/walletService';
 import { authService } from '../../services/authService';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -33,7 +33,7 @@ type SettingsNavProp = NativeStackNavigationProp<RootStackParamList>;
 export const AccountSettingsScreen: React.FC = () => {
   const navigation = useNavigation<SettingsNavProp>();
   const { user: currentUser, logout, updateUser } = useAuth();
-  const { wallet, setWallet } = useApp();
+  const { wallet, setWallet } = useWallet();
 
   // States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);

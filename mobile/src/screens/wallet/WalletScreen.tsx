@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { walletService } from '../../services/walletService';
-import { useApp } from '../../context/AppContext';
+import { useWallet } from '../../context/AppContext';
 import { Wallet, WalletTransaction } from '../../types';
 import { formatCurrency, formatDate, getStatusLabel } from '../../utils/format';
 import { Input } from '../../components/ui/Input';
@@ -16,7 +16,7 @@ import { Input } from '../../components/ui/Input';
 const TOPUP_PRESETS = [50000, 100000, 200000, 500000, 1000000];
 
 export const WalletScreen: React.FC = () => {
-  const { wallet, setWallet } = useApp();
+  const { wallet, setWallet } = useWallet();
   const route = useRoute<any>();
   const scrollViewRef = useRef<ScrollView>(null);
   const [historyY, setHistoryY] = useState(0);
@@ -37,6 +37,15 @@ export const WalletScreen: React.FC = () => {
     }
   }, [route.params?.scrollToHistory, historyY]);
 
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     loadWalletData();
   }, []);
@@ -44,15 +53,21 @@ export const WalletScreen: React.FC = () => {
   const loadWalletData = async () => {
     try {
       const walletData = await walletService.getMyWallet();
-      setWallet(walletData);
+      if (isMountedRef.current) {
+        setWallet(walletData);
+      }
       try {
         const txData = await walletService.getTransactions();
-        setTransactions(txData.transactions);
+        if (isMountedRef.current) {
+          setTransactions(txData.transactions);
+        }
       } catch {}
     } catch (error) {
       console.error('Failed to load wallet:', error);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 

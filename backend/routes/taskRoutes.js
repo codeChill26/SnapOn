@@ -3,8 +3,12 @@ const router = express.Router();
 const authenticate = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const taskValidator = require('../validators/taskValidator');
-const taskController = require('../controllers/taskController');
 const rateLimiter = require('../middleware/rateLimiter');
+
+// Import split controllers by domain
+const TaskQueryController = require('../controllers/task/TaskQueryController');
+const TaskPublishController = require('../controllers/task/TaskPublishController');
+const TaskActionController = require('../controllers/task/TaskActionController');
 
 /**
  * Task Routes
@@ -17,7 +21,7 @@ router.get(
   authenticate,
   taskValidator.listTasks,
   validate,
-  taskController.getTasks
+  TaskQueryController.getTasks
 );
 
 // GET /api/tasks/my-tasks — Get current user's tasks
@@ -25,7 +29,7 @@ router.get(
 router.get(
   '/my-tasks',
   authenticate,
-  taskController.getMyTasks
+  TaskQueryController.getMyTasks
 );
 
 // POST /api/tasks/upload-images — Upload images to Cloudinary (Base64)
@@ -36,14 +40,14 @@ router.post(
   rateLimiter('image-upload', 10, 60),
   taskValidator.uploadImages,
   validate,
-  taskController.uploadTaskImages
+  TaskPublishController.uploadTaskImages
 );
 
 // GET /api/tasks/saved — Get current user's saved tasks
 router.get(
   '/saved',
   authenticate,
-  taskController.getSavedTasks
+  TaskQueryController.getSavedTasks
 );
 
 // POST /api/tasks/:id/save — Save a task
@@ -52,7 +56,7 @@ router.post(
   authenticate,
   taskValidator.taskIdParam,
   validate,
-  taskController.saveTask
+  TaskActionController.saveTask
 );
 
 // DELETE /api/tasks/:id/save — Remove a saved task
@@ -61,7 +65,7 @@ router.delete(
   authenticate,
   taskValidator.taskIdParam,
   validate,
-  taskController.unsaveTask
+  TaskActionController.unsaveTask
 );
 
 // GET /api/tasks/:id — Get task details
@@ -70,7 +74,7 @@ router.get(
   authenticate,
   taskValidator.taskIdParam,
   validate,
-  taskController.getTaskById
+  TaskQueryController.getTaskById
 );
 
 // POST /api/tasks — Create a new task
@@ -79,7 +83,7 @@ router.post(
   authenticate,
   taskValidator.createTask,
   validate,
-  taskController.createTask
+  TaskPublishController.createTask
 );
 
 // PATCH /api/tasks/:id/status — Update task status
@@ -88,7 +92,7 @@ router.patch(
   authenticate,
   taskValidator.updateStatus,
   validate,
-  taskController.updateTaskStatus
+  TaskActionController.updateTaskStatus
 );
 
 // PATCH /api/tasks/:id — Update task details
@@ -97,7 +101,7 @@ router.patch(
   authenticate,
   taskValidator.updateTask,
   validate,
-  taskController.updateTask
+  TaskPublishController.updateTask
 );
 
 // PATCH /api/tasks/:id/close-recruitment — Close recruitment early
@@ -106,7 +110,7 @@ router.patch(
   authenticate,
   taskValidator.taskIdParam,
   validate,
-  taskController.closeRecruitment
+  TaskActionController.closeRecruitment
 );
 
 // DELETE /api/tasks/:id — Delete a task
@@ -115,7 +119,7 @@ router.delete(
   authenticate,
   taskValidator.taskIdParam,
   validate,
-  taskController.deleteTask
+  TaskPublishController.deleteTask
 );
 
 module.exports = router;

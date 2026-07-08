@@ -1,12 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { Alert } from 'react-native';
 import { User, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { storage } from '../utils/storage';
-import { socketService } from '../services/socketService';
 import { setOnUnauthorized } from '../services/api';
-import { notificationService } from '../services/notificationService';
 import { detectBackend } from '../utils/backendDetector';
 
 interface AuthContextType {
@@ -49,38 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  useEffect(() => {
-    if (token && user) {
-      socketService.connect(user.id);
-      void notificationService.registerDeviceForChatNotifications().catch((error) => {
-        console.warn('Failed to register push token:', error);
-      });
-
-      const handleApplicationJoined = (data: { taskTitle: string; taskerName: string }) => {
-        Alert.alert(
-          '💡 Ứng tuyển mới!',
-          `Ứng viên ${data.taskerName} đã đăng ký làm công việc: "${data.taskTitle}".`
-        );
-      };
-
-      const handleTaskAssigned = (data: { taskTitle: string }) => {
-        Alert.alert(
-          '🎉 Nhận việc thành công!',
-          `Bạn đã được chọn cho công việc: "${data.taskTitle}". Vui lòng vào kiểm tra công việc và bắt đầu làm việc!`
-        );
-      };
-
-      socketService.on('application_joined', handleApplicationJoined);
-      socketService.on('task_assigned', handleTaskAssigned);
-
-      return () => {
-        socketService.off('application_joined', handleApplicationJoined);
-        socketService.off('task_assigned', handleTaskAssigned);
-      };
-    } else {
-      socketService.disconnect();
-    }
-  }, [token, user]);
+  // Socket and notification logic has been refactored to NotificationContext.tsx
 
   const loadStoredAuth = async () => {
     try {
@@ -181,19 +148,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void role;
   }, []);
 
+  const contextValue = useMemo(() => ({
+    user,
+    token,
+    isLoading,
+    isAuthenticated: !!token && !!user,
+    login,
+    logout,
+    updateUser,
+    switchRole,
+  }), [user, token, isLoading, login, logout, updateUser, switchRole]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isLoading,
-        isAuthenticated: !!token && !!user,
-        login,
-        logout,
-        updateUser,
-        switchRole,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

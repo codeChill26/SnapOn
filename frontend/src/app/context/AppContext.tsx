@@ -339,11 +339,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw err;
       });
       const data = res.data;
-      if (data.success && data.user) {
-        setDbUser(data.user);
+      const userObj = data.data?.user || data.user;
+      if (data.success && userObj) {
+        setDbUser(userObj);
         // no-op
-        localStorage.setItem('appUser', JSON.stringify(data.user));
-        const dbRole = data.user.role;
+        localStorage.setItem('appUser', JSON.stringify(userObj));
+        const dbRole = userObj.role;
         const mappedRole = dbRole === 'tasker' ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
         _setUserRole(mappedRole);
 
@@ -413,9 +414,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const res = await api.put('/users/profile', fields);
       const data = res.data;
-      if (data.success && data.user) {
-        setDbUser(data.user);
-        localStorage.setItem('appUser', JSON.stringify(data.user));
+      const userObj = data.data?.user || data.user;
+      if (data.success && userObj) {
+        setDbUser(userObj);
+        localStorage.setItem('appUser', JSON.stringify(userObj));
         return true;
       }
       return false;
@@ -433,9 +435,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const dbRole = role === 'worker' ? 'tasker' : role;
         const res = await api.put('/users/role', { role: dbRole });
         const data = res.data;
-        if (data.success && data.user) {
-          setDbUser(data.user);
-          localStorage.setItem('appUser', JSON.stringify(data.user));
+        const userObj = data.data?.user || data.user;
+        if (data.success && userObj) {
+          setDbUser(userObj);
+          localStorage.setItem('appUser', JSON.stringify(userObj));
         }
         // Refresh wallet balance when switching roles to ensure consistency
         await fetchProfile();

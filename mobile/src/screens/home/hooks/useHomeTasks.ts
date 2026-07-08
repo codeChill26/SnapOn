@@ -1,56 +1,181 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Keyboard } from 'react-native';
+import { Alert, Keyboard, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { taskService } from '../../../services/taskService';
 import { categoryService } from '../../../services/categoryService';
-import { useApp } from '../../../context/AppContext';
+
 import { Task } from '../../../types';
 import { JobField, JobSubcategory } from '../../../constants/jobCategories';
 import { PostTypeFilter } from '../../../components/home/HomeRoleTabs';
+
+// Sub-hook 1: Manage Search query states and debounce
+const useHomeSearch = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    setDebouncedSearch('');
+    Keyboard.dismiss();
+  }, []);
+
+  const handleSubmitSearch = useCallback(() => {
+    setDebouncedSearch(searchQuery.trim());
+    Keyboard.dismiss();
+  }, [searchQuery]);
+
+  const handleResetSearch = useCallback(() => {
+    setSearchQuery('');
+    setDebouncedSearch('');
+  }, []);
+
+  return {
+    searchQuery,
+    setSearchQuery,
+    debouncedSearch,
+    setDebouncedSearch,
+    handleClearSearch,
+    handleSubmitSearch,
+    handleResetSearch,
+  };
+};
+
+// Sub-hook 2: Manage Category and Sorting Filters
+const useHomeFilters = (categoriesList: JobField[], handleResetSearch: () => void) => {
+  const [postTypeFilter, setPostTypeFilter] = useState<PostTypeFilter>('ALL');
+  const [selectedFieldId, setSelectedFieldId] = useState<string | undefined>();
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | undefined>();
+  const [activeSort, setActiveSort] = useState<'hot' | 'newest' | null>(null);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
+
+  const selectedFieldName = useMemo(() => {
+    if (!selectedFieldId) return undefined;
+    return categoriesList.find((c) => c.id === selectedFieldId)?.name;
+  }, [selectedFieldId, categoriesList]);
+
+  const selectedSubcategoryName = useMemo(() => {
+    if (!selectedSubcategoryId || !selectedFieldId) return undefined;
+    const cat = categoriesList.find((c) => c.id === selectedFieldId);
+    return cat?.subcategories?.find((s) => s.id === selectedSubcategoryId)?.name;
+  }, [selectedFieldId, selectedSubcategoryId, categoriesList]);
+
+  const handleResetFilters = useCallback(() => {
+    handleResetSearch();
+    setSelectedFieldId(undefined);
+    setSelectedSubcategoryId(undefined);
+    setPostTypeFilter('ALL');
+    setActiveSort(null);
+    setStatusFilter('ALL');
+    Keyboard.dismiss();
+  }, [handleResetSearch]);
+
+  const handleCategorySelect = useCallback(
+    (categoryId: string, _categoryName?: string) => {
+      if (!categoryId) {
+        handleResetFilters();
+        return;
+      }
+      setSelectedFieldId(categoryId);
+      setSelectedSubcategoryId(undefined);
+    },
+    [handleResetFilters]
+  );
+
+  const handleSelectField = useCallback((field: JobField) => {
+    setSelectedFieldId(field.id);
+    setSelectedSubcategoryId(undefined);
+    setCategoryModalVisible(false);
+  }, []);
+
+  const handleSelectSubcategory = useCallback((field: JobField, subcategory: JobSubcategory) => {
+    setSelectedFieldId(field.id);
+    setSelectedSubcategoryId(subcategory.id);
+    setCategoryModalVisible(false);
+  }, []);
+
+  const handleClearCategoryFilter = useCallback(() => {
+    setSelectedFieldId(undefined);
+    setSelectedSubcategoryId(undefined);
+  }, []);
+
+  return {
+    postTypeFilter,
+    setPostTypeFilter,
+    selectedFieldId,
+    selectedFieldName,
+    selectedSubcategoryId,
+    selectedSubcategoryName,
+    activeSort,
+    setActiveSort,
+    categoryModalVisible,
+    setCategoryModalVisible,
+    statusFilter,
+    setStatusFilter,
+    handleResetFilters,
+    handleCategorySelect,
+    handleSelectField,
+    handleSelectSubcategory,
+    handleClearCategoryFilter,
+  };
+};
 
 export const useHomeTasks = () => {
   const latestRequestRef = useRef(0);
   const didInitialFocusRef = useRef(false);
   const lastFetchTimeRef = useRef(0);
 
-  const { tasks, setTasks, updateTask } = useApp();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const updateTask = useCallback((id: string, updates: Partial<Task>) => {
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
+  }, []);
+
+  useEffect(() => {
+    const subCreated = DeviceEventEmitter.addListener('task_created', (newTask) => {
+      setTasks(prev => [newTask, ...prev]);
+    });
+    const subUpdated = DeviceEventEmitter.addListener('task_updated', (updatedTask) => {
+      setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+    });
+    const subSaved = DeviceEventEmitter.addListener('task_saved_changed', ({ taskId, isSaved }) => {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isSaved } : t));
+    });
+    return () => {
+      subCreated.remove();
+      subUpdated.remove();
+      subSaved.remove();
+    };
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-
-  // Post type filter state
-  const [postTypeFilter, setPostTypeFilter] = useState<PostTypeFilter>('ALL');
-
-  // UI state variables for the two-level category selector
-  const [selectedFieldId, setSelectedFieldId] = useState<string | undefined>();
-  const [selectedFieldName, setSelectedFieldName] = useState<string | undefined>();
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | undefined>();
-  const [selectedSubcategoryName, setSelectedSubcategoryName] = useState<string | undefined>();
-
-  // Custom local state for sorting and category picker
-  const [activeSort, setActiveSort] = useState<'hot' | 'newest' | null>(null);
-  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [categoriesList, setCategoriesList] = useState<JobField[]>([]);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [savingTaskIds, setSavingTaskIds] = useState<Record<string, boolean>>({});
+
+  // Use search and filters sub-hooks
+  const search = useHomeSearch();
+  const filters = useHomeFilters(categoriesList, search.handleResetSearch);
 
   // Load dynamic categories on mount with SWR
   useEffect(() => {
     let active = true;
     const fetchCategoriesList = async () => {
-      const data = await categoryService.getCategories((updatedCats) => {
+      // Exclusively set state via onUpdate callback to prevent double renders
+      await categoryService.getCategories((updatedCats) => {
         if (active && updatedCats) {
           setCategoriesList(updatedCats);
         }
       });
-      if (active && data) {
-        setCategoriesList(data);
-      }
     };
     void fetchCategoriesList();
     return () => {
@@ -77,15 +202,6 @@ export const useHomeTasks = () => {
     void loadCachedTasks();
   }, [setTasks]);
 
-  // Debouncing search query (450ms)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery.trim());
-    }, 450);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
   // Fetching tasks from backend
   const fetchTasks = useCallback(
     async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
@@ -101,18 +217,18 @@ export const useHomeTasks = () => {
           limit: 20,
         };
 
-        if (selectedSubcategoryId) {
-          params.category_id = selectedSubcategoryId;
-        } else if (selectedFieldId) {
-          params.field_id = selectedFieldId;
+        if (filters.selectedSubcategoryId) {
+          params.category_id = filters.selectedSubcategoryId;
+        } else if (filters.selectedFieldId) {
+          params.field_id = filters.selectedFieldId;
         }
 
-        if (debouncedSearch) {
-          params.search = debouncedSearch;
+        if (search.debouncedSearch) {
+          params.search = search.debouncedSearch;
         }
 
-        if (postTypeFilter !== 'ALL') {
-          params.post_type = postTypeFilter;
+        if (filters.postTypeFilter !== 'ALL') {
+          params.post_type = filters.postTypeFilter;
         }
 
         const result = await taskService.getTasks(params);
@@ -138,7 +254,7 @@ export const useHomeTasks = () => {
         }
       }
     },
-    [debouncedSearch, selectedFieldId, selectedSubcategoryId, postTypeFilter, setTasks]
+    [search.debouncedSearch, filters.selectedFieldId, filters.selectedSubcategoryId, filters.postTypeFilter, setTasks]
   );
 
   useEffect(() => {
@@ -164,56 +280,6 @@ export const useHomeTasks = () => {
     void fetchTasks({ showLoading: false });
   }, [fetchTasks]);
 
-  const handleResetFilters = useCallback(() => {
-    setSearchQuery('');
-    setDebouncedSearch('');
-    setSelectedFieldId(undefined);
-    setSelectedFieldName(undefined);
-    setSelectedSubcategoryId(undefined);
-    setSelectedSubcategoryName(undefined);
-    setPostTypeFilter('ALL');
-    setActiveSort(null);
-    setStatusFilter('ALL');
-    Keyboard.dismiss();
-  }, []);
-
-  const handleCategorySelect = useCallback(
-    (categoryId: string, categoryName: string) => {
-      if (!categoryId) {
-        handleResetFilters();
-        return;
-      }
-      setSelectedFieldId(categoryId);
-      setSelectedFieldName(categoryName);
-      setSelectedSubcategoryId(undefined);
-      setSelectedSubcategoryName(undefined);
-    },
-    [handleResetFilters]
-  );
-
-  const handleSelectField = useCallback((field: JobField) => {
-    setSelectedFieldId(field.id);
-    setSelectedFieldName(field.name);
-    setSelectedSubcategoryId(undefined);
-    setSelectedSubcategoryName(undefined);
-    setCategoryModalVisible(false);
-  }, []);
-
-  const handleSelectSubcategory = useCallback((field: JobField, subcategory: JobSubcategory) => {
-    setSelectedFieldId(field.id);
-    setSelectedFieldName(field.name);
-    setSelectedSubcategoryId(subcategory.id);
-    setSelectedSubcategoryName(subcategory.name);
-    setCategoryModalVisible(false);
-  }, []);
-
-  const handleClearCategoryFilter = useCallback(() => {
-    setSelectedFieldId(undefined);
-    setSelectedFieldName(undefined);
-    setSelectedSubcategoryId(undefined);
-    setSelectedSubcategoryName(undefined);
-  }, []);
-
   const handleToggleSaved = useCallback(
     async (task: Task) => {
       if (savingTaskIds[task.id]) return;
@@ -221,6 +287,7 @@ export const useHomeTasks = () => {
       const nextSaved = !task.isSaved;
       setSavingTaskIds((current) => ({ ...current, [task.id]: true }));
       updateTask(task.id, { isSaved: nextSaved });
+      DeviceEventEmitter.emit('task_saved_changed', { taskId: task.id, isSaved: nextSaved });
 
       try {
         if (nextSaved) {
@@ -233,6 +300,7 @@ export const useHomeTasks = () => {
           console.warn('Failed to toggle saved task:', error);
         }
         updateTask(task.id, { isSaved: !nextSaved });
+        DeviceEventEmitter.emit('task_saved_changed', { taskId: task.id, isSaved: !nextSaved });
         Alert.alert('Không cập nhật được', 'Vui lòng thử lại sau ít phút.');
       } finally {
         setSavingTaskIds((current) => {
@@ -245,31 +313,20 @@ export const useHomeTasks = () => {
     [savingTaskIds, updateTask]
   );
 
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-    setDebouncedSearch('');
-    Keyboard.dismiss();
-  }, []);
-
-  const handleSubmitSearch = useCallback(() => {
-    setDebouncedSearch(searchQuery.trim());
-    Keyboard.dismiss();
-  }, [searchQuery]);
-
-  const hasActiveFilter = Boolean(selectedFieldId || debouncedSearch || postTypeFilter !== 'ALL');
+  const hasActiveFilter = Boolean(filters.selectedFieldId || search.debouncedSearch || filters.postTypeFilter !== 'ALL');
 
   const sortedTasks = useMemo(() => {
     let list = [...tasks];
 
-    if (postTypeFilter === 'RECRUITMENT' || postTypeFilter === 'ALL') {
-      if (statusFilter === 'OPEN') {
+    if (filters.postTypeFilter === 'RECRUITMENT' || filters.postTypeFilter === 'ALL') {
+      if (filters.statusFilter === 'OPEN') {
         list = list.filter((item) => {
           if (item.postType === 'SERVICE_OFFER') return true;
           const isExpired =
             item.applicationDeadline && new Date(item.applicationDeadline).getTime() < Date.now();
           return item.status === 'OPEN' && !isExpired;
         });
-      } else if (statusFilter === 'CLOSED') {
+      } else if (filters.statusFilter === 'CLOSED') {
         list = list.filter((item) => {
           if (item.postType === 'SERVICE_OFFER') return false;
           const isExpired =
@@ -279,45 +336,49 @@ export const useHomeTasks = () => {
       }
     }
 
-    if (activeSort === 'newest') {
+    if (filters.activeSort === 'newest') {
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } else if (activeSort === 'hot') {
+    } else if (filters.activeSort === 'hot') {
       list.sort((a, b) => b.budgetMax - a.budgetMax);
     }
     return list;
-  }, [tasks, activeSort, statusFilter, postTypeFilter]);
+  }, [tasks, filters.activeSort, filters.statusFilter, filters.postTypeFilter]);
 
   return {
-    loading,
-    refreshing,
-    bannerRefreshKey,
-    searchQuery,
-    setSearchQuery,
-    debouncedSearch,
-    postTypeFilter,
-    setPostTypeFilter,
-    selectedFieldId,
-    selectedFieldName,
-    selectedSubcategoryId,
-    selectedSubcategoryName,
-    activeSort,
-    setActiveSort,
-    categoryModalVisible,
-    setCategoryModalVisible,
-    categoriesList,
-    statusFilter,
-    setStatusFilter,
-    savingTaskIds,
-    onRefresh,
-    handleResetFilters,
-    handleCategorySelect,
-    handleSelectField,
-    handleSelectSubcategory,
-    handleClearCategoryFilter,
-    handleToggleSaved,
-    handleClearSearch,
-    handleSubmitSearch,
-    hasActiveFilter,
-    sortedTasks,
+    state: {
+      loading,
+      refreshing,
+      bannerRefreshKey,
+      searchQuery: search.searchQuery,
+      debouncedSearch: search.debouncedSearch,
+      postTypeFilter: filters.postTypeFilter,
+      selectedFieldId: filters.selectedFieldId,
+      selectedFieldName: filters.selectedFieldName,
+      selectedSubcategoryId: filters.selectedSubcategoryId,
+      selectedSubcategoryName: filters.selectedSubcategoryName,
+      activeSort: filters.activeSort,
+      categoryModalVisible: filters.categoryModalVisible,
+      categoriesList,
+      statusFilter: filters.statusFilter,
+      savingTaskIds,
+      hasActiveFilter,
+      sortedTasks,
+    },
+    actions: {
+      setSearchQuery: search.setSearchQuery,
+      setPostTypeFilter: filters.setPostTypeFilter,
+      setActiveSort: filters.setActiveSort,
+      setCategoryModalVisible: filters.setCategoryModalVisible,
+      setStatusFilter: filters.setStatusFilter,
+      onRefresh,
+      handleResetFilters: filters.handleResetFilters,
+      handleCategorySelect: filters.handleCategorySelect,
+      handleSelectField: filters.handleSelectField,
+      handleSelectSubcategory: filters.handleSelectSubcategory,
+      handleClearCategoryFilter: filters.handleClearCategoryFilter,
+      handleToggleSaved,
+      handleClearSearch: search.handleClearSearch,
+      handleSubmitSearch: search.handleSubmitSearch,
+    },
   };
 };

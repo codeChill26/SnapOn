@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../../context/AuthContext';
 import { taskService } from '../../../services/taskService';
 import { applicationService } from '../../../services/applicationService';
@@ -30,7 +30,7 @@ export const useJobDetail = () => {
   const [submittingClose, setSubmittingClose] = useState(false);
 
   const isPoster = user?.id === task?.posterId;
-  const isWorker = user?.role === 'USER' || user?.role === 'worker';
+  const isWorker = user?.role === 'USER';
 
   const activeWorkers = useMemo(() => {
     return applications.filter(
@@ -79,7 +79,7 @@ export const useJobDetail = () => {
         }
       }
 
-      if ((user?.role === 'USER' || user?.role === 'worker') && user?.id) {
+      if (user?.role === 'USER' && user?.id) {
         void checkWorkerAvailability();
       }
     } catch (error) {
@@ -91,13 +91,11 @@ export const useJobDetail = () => {
     }
   }, [taskId, user, checkWorkerAvailability]);
 
-  useEffect(() => {
-    void loadTaskDetail();
-    const unsubscribe = navigation.addListener('focus', () => {
+  useFocusEffect(
+    useCallback(() => {
       void loadTaskDetail();
-    });
-    return unsubscribe;
-  }, [navigation, loadTaskDetail]);
+    }, [loadTaskDetail])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -109,11 +107,12 @@ export const useJobDetail = () => {
     setShowApplyModal(false);
     setSubmittingApply(true);
     try {
-      await applicationService.createApplication(taskId, {
+      const newApp = await applicationService.createApplication(taskId, {
         bid_price: bidPrice ?? undefined,
         estimated_time: 'Thương lượng',
         message: message || '',
       });
+      setUserApplication(newApp);
       showToast.success(
         'Ứng tuyển thành công',
         'Vui lòng bật thông báo để nhận thông báo duyệt việc.'
@@ -140,11 +139,14 @@ export const useJobDetail = () => {
           text: 'Rút hồ sơ',
           style: 'destructive',
           onPress: async () => {
+            const prevApp = userApplication;
+            setUserApplication(null);
             try {
               await applicationService.withdrawApplication(appId);
               showToast.success('Thành công', 'Đã rút hồ sơ ứng tuyển.');
               void loadTaskDetail();
             } catch (err: any) {
+              setUserApplication(prevApp);
               showToast.error('Lỗi', err.message || 'Hủy ứng tuyển thất bại.');
             }
           },
@@ -274,32 +276,36 @@ export const useJobDetail = () => {
   };
 
   return {
-    taskId,
-    task,
-    applications,
-    userApplication,
-    loading,
-    refreshing,
-    activeImageIndex,
-    setActiveImageIndex,
-    workerHasActiveJob,
-    showApplyModal,
-    setShowApplyModal,
-    showCloseModal,
-    setShowCloseModal,
-    submittingApply,
-    submittingClose,
-    isPoster,
-    isWorker,
-    activeWorkers,
-    onRefresh,
-    handleApplyConfirm,
-    handleWithdraw,
-    handleCloseConfirm,
-    handleDeleteTask,
-    handleAcceptAssignment,
-    handleDeclineAssignment,
-    handleCompleteAssignment,
-    handleCancelAssignment,
+    state: {
+      taskId,
+      task,
+      applications,
+      userApplication,
+      loading,
+      refreshing,
+      activeImageIndex,
+      workerHasActiveJob,
+      showApplyModal,
+      showCloseModal,
+      submittingApply,
+      submittingClose,
+      isPoster,
+      isWorker,
+      activeWorkers,
+    },
+    actions: {
+      setActiveImageIndex,
+      setShowApplyModal,
+      setShowCloseModal,
+      onRefresh,
+      handleApplyConfirm,
+      handleWithdraw,
+      handleCloseConfirm,
+      handleDeleteTask,
+      handleAcceptAssignment,
+      handleDeclineAssignment,
+      handleCompleteAssignment,
+      handleCancelAssignment,
+    },
   };
 };

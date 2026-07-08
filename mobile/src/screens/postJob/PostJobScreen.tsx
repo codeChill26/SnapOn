@@ -34,13 +34,26 @@ import { PostJobRequirements } from './sections/PostJobRequirements';
 import { PostJobMediaTags } from './sections/PostJobMediaTags';
 import { PostJobErrors } from './sections/PostJobErrors';
 
+import { CompositeNavigationProp, RouteProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainTabParamList } from '../../navigation/MainTabNavigator';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+
+export type PostJobScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'PostJob'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
+type PostJobScreenRouteProp = RouteProp<MainTabParamList, 'PostJob'>;
+
 export const PostJobScreen: React.FC = () => {
   const theme = useTheme();
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const navigation = useNavigation<PostJobScreenNavigationProp>();
+  const route = useRoute<PostJobScreenRouteProp>();
 
   const initialPostType = route.params?.initialPostType || 'RECRUITMENT';
-  const editingTaskId = route.params?.taskId as string | undefined;
+  const editingTaskId = route.params?.taskId;
 
   const hookData = usePostJob({
     editingTaskId,
@@ -298,7 +311,7 @@ export const PostJobScreen: React.FC = () => {
         options={WORK_MODES}
         selectedValue={workMode}
         onSelect={(val) => {
-          setWorkMode(val as any);
+          setWorkMode(val as 'ONSITE' | 'REMOTE' | 'NEGOTIABLE');
           if (val === 'REMOTE') {
             setAddress('');
           }
@@ -311,7 +324,7 @@ export const PostJobScreen: React.FC = () => {
         title="Loại công việc"
         options={EMPLOYMENT_TYPES}
         selectedValue={employmentType}
-        onSelect={(val) => setEmploymentType(val as any)}
+        onSelect={(val) => setEmploymentType(val as 'ONE_TIME' | 'PART_TIME' | 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'SHIFT' | 'INTERNSHIP' | 'NEGOTIABLE')}
         onClose={() => setEmploymentModalVisible(false)}
       />
 

@@ -3,9 +3,10 @@ const router = express.Router();
 const verifyFirebaseToken = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
 const pool = require('../config/db');
+const { success } = require('../utils/responseHandler');
 
 // GET /api/admin/stats — Aggregated platform statistics
-router.get('/stats', verifyFirebaseToken, authorize('ADMIN'), async (req, res) => {
+router.get('/stats', verifyFirebaseToken, authorize('ADMIN'), async (req, res, next) => {
   try {
     const [
       userStats,
@@ -113,9 +114,9 @@ router.get('/stats', verifyFirebaseToken, authorize('ADMIN'), async (req, res) =
       `),
     ]);
 
-    res.json({
-      success: true,
-      data: {
+    return success(
+      res,
+      {
         users: {
           total: parseInt(userStats.rows[0].total),
           newThisMonth: parseInt(userStats.rows[0].new_this_month),
@@ -177,14 +178,11 @@ router.get('/stats', verifyFirebaseToken, authorize('ADMIN'), async (req, res) =
           completedCount: parseInt(r.completed_count),
         })),
       },
-    });
+      'Admin stats fetched successfully'
+    );
   } catch (err) {
     console.error('Admin stats error:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch admin stats',
-      error: err.message,
-    });
+    next(err);
   }
 });
 

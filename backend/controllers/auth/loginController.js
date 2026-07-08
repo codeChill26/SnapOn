@@ -3,14 +3,12 @@ const prisma = require('../../db/prisma');
 const redis = require('../../config/redis');
 const response = require('../../utils/responseHandler');
 const { generateAccessToken, generateRefreshToken } = require('../../utils/jwtHelper');
-const { saveRefreshToken, sendVerificationEmailInBackground } = require('./authHelper');
+const { saveRefreshToken, sendVerificationEmailInBackground, localGenerateVerificationToken } = require('./authHelper');
 const { AUTH_CONFIG } = require('../../utils/constants');
-const { localGenerateVerificationToken } = require('./authHelpers');
+const withDbTx = require('../../utils/withDbTx');
 
 module.exports = {
   async syncUser(req, res) {
-    const client = await pool.connect();
-
     try {
       const { uid, email, name, picture } = req.firebaseUser;
 
@@ -18,57 +16,57 @@ module.exports = {
         return response.error(res, 'Firebase user thiếu uid hoặc email.', 400);
       }
 
-      await client.query('BEGIN');
-
       const host = req.get('host');
       const protocol = req.protocol;
       const defaultAvatar = `${protocol}://${host}/uploads/default-avatar.png`;
       const finalAvatar = picture || defaultAvatar;
 
-      const upsertUserQuery = `
-        INSERT INTO users (
-          id,
-          firebase_uid,
+      const { user, wallet } = await withDbTx(async (client) => {
+        const upsertUserQuery = `
+          INSERT INTO users (
+            id,
+            firebase_uid,
+            email,
+            full_name,
+            avatar_url,
+            status,
+            is_verified
+          )
+          VALUES (gen_random_uuid(), $1, $2, COALESCE($3, split_part($2, '@', 1)), $4, 'ACTIVE', false)
+          ON CONFLICT (email) DO UPDATE
+          SET firebase_uid = EXCLUDED.firebase_uid,
+              full_name = COALESCE($3, users.full_name),
+              avatar_url = COALESCE(users.avatar_url, $4)
+          RETURNING *;
+        `;
+
+        const userResult = await client.query(upsertUserQuery, [
+          uid,
           email,
-          full_name,
-          avatar_url,
-          status,
-          is_verified
-        )
-        VALUES (gen_random_uuid(), $1, $2, COALESCE($3, split_part($2, '@', 1)), $4, 'ACTIVE', false)
-        ON CONFLICT (email) DO UPDATE
-        SET firebase_uid = EXCLUDED.firebase_uid,
-            full_name = COALESCE($3, users.full_name),
-            avatar_url = COALESCE(users.avatar_url, $4)
-        RETURNING *;
-      `;
+          name || email.split('@')[0],
+          finalAvatar
+        ]);
+        const userVal = userResult.rows[0];
 
-      const userResult = await client.query(upsertUserQuery, [
-        uid,
-        email,
-        name || email.split('@')[0],
-        finalAvatar
-      ]);
-      const user = userResult.rows[0];
+        const upsertWalletQuery = `
+          INSERT INTO wallets (
+            id,
+            user_id,
+            balance,
+            available_balance,
+            locked_balance
+          )
+          VALUES (gen_random_uuid(), $1, 0, 0, 0)
+          ON CONFLICT (user_id) DO UPDATE
+          SET user_id = EXCLUDED.user_id
+          RETURNING *;
+        `;
 
-      const upsertWalletQuery = `
-        INSERT INTO wallets (
-          id,
-          user_id,
-          balance,
-          available_balance,
-          locked_balance
-        )
-        VALUES (gen_random_uuid(), $1, 0, 0, 0)
-        ON CONFLICT (user_id) DO UPDATE
-        SET user_id = EXCLUDED.user_id
-        RETURNING *;
-      `;
+        const walletResult = await client.query(upsertWalletQuery, [userVal.id]);
+        const walletVal = walletResult.rows[0];
 
-      const walletResult = await client.query(upsertWalletQuery, [user.id]);
-      const wallet = walletResult.rows[0];
-
-      await client.query('COMMIT');
+        return { user: userVal, wallet: walletVal };
+      });
 
       let debugOtp = null;
       if (!user.is_verified) {
@@ -116,13 +114,7 @@ module.exports = {
       }, 'User synced successfully');
     } catch (error) {
       console.error('❌ Sync user error:', error);
-      try {
-        await client.query('ROLLBACK');
-      } catch (rollbackErr) {}
-
       return response.error(res, 'Sync user failed: ' + error.message, 500);
-    } finally {
-      client.release();
     }
   },
 

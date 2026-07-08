@@ -129,7 +129,7 @@ export const PostJobBudget: React.FC<PostJobBudgetProps> = ({
           </View>
         </View>
         {validationErrors.budget ? (
-          <Text style={styles.inlineErrorText}>{validationErrors.budget}</Text>
+          <Text style={[styles.inlineErrorText, { color: theme.colors.status.error }]}>{validationErrors.budget}</Text>
         ) : null}
       </View>
 
@@ -232,6 +232,5 @@ const styles = StyleSheet.create({
   },
   inlineErrorText: {
     fontSize: 11,
-    color: '#EF4444',
   },
 });

@@ -4,6 +4,7 @@ const taskApplicationModel = require('../models/taskApplicationModel');
 const taskModel = require('../models/taskModel');
 const escrowService = require('../services/escrowService');
 const { toDbAssignedTaskStatus, toDbApplicationStatus } = require('../utils/dbEnum');
+const withDbTx = require('../utils/withDbTx');
 
 /**
  * Assignment Expiry Service
@@ -15,52 +16,51 @@ const assignmentExpiryService = {
    * Cập nhật trạng thái sang CANCELLED, hoàn trả tiền ký quỹ (escrow) và gửi socket thông báo
    */
   async expireAssignment(assignmentId, io) {
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-
-      // 1. Khóa và kiểm tra trạng thái hiện tại của giao việc
-      const assignmentRes = await client.query(
-        'SELECT * FROM assigned_tasks WHERE id = $1 FOR UPDATE',
-        [assignmentId]
-      );
-      const assignment = assignmentRes.rows[0];
-      
-      // Nếu không tìm thấy hoặc đã được accept, decline, hay đã bị hủy trước đó
-      if (!assignment) {
-        await client.query('ROLLBACK');
-        return false;
-      }
-      
-      // Chuyển đổi trạng thái từ DB enum (nếu cần)
-      const currentStatus = assignment.status.trim();
-      // DB lưu trạng thái dưới dạng enum DB, ta cần so sánh tương ứng
-      const dbAssignedStatus = toDbAssignedTaskStatus('ASSIGNED');
-      if (assignment.status !== dbAssignedStatus) {
-        await client.query('ROLLBACK');
-        return false;
-      }
-
-      // 2. Cập nhật trạng thái giao việc thành CANCELLED
-      const dbCancelledStatus = toDbAssignedTaskStatus('CANCELLED');
-      await client.query(
-        'UPDATE assigned_tasks SET status = $2 WHERE id = $1',
-        [assignmentId, dbCancelledStatus]
-      );
-
-      // 3. Cập nhật trạng thái đơn ứng tuyển tương ứng thành REJECTED (từ chối/hủy)
-      if (assignment.application_id) {
-        const dbRejectedStatus = toDbApplicationStatus('REJECTED');
-        await client.query(
-          'UPDATE task_applications SET status = $2 WHERE id = $1',
-          [assignment.application_id, dbRejectedStatus]
+      const assignment = await withDbTx(async (client) => {
+        // 1. Khóa và kiểm tra trạng thái hiện tại của giao việc
+        const assignmentRes = await client.query(
+          'SELECT * FROM assigned_tasks WHERE id = $1 FOR UPDATE',
+          [assignmentId]
         );
+        const assignmentVal = assignmentRes.rows[0];
+        
+        // Nếu không tìm thấy hoặc đã được accept, decline, hay đã bị hủy trước đó
+        if (!assignmentVal) {
+          return null;
+        }
+        
+        // Chuyển đổi trạng thái từ DB enum (nếu cần)
+        const dbAssignedStatus = toDbAssignedTaskStatus('ASSIGNED');
+        if (assignmentVal.status !== dbAssignedStatus) {
+          return null;
+        }
+
+        // 2. Cập nhật trạng thái giao việc thành CANCELLED
+        const dbCancelledStatus = toDbAssignedTaskStatus('CANCELLED');
+        await client.query(
+          'UPDATE assigned_tasks SET status = $2 WHERE id = $1',
+          [assignmentId, dbCancelledStatus]
+        );
+
+        // 3. Cập nhật trạng thái đơn ứng tuyển tương ứng thành REJECTED (từ chối/hủy)
+        if (assignmentVal.application_id) {
+          const dbRejectedStatus = toDbApplicationStatus('REJECTED');
+          await client.query(
+            'UPDATE task_applications SET status = $2 WHERE id = $1',
+            [assignmentVal.application_id, dbRejectedStatus]
+          );
+        }
+
+        // 4. Hoàn trả tiền ký quỹ (escrow refund) cho chủ bài đăng
+        await escrowService.refundForTask(assignmentVal.task_id, client);
+
+        return assignmentVal;
+      });
+
+      if (!assignment) {
+        return false;
       }
-
-      // 4. Hoàn trả tiền ký quỹ (escrow refund) cho chủ bài đăng
-      await escrowService.refundForTask(assignment.task_id, client);
-
-      await client.query('COMMIT');
 
       console.log(`[ExpiryService] ⏳ Tự động hủy giao việc quá hạn 15 phút (ID: ${assignmentId}) thành công.`);
 
@@ -91,13 +91,8 @@ const assignmentExpiryService = {
       }
       return true;
     } catch (error) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (rollbackErr) {}
       console.error(`[ExpiryService] Lỗi khi hủy giao việc quá hạn ${assignmentId}:`, error);
       return false;
-    } finally {
-      client.release();
     }
   },
 

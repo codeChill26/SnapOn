@@ -23,6 +23,7 @@ import { Task } from '../../types';
 import { useTheme } from '../../theme';
 import { useHomeTasks } from './hooks/useHomeTasks';
 import { useAppNavigation } from '../../hooks/useAppNavigation';
+import { taskService } from '../../services/taskService';
 
 export const HomeScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -30,41 +31,46 @@ export const HomeScreen: React.FC = () => {
   const theme = useTheme();
 
   const {
-    loading,
-    refreshing,
-    bannerRefreshKey,
-    searchQuery,
-    setSearchQuery,
-    debouncedSearch,
-    postTypeFilter,
-    setPostTypeFilter,
-    selectedFieldId,
-    selectedFieldName,
-    selectedSubcategoryId,
-    selectedSubcategoryName,
-    activeSort,
-    setActiveSort,
-    categoryModalVisible,
-    setCategoryModalVisible,
-    categoriesList,
-    statusFilter,
-    setStatusFilter,
-    savingTaskIds,
-    onRefresh,
-    handleResetFilters,
-    handleCategorySelect,
-    handleSelectField,
-    handleSelectSubcategory,
-    handleClearCategoryFilter,
-    handleToggleSaved,
-    handleClearSearch,
-    handleSubmitSearch,
-    hasActiveFilter,
-    sortedTasks,
+    state: {
+      loading,
+      refreshing,
+      bannerRefreshKey,
+      searchQuery,
+      debouncedSearch,
+      postTypeFilter,
+      selectedFieldId,
+      selectedFieldName,
+      selectedSubcategoryId,
+      selectedSubcategoryName,
+      activeSort,
+      categoryModalVisible,
+      categoriesList,
+      statusFilter,
+      savingTaskIds,
+      hasActiveFilter,
+      sortedTasks,
+    },
+    actions: {
+      setSearchQuery,
+      setPostTypeFilter,
+      setActiveSort,
+      setCategoryModalVisible,
+      setStatusFilter,
+      onRefresh,
+      handleResetFilters,
+      handleCategorySelect,
+      handleSelectField,
+      handleSelectSubcategory,
+      handleClearCategoryFilter,
+      handleToggleSaved,
+      handleClearSearch,
+      handleSubmitSearch,
+    }
   } = useHomeTasks();
 
   const handleJobPress = useCallback(
     (task: Task) => {
+      taskService.prefetchTaskDetail(task.id);
       navigation.navigate('JobDetail', {
         taskId: task.id,
       });

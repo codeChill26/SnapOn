@@ -1,5 +1,6 @@
 const walletModel = require('../models/walletModel');
 const walletTransactionModel = require('../models/walletTransactionModel');
+const CustomError = require('../utils/CustomError');
 
 function getPlatformFeeRate() {
   const raw = process.env.PLATFORM_FEE_RATE;
@@ -23,9 +24,7 @@ const escrowService = {
 
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      const err = new Error('Invalid escrow amount');
-      err.statusCode = 400;
-      throw err;
+      throw new CustomError('Invalid escrow amount', 400, 'BAD_REQUEST');
     }
 
     const feeRate = getPlatformFeeRate();
@@ -47,9 +46,7 @@ const escrowService = {
       }
 
       if (prev.status === 'RELEASED') {
-        const err = new Error('Giao dịch ký quỹ của bạn với người làm này đã hoàn thành và thanh toán.');
-        err.statusCode = 400;
-        throw err;
+        throw new CustomError('Giao dịch ký quỹ của bạn với người làm này đã hoàn thành và thanh toán.', 400, 'LIMIT_EXCEEDED');
       }
 
       // status === 'REFUNDED': re-activate for tasker
@@ -88,11 +85,11 @@ const escrowService = {
 
     const availBal = parseFloat(posterWallet.available_balance);
     if (availBal < amt) {
-      const err = new Error(
-        `Số dư khả dụng không đủ. Hiện có: ${availBal.toLocaleString('vi-VN')}đ, cần: ${amt.toLocaleString('vi-VN')}đ`
+      throw new CustomError(
+        `Số dư khả dụng không đủ. Hiện có: ${availBal.toLocaleString('vi-VN')}đ, cần: ${amt.toLocaleString('vi-VN')}đ`,
+        400,
+        'INSUFFICIENT_BALANCE'
       );
-      err.statusCode = 400;
-      throw err;
     }
 
     // Move available_balance → locked_balance (balance total unchanged)

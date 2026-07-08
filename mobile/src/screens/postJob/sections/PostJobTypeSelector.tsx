@@ -40,7 +40,7 @@ export const PostJobTypeSelector: React.FC<PostJobTypeSelectorProps> = ({
           style={[
             styles.postTypeTabText,
             { color: theme.colors.text.secondary },
-            postType === 'RECRUITMENT' && styles.postTypeTabTextActive,
+            postType === 'RECRUITMENT' && [styles.postTypeTabTextActive, { color: theme.colors.text.inverse }],
           ]}
         >
           Đăng tuyển dụng
@@ -60,7 +60,7 @@ export const PostJobTypeSelector: React.FC<PostJobTypeSelectorProps> = ({
           style={[
             styles.postTypeTabText,
             { color: theme.colors.text.secondary },
-            postType === 'SERVICE_OFFER' && styles.postTypeTabTextActive,
+            postType === 'SERVICE_OFFER' && [styles.postTypeTabTextActive, { color: theme.colors.text.inverse }],
           ]}
         >
           Đăng bài Thuê tôi
@@ -89,7 +89,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   postTypeTabTextActive: {
-    color: '#FFFFFF',
     fontWeight: '800',
   },
 });

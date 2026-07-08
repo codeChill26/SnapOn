@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { useState, useEffect, useMemo, useCallback, useReducer } from 'react';
+import { Alert, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -13,6 +13,8 @@ import { Task } from '../../../types';
 import { showToast } from '../../../utils/toast';
 import { getRawPrice } from '../utils/postJobUtils';
 
+import { PostJobScreenNavigationProp } from '../PostJobScreen';
+
 export type SelectedImage = {
   uri: string;
   base64?: string;
@@ -21,120 +23,245 @@ export type SelectedImage = {
 interface UsePostJobProps {
   editingTaskId?: string;
   initialPostType: 'RECRUITMENT' | 'SERVICE_OFFER';
-  navigation: any;
+  navigation: PostJobScreenNavigationProp;
 }
 
+// 1. Reducer for the Form Fields State
+interface PostJobFormState {
+  postType: 'RECRUITMENT' | 'SERVICE_OFFER';
+  title: string;
+  description: string;
+  fieldId: string | undefined;
+  fieldName: string | undefined;
+  subcategoryId: string | undefined;
+  subcategoryName: string | undefined;
+  apiCategoryId: string | undefined;
+  budgetMinInput: string;
+  budgetMaxInput: string;
+  activePricePreset: number | null;
+  salaryUnit: 'PER_JOB' | 'PER_HOUR' | 'PER_DAY' | 'PER_MONTH';
+  workMode: 'ONSITE' | 'REMOTE' | 'NEGOTIABLE';
+  employmentType: 'ONE_TIME' | 'PART_TIME' | 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'SHIFT' | 'INTERNSHIP' | 'NEGOTIABLE';
+  address: string;
+  peopleNeeded: number;
+  contactPhone: string;
+  startDate: Date;
+  experienceLevel: string;
+  educationLevel: string;
+  genderRequirement: string;
+  minAge: number | null;
+  maxAge: number | null;
+  minHeightCm: number | null;
+  maxHeightCm: number | null;
+  hashtagInput: string;
+  hashtags: string[];
+  selectedImages: SelectedImage[];
+  selectedDeadlinePreset: number | null;
+}
+
+type PostJobFormAction =
+  | { type: 'SET_FIELD'; field: keyof PostJobFormState; value: any }
+  | { type: 'SET_FIELDS'; payload: Partial<PostJobFormState> }
+  | { type: 'RESET_FORM'; initialPhone?: string };
+
+const createInitialFormState = (initialPostType: 'RECRUITMENT' | 'SERVICE_OFFER', initialPhone?: string): PostJobFormState => ({
+  postType: initialPostType,
+  title: '',
+  description: '',
+  fieldId: undefined,
+  fieldName: undefined,
+  subcategoryId: undefined,
+  subcategoryName: undefined,
+  apiCategoryId: undefined,
+  budgetMinInput: '',
+  budgetMaxInput: '',
+  activePricePreset: null,
+  salaryUnit: 'PER_JOB',
+  workMode: 'ONSITE',
+  employmentType: 'ONE_TIME',
+  address: '',
+  peopleNeeded: 1,
+  contactPhone: initialPhone || '',
+  startDate: new Date(),
+  experienceLevel: 'NO_REQUIREMENT',
+  educationLevel: 'NO_REQUIREMENT',
+  genderRequirement: 'NO_REQUIREMENT',
+  minAge: null,
+  maxAge: null,
+  minHeightCm: null,
+  maxHeightCm: null,
+  hashtagInput: '',
+  hashtags: [],
+  selectedImages: [],
+  selectedDeadlinePreset: null,
+});
+
+const postJobFormReducer = (state: PostJobFormState, action: PostJobFormAction): PostJobFormState => {
+  switch (action.type) {
+    case 'SET_FIELD':
+      return { ...state, [action.field]: action.value };
+    case 'SET_FIELDS':
+      return { ...state, ...action.payload };
+    case 'RESET_FORM':
+      return createInitialFormState(state.postType, action.initialPhone);
+    default:
+      return state;
+  }
+};
+
+// 2. Reducer for the Modals Visibility State
+interface ModalsState {
+  categoryModalVisible: boolean;
+  workModeModalVisible: boolean;
+  employmentModalVisible: boolean;
+  experienceModalVisible: boolean;
+  educationModalVisible: boolean;
+  genderModalVisible: boolean;
+  ageModalVisible: boolean;
+  heightModalVisible: boolean;
+  datePickerVisible: boolean;
+}
+
+type ModalsAction =
+  | { type: 'SET_MODAL_VISIBLE'; modal: keyof ModalsState; visible: boolean }
+  | { type: 'CLOSE_ALL' };
+
+const modalsReducer = (state: ModalsState, action: ModalsAction): ModalsState => {
+  switch (action.type) {
+    case 'SET_MODAL_VISIBLE':
+      return { ...state, [action.modal]: action.visible };
+    case 'CLOSE_ALL':
+      return {
+        categoryModalVisible: false,
+        workModeModalVisible: false,
+        employmentModalVisible: false,
+        experienceModalVisible: false,
+        educationModalVisible: false,
+        genderModalVisible: false,
+        ageModalVisible: false,
+        heightModalVisible: false,
+        datePickerVisible: false,
+      };
+    default:
+      return state;
+  }
+};
+
 export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePostJobProps) => {
-  const { addTask, updateTask } = useApp();
   const { user } = useAuth();
   const isEditMode = Boolean(editingTaskId);
 
   const [loading, setLoading] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-
-  // Form Fields
-  const [postType, setPostType] = useState<'RECRUITMENT' | 'SERVICE_OFFER'>(initialPostType);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [fieldId, setFieldId] = useState<string | undefined>();
-  const [fieldName, setFieldName] = useState<string | undefined>();
-  const [subcategoryId, setSubcategoryId] = useState<string | undefined>();
-  const [subcategoryName, setSubcategoryName] = useState<string | undefined>();
-  const [apiCategoryId, setApiCategoryId] = useState<string | undefined>();
-  
-  const [budgetMinInput, setBudgetMinInput] = useState('');
-  const [budgetMaxInput, setBudgetMaxInput] = useState('');
-  const [activePricePreset, setActivePricePreset] = useState<number | null>(null);
-  const [salaryUnit, setSalaryUnit] = useState<'PER_JOB' | 'PER_HOUR' | 'PER_DAY' | 'PER_MONTH'>('PER_JOB');
-  const [workMode, setWorkMode] = useState<'ONSITE' | 'REMOTE' | 'NEGOTIABLE'>('ONSITE');
-  const [employmentType, setEmploymentType] = useState<'ONE_TIME' | 'PART_TIME' | 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'SHIFT' | 'INTERNSHIP' | 'NEGOTIABLE'>('ONE_TIME');
-  const [address, setAddress] = useState('');
-  const [peopleNeeded, setPeopleNeeded] = useState(1);
-  const [contactPhone, setContactPhone] = useState(user?.phone || '');
-  const [startDate, setStartDate] = useState<Date>(new Date());
-  
-  const [experienceLevel, setExperienceLevel] = useState('NO_REQUIREMENT');
-  const [educationLevel, setEducationLevel] = useState('NO_REQUIREMENT');
-  const [genderRequirement, setGenderRequirement] = useState('NO_REQUIREMENT');
-  
-  const [minAge, setMinAge] = useState<number | null>(null);
-  const [maxAge, setMaxAge] = useState<number | null>(null);
-  const [minHeightCm, setMinHeightCm] = useState<number | null>(null);
-  const [maxHeightCm, setMaxHeightCm] = useState<number | null>(null);
-
-  const [hashtagInput, setHashtagInput] = useState('');
-  const [hashtags, setHashtags] = useState<string[]>([]);
-  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [categoriesList, setCategoriesList] = useState<JobField[]>([]);
-  const [selectedDeadlinePreset, setSelectedDeadlinePreset] = useState<number | null>(null);
 
-  // Modal Visibility States
-  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
-  const [workModeModalVisible, setWorkModeModalVisible] = useState(false);
-  const [employmentModalVisible, setEmploymentModalVisible] = useState(false);
-  const [experienceModalVisible, setExperienceModalVisible] = useState(false);
-  const [educationModalVisible, setEducationModalVisible] = useState(false);
-  const [genderModalVisible, setGenderModalVisible] = useState(false);
-  const [ageModalVisible, setAgeModalVisible] = useState(false);
-  const [heightModalVisible, setHeightModalVisible] = useState(false);
-  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  // Reducer states
+  const [formState, dispatch] = useReducer(
+    postJobFormReducer,
+    createInitialFormState(initialPostType, user?.phone)
+  );
 
-  // Inline validation logic
+  const [modalsState, dispatchModals] = useReducer(modalsReducer, {
+    categoryModalVisible: false,
+    workModeModalVisible: false,
+    employmentModalVisible: false,
+    experienceModalVisible: false,
+    educationModalVisible: false,
+    genderModalVisible: false,
+    ageModalVisible: false,
+    heightModalVisible: false,
+    datePickerVisible: false,
+  });
+
+  const setField = useCallback((field: keyof PostJobFormState, value: any) => {
+    dispatch({ type: 'SET_FIELD', field, value });
+  }, []);
+
+  const setModalVisible = useCallback((modal: keyof ModalsState, visible: boolean) => {
+    dispatchModals({ type: 'SET_MODAL_VISIBLE', modal, visible });
+  }, []);
+
+  // Validation logic (derived from reducer state)
   const validationErrors = useMemo(() => {
     const errors: Record<string, string> = {};
 
-    if (title.trim() && title.length < 5) {
+    if (formState.title.trim() && formState.title.length < 5) {
       errors.title = 'Tiêu đề bài đăng phải có ít nhất 5 ký tự.';
     }
-    if (description.trim() && description.length < 10) {
+    if (formState.description.trim() && formState.description.length < 10) {
       errors.description = 'Mô tả công việc phải có ít nhất 10 ký tự.';
     }
-    const rawMin = getRawPrice(budgetMinInput);
-    const rawMax = getRawPrice(budgetMaxInput);
-    if (budgetMinInput && rawMin <= 0) {
+    const rawMin = getRawPrice(formState.budgetMinInput);
+    const rawMax = getRawPrice(formState.budgetMaxInput);
+    if (formState.budgetMinInput && rawMin <= 0) {
       errors.budget = 'Giá tối thiểu phải lớn hơn 0đ.';
-    } else if (budgetMaxInput && rawMax <= 0) {
+    } else if (formState.budgetMaxInput && rawMax <= 0) {
       errors.budget = 'Giá tối đa phải lớn hơn 0đ.';
-    } else if (budgetMinInput && budgetMaxInput && rawMin > rawMax) {
+    } else if (formState.budgetMinInput && formState.budgetMaxInput && rawMin > rawMax) {
       errors.budget = 'Giá tối thiểu không được lớn hơn giá tối đa.';
     }
-    if (workMode === 'ONSITE' && !address.trim()) {
+    if (formState.workMode === 'ONSITE' && !formState.address.trim()) {
       errors.address = 'Địa chỉ là bắt buộc khi làm việc tại chỗ.';
     }
-    if (!contactPhone.trim()) {
+    if (!formState.contactPhone.trim()) {
       errors.contactPhone = 'Số điện thoại liên hệ là bắt buộc.';
     }
-    if (postType === 'RECRUITMENT') {
-      if (peopleNeeded < 1) {
+    if (formState.postType === 'RECRUITMENT') {
+      if (formState.peopleNeeded < 1) {
         errors.peopleNeeded = 'Cần tuyển ít nhất 1 người.';
       }
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      if (startDate && startDate.getTime() < today.getTime()) {
+      if (formState.startDate && formState.startDate.getTime() < today.getTime()) {
         errors.startDate = 'Ngày bắt đầu không được ở quá khứ.';
       }
     }
 
     return errors;
-  }, [title, description, budgetMinInput, budgetMaxInput, workMode, address, postType, peopleNeeded, startDate, contactPhone]);
+  }, [
+    formState.title,
+    formState.description,
+    formState.budgetMinInput,
+    formState.budgetMaxInput,
+    formState.workMode,
+    formState.address,
+    formState.postType,
+    formState.peopleNeeded,
+    formState.startDate,
+    formState.contactPhone,
+  ]);
 
   const isFormValid = useMemo(() => {
-    if (!title.trim() || title.length < 5) return false;
-    if (!description.trim() || description.length < 10) return false;
-    if (!fieldId || !subcategoryId) return false;
-    const rawMin = getRawPrice(budgetMinInput);
-    const rawMax = getRawPrice(budgetMaxInput);
+    if (!formState.title.trim() || formState.title.length < 5) return false;
+    if (!formState.description.trim() || formState.description.length < 10) return false;
+    if (!formState.fieldId || !formState.subcategoryId) return false;
+    const rawMin = getRawPrice(formState.budgetMinInput);
+    const rawMax = getRawPrice(formState.budgetMaxInput);
     if (rawMin <= 0 || rawMax <= 0 || rawMin > rawMax) return false;
-    if (workMode === 'ONSITE' && !address.trim()) return false;
-    if (!contactPhone.trim()) return false;
-    if (postType === 'RECRUITMENT') {
-      if (peopleNeeded < 1) return false;
+    if (formState.workMode === 'ONSITE' && !formState.address.trim()) return false;
+    if (!formState.contactPhone.trim()) return false;
+    if (formState.postType === 'RECRUITMENT') {
+      if (formState.peopleNeeded < 1) return false;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      if (startDate && startDate.getTime() < today.getTime()) return false;
+      if (formState.startDate && formState.startDate.getTime() < today.getTime()) return false;
     }
     return Object.keys(validationErrors).length === 0;
-  }, [title, description, fieldId, subcategoryId, budgetMinInput, budgetMaxInput, workMode, address, postType, peopleNeeded, contactPhone, startDate, validationErrors]);
+  }, [
+    formState.title,
+    formState.description,
+    formState.fieldId,
+    formState.subcategoryId,
+    formState.budgetMinInput,
+    formState.budgetMaxInput,
+    formState.workMode,
+    formState.address,
+    formState.postType,
+    formState.peopleNeeded,
+    formState.contactPhone,
+    formState.startDate,
+    validationErrors,
+  ]);
 
   // Load draft on mount / when postType changes
   useEffect(() => {
@@ -142,108 +269,85 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
 
     const loadDraft = async () => {
       try {
-        const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+        const key = formState.postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
         const draftStr = await AsyncStorage.getItem(key);
         if (draftStr) {
           const draft = JSON.parse(draftStr);
-          setTitle(draft.title || '');
-          setDescription(draft.description || '');
-          setFieldId(draft.fieldId || undefined);
-          setFieldName(draft.fieldName || undefined);
-          setSubcategoryId(draft.subcategoryId || undefined);
-          setSubcategoryName(draft.subcategoryName || undefined);
-          setBudgetMinInput(draft.budgetMinInput || '');
-          setBudgetMaxInput(draft.budgetMaxInput || '');
-          setSalaryUnit(draft.salaryUnit || 'PER_JOB');
-          setWorkMode(draft.workMode || 'ONSITE');
-          setEmploymentType(draft.employmentType || 'ONE_TIME');
-          setAddress(draft.address || '');
-          setPeopleNeeded(draft.peopleNeeded || 1);
-          setContactPhone(draft.contactPhone || user?.phone || '');
-          setExperienceLevel(draft.experienceLevel || 'NO_REQUIREMENT');
-          setEducationLevel(draft.educationLevel || 'NO_REQUIREMENT');
-          setGenderRequirement(draft.genderRequirement || 'NO_REQUIREMENT');
-          setMinAge(draft.minAge ?? null);
-          setMaxAge(draft.maxAge ?? null);
-          setMinHeightCm(draft.minHeightCm ?? null);
-          setMaxHeightCm(draft.maxHeightCm ?? null);
-          setHashtags(draft.hashtags || []);
-          if (draft.startDate) {
-            setStartDate(new Date(draft.startDate));
-          }
+          dispatch({
+            type: 'SET_FIELDS',
+            payload: {
+              title: draft.title || '',
+              description: draft.description || '',
+              fieldId: draft.fieldId || undefined,
+              fieldName: draft.fieldName || undefined,
+              subcategoryId: draft.subcategoryId || undefined,
+              subcategoryName: draft.subcategoryName || undefined,
+              budgetMinInput: draft.budgetMinInput || '',
+              budgetMaxInput: draft.budgetMaxInput || '',
+              salaryUnit: draft.salaryUnit || 'PER_JOB',
+              workMode: draft.workMode || 'ONSITE',
+              employmentType: draft.employmentType || 'ONE_TIME',
+              address: draft.address || '',
+              peopleNeeded: draft.peopleNeeded || 1,
+              contactPhone: draft.contactPhone || user?.phone || '',
+              experienceLevel: draft.experienceLevel || 'NO_REQUIREMENT',
+              educationLevel: draft.educationLevel || 'NO_REQUIREMENT',
+              genderRequirement: draft.genderRequirement || 'NO_REQUIREMENT',
+              minAge: draft.minAge ?? null,
+              maxAge: draft.maxAge ?? null,
+              minHeightCm: draft.minHeightCm ?? null,
+              maxHeightCm: draft.maxHeightCm ?? null,
+              hashtags: draft.hashtags || [],
+              startDate: draft.startDate ? new Date(draft.startDate) : new Date(),
+            },
+          });
         }
       } catch (e) {
         console.warn('Failed to load draft:', e);
       }
     };
     void loadDraft();
-  }, [postType, isEditMode, user]);
+  }, [formState.postType, isEditMode, user]);
 
   // Save draft periodically
   useEffect(() => {
     if (isEditMode) return;
 
     const draft = {
-      title,
-      description,
-      fieldId,
-      fieldName,
-      subcategoryId,
-      subcategoryName,
-      budgetMinInput,
-      budgetMaxInput,
-      salaryUnit,
-      workMode,
-      employmentType,
-      address,
-      peopleNeeded,
-      contactPhone,
-      startDate: startDate.toISOString(),
-      experienceLevel,
-      educationLevel,
-      genderRequirement,
-      minAge,
-      maxAge,
-      minHeightCm,
-      maxHeightCm,
-      hashtags,
+      title: formState.title,
+      description: formState.description,
+      fieldId: formState.fieldId,
+      fieldName: formState.fieldName,
+      subcategoryId: formState.subcategoryId,
+      subcategoryName: formState.subcategoryName,
+      budgetMinInput: formState.budgetMinInput,
+      budgetMaxInput: formState.budgetMaxInput,
+      salaryUnit: formState.salaryUnit,
+      workMode: formState.workMode,
+      employmentType: formState.employmentType,
+      address: formState.address,
+      peopleNeeded: formState.peopleNeeded,
+      contactPhone: formState.contactPhone,
+      startDate: formState.startDate.toISOString(),
+      experienceLevel: formState.experienceLevel,
+      educationLevel: formState.educationLevel,
+      genderRequirement: formState.genderRequirement,
+      minAge: formState.minAge,
+      maxAge: formState.maxAge,
+      minHeightCm: formState.minHeightCm,
+      maxHeightCm: formState.maxHeightCm,
+      hashtags: formState.hashtags,
     };
 
     const timer = setTimeout(() => {
-      const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+      const key = formState.postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
       AsyncStorage.setItem(key, JSON.stringify(draft)).catch((e) => {
         console.warn('Failed to save draft:', e);
       });
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [
-    title,
-    description,
-    fieldId,
-    fieldName,
-    subcategoryId,
-    subcategoryName,
-    budgetMinInput,
-    budgetMaxInput,
-    salaryUnit,
-    workMode,
-    employmentType,
-    address,
-    peopleNeeded,
-    contactPhone,
-    startDate,
-    experienceLevel,
-    educationLevel,
-    genderRequirement,
-    minAge,
-    maxAge,
-    minHeightCm,
-    maxHeightCm,
-    hashtags,
-    postType,
-    isEditMode,
-  ]);
+  }, [formState, isEditMode]);
 
   const handleDiscardDraft = async () => {
     Alert.alert(
@@ -256,32 +360,9 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
           style: 'destructive',
           onPress: async () => {
             try {
-              const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+              const key = formState.postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
               await AsyncStorage.removeItem(key);
-              
-              // Reset form states
-              setTitle('');
-              setDescription('');
-              setFieldId(undefined);
-              setFieldName(undefined);
-              setSubcategoryId(undefined);
-              setSubcategoryName(undefined);
-              setBudgetMinInput('');
-              setBudgetMaxInput('');
-              setActivePricePreset(null);
-              setAddress('');
-              setPeopleNeeded(1);
-              setHashtags([]);
-              setSelectedImages([]);
-              setExperienceLevel('NO_REQUIREMENT');
-              setEducationLevel('NO_REQUIREMENT');
-              setGenderRequirement('NO_REQUIREMENT');
-              setMinAge(null);
-              setMaxAge(null);
-              setMinHeightCm(null);
-              setMaxHeightCm(null);
-              setSelectedDeadlinePreset(null);
-              setStartDate(new Date());
+              dispatch({ type: 'RESET_FORM', initialPhone: user?.phone });
               showToast.success('Thành công', 'Đã hủy bản nháp.');
             } catch (e) {
               showToast.error('Lỗi', 'Không thể hủy bản nháp.');
@@ -323,33 +404,38 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
         if (!active) return;
 
         setEditingTask(taskData);
-        setPostType((taskData.postType || 'RECRUITMENT') as 'RECRUITMENT' | 'SERVICE_OFFER');
-        setTitle(taskData.title || '');
-        setDescription(taskData.description || '');
-        setFieldId(taskData.categoryId);
-        setFieldName(taskData.field?.name || taskData.categoryName);
-        setSubcategoryId(taskData.subcategory?.id || taskData.skills?.[0]?.id);
-        setSubcategoryName(taskData.subcategory?.name || taskData.skills?.[0]?.name);
-        setBudgetMinInput(String(taskData.budgetMin || 0));
-        setBudgetMaxInput(String(taskData.budgetMax || taskData.budgetMin || 0));
-        setActivePricePreset(null);
-        setSalaryUnit((taskData.salaryUnit || 'PER_JOB') as any);
-        setWorkMode((taskData.workMode || 'ONSITE') as any);
-        setEmploymentType((taskData.employmentType || 'ONE_TIME') as any);
-        setAddress(taskData.locations?.[0]?.address || '');
-        setPeopleNeeded(taskData.peopleNeeded || 1);
-        setContactPhone(taskData.contactPhone || user?.phone || '');
-        setStartDate(taskData.startDate ? new Date(taskData.startDate) : new Date());
-        setExperienceLevel(taskData.experienceLevel || 'NO_REQUIREMENT');
-        setEducationLevel(taskData.educationLevel || 'NO_REQUIREMENT');
-        setGenderRequirement(taskData.genderRequirement || 'NO_REQUIREMENT');
-        setMinAge(taskData.minAge ?? null);
-        setMaxAge(taskData.maxAge ?? null);
-        setMinHeightCm(taskData.minHeightCm ?? null);
-        setMaxHeightCm(taskData.maxHeightCm ?? null);
-        setHashtags(taskData.hashtags || []);
-        setSelectedImages((taskData.images || []).map((uri) => ({ uri })));
-        setSelectedDeadlinePreset(null);
+        dispatch({
+          type: 'SET_FIELDS',
+          payload: {
+            postType: (taskData.postType || 'RECRUITMENT') as 'RECRUITMENT' | 'SERVICE_OFFER',
+            title: taskData.title || '',
+            description: taskData.description || '',
+            fieldId: taskData.categoryId,
+            fieldName: taskData.field?.name || taskData.categoryName,
+            subcategoryId: taskData.subcategory?.id || taskData.skills?.[0]?.id,
+            subcategoryName: taskData.subcategory?.name || taskData.skills?.[0]?.name,
+            budgetMinInput: String(taskData.budgetMin || 0),
+            budgetMaxInput: String(taskData.budgetMax || taskData.budgetMin || 0),
+            activePricePreset: null,
+            salaryUnit: (taskData.salaryUnit || 'PER_JOB') as any,
+            workMode: (taskData.workMode || 'ONSITE') as any,
+            employmentType: (taskData.employmentType || 'ONE_TIME') as any,
+            address: taskData.locations?.[0]?.address || '',
+            peopleNeeded: taskData.peopleNeeded || 1,
+            contactPhone: taskData.contactPhone || user?.phone || '',
+            startDate: taskData.startDate ? new Date(taskData.startDate) : new Date(),
+            experienceLevel: taskData.experienceLevel || 'NO_REQUIREMENT',
+            educationLevel: taskData.educationLevel || 'NO_REQUIREMENT',
+            genderRequirement: taskData.genderRequirement || 'NO_REQUIREMENT',
+            minAge: taskData.minAge ?? null,
+            maxAge: taskData.maxAge ?? null,
+            minHeightCm: taskData.minHeightCm ?? null,
+            maxHeightCm: taskData.maxHeightCm ?? null,
+            hashtags: taskData.hashtags || [],
+            selectedImages: (taskData.images || []).map((uri) => ({ uri })),
+            selectedDeadlinePreset: null,
+          },
+        });
       } catch (error) {
         console.error('Load task for edit error:', error);
         showToast.error('Không tải được bài viết', 'Vui lòng thử lại sau ít phút.');
@@ -366,13 +452,18 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
     };
   }, [editingTaskId, navigation, user]);
 
-  const handlePostTypeChange = (type: 'RECRUITMENT' | 'SERVICE_OFFER') => {
-    if (type === postType) return;
-    setPostType(type);
-  };
+  const handlePostTypeChange = useCallback((type: 'RECRUITMENT' | 'SERVICE_OFFER') => {
+    if (type === formState.postType) return;
+    setField('postType', type);
+  }, [formState.postType, setField]);
 
-  const increasePeople = () => setPeopleNeeded((prev) => prev + 1);
-  const decreasePeople = () => setPeopleNeeded((prev) => Math.max(1, prev - 1));
+  const increasePeople = useCallback(() => {
+    setField('peopleNeeded', formState.peopleNeeded + 1);
+  }, [formState.peopleNeeded, setField]);
+
+  const decreasePeople = useCallback(() => {
+    setField('peopleNeeded', Math.max(1, formState.peopleNeeded - 1));
+  }, [formState.peopleNeeded, setField]);
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -386,7 +477,7 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
         quality: 1.0,
-        selectionLimit: 5 - selectedImages.length,
+        selectionLimit: 5 - formState.selectedImages.length,
       });
 
       if (!result.canceled) {
@@ -420,7 +511,7 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
             })
           );
 
-          setSelectedImages((prev) => [...prev, ...compressedImages].slice(0, 5));
+          setField('selectedImages', [...formState.selectedImages, ...compressedImages].slice(0, 5));
         } catch (manipulateError) {
           console.error('Compress image error:', manipulateError);
           showToast.error('Lỗi', 'Có lỗi khi tối ưu hình ảnh.');
@@ -434,79 +525,84 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
     }
   };
 
-  const removeImage = (index: number) => {
-    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
-  };
+  const removeImage = useCallback((index: number) => {
+    setField('selectedImages', formState.selectedImages.filter((_, i) => i !== index));
+  }, [formState.selectedImages, setField]);
 
-  const addHashtag = () => {
-    const cleaned = hashtagInput.replace(/^#+/, '').trim().toLowerCase();
-    if (cleaned && !hashtags.includes(cleaned)) {
-      setHashtags((prev) => [...prev, cleaned]);
-      setHashtagInput('');
+  const addHashtag = useCallback(() => {
+    const cleaned = formState.hashtagInput.replace(/^#+/, '').trim().toLowerCase();
+    if (cleaned && !formState.hashtags.includes(cleaned)) {
+      dispatch({
+        type: 'SET_FIELDS',
+        payload: {
+          hashtags: [...formState.hashtags, cleaned],
+          hashtagInput: '',
+        },
+      });
     }
-  };
+  }, [formState.hashtagInput, formState.hashtags]);
 
-  const removeHashtag = (tag: string) => {
-    setHashtags((prev) => prev.filter((t) => t !== tag));
-  };
+  const removeHashtag = useCallback((tag: string) => {
+    setField('hashtags', formState.hashtags.filter((t) => t !== tag));
+  }, [formState.hashtags, setField]);
 
   const handleSubmit = async () => {
     if (!isFormValid) return;
 
     setLoading(true);
     try {
-      const existingImageUrls = selectedImages
+      const existingImageUrls = formState.selectedImages
         .filter((img) => !img.base64)
         .map((img) => img.uri);
       let uploadedImageUrls: string[] = [];
-      const base64s = selectedImages.map((img) => img.base64).filter((b): b is string => !!b);
+      const base64s = formState.selectedImages.map((img) => img.base64).filter((b): b is string => !!b);
       if (base64s.length > 0) {
         uploadedImageUrls = await taskService.uploadTaskImages(base64s);
       }
       const imageUrls = [...existingImageUrls, ...uploadedImageUrls];
 
-      const budgetMin = getRawPrice(budgetMinInput);
-      const budgetMax = getRawPrice(budgetMaxInput);
+      const budgetMin = getRawPrice(formState.budgetMinInput);
+      const budgetMax = getRawPrice(formState.budgetMaxInput);
 
       let applicationDeadline: string | null = isEditMode
         ? editingTask?.applicationDeadline || null
         : null;
-      if (postType === 'RECRUITMENT' && selectedDeadlinePreset !== null) {
-        applicationDeadline = new Date(Date.now() + selectedDeadlinePreset * 86400000).toISOString();
+      if (formState.postType === 'RECRUITMENT' && formState.selectedDeadlinePreset !== null) {
+        applicationDeadline = new Date(Date.now() + formState.selectedDeadlinePreset * 86400000).toISOString();
       }
 
       const payload = {
-        title,
-        description,
-        category_id: fieldId!,
+        title: formState.title,
+        description: formState.description,
+        category_id: formState.fieldId!,
         task_type: 'ONLINE',
         budget_min: budgetMin,
         budget_max: budgetMax,
         deadline_start: new Date().toISOString(),
         deadline_end: new Date(Date.now() + 30 * 86400000).toISOString(),
         application_deadline: applicationDeadline,
-        skill_ids: [subcategoryId!],
+        skill_ids: [formState.subcategoryId!],
         images: imageUrls,
-        post_type: postType,
-        work_mode: workMode,
-        salary_unit: salaryUnit,
-        employment_type: employmentType,
-        people_needed: postType === 'RECRUITMENT' ? peopleNeeded : null,
-        contact_phone: contactPhone.trim() || null,
-        start_date: postType === 'RECRUITMENT' ? startDate.toISOString() : null,
-        experience_level: experienceLevel,
-        education_level: educationLevel,
-        gender_requirement: postType === 'RECRUITMENT' ? genderRequirement : 'NO_REQUIREMENT',
-        min_age: postType === 'RECRUITMENT' ? minAge : null,
-        max_age: postType === 'RECRUITMENT' ? maxAge : null,
-        min_height_cm: postType === 'RECRUITMENT' ? minHeightCm : null,
-        max_height_cm: postType === 'RECRUITMENT' ? maxHeightCm : null,
-        hashtags: hashtags,
+        post_type: formState.postType,
+        work_mode: formState.workMode,
+        salary_unit: formState.salaryUnit,
+        employment_type: formState.employmentType,
+        people_needed: formState.postType === 'RECRUITMENT' ? formState.peopleNeeded : null,
+        contact_phone: formState.contactPhone.trim() || null,
+        start_date: formState.postType === 'RECRUITMENT' ? formState.startDate.toISOString() : null,
+        experience_level: formState.experienceLevel,
+        education_level: formState.educationLevel,
+        gender_requirement: formState.postType === 'RECRUITMENT' ? formState.genderRequirement : 'NO_REQUIREMENT',
+        min_age: formState.postType === 'RECRUITMENT' ? formState.minAge : null,
+        max_age: formState.postType === 'RECRUITMENT' ? formState.maxAge : null,
+        min_height_cm: formState.postType === 'RECRUITMENT' ? formState.minHeightCm : null,
+        max_height_cm: formState.postType === 'RECRUITMENT' ? formState.maxHeightCm : null,
+        hashtags: formState.hashtags,
         location:
-          workMode !== 'REMOTE' && address.trim()
+          formState.workMode !== 'REMOTE' && formState.address.trim()
             ? {
                 location_type: 'TASK_LOCATION',
-                address: address.trim(),
+                address: formState.address.trim(),
                 latitude: 10.7769,
                 longitude: 106.7009,
               }
@@ -519,14 +615,14 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
           : await taskService.createTask(payload);
 
       // Clear draft on successful submit
-      const key = postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
+      const key = formState.postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
       await AsyncStorage.removeItem(key);
 
       if (isEditMode) {
-        updateTask(savedTask.id, savedTask);
+        DeviceEventEmitter.emit('task_updated', savedTask);
         navigation.setParams({ taskId: undefined });
       } else {
-        addTask(savedTask);
+        DeviceEventEmitter.emit('task_created', savedTask);
       }
 
       showToast.success('Thành công', isEditMode ? 'Bài đăng đã cập nhật!' : 'Đã đăng bài thành công!');
@@ -542,36 +638,36 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
 
   return {
     state: {
-      postType,
-      title,
-      description,
-      fieldId,
-      fieldName,
-      subcategoryId,
-      subcategoryName,
-      apiCategoryId,
-      budgetMinInput,
-      budgetMaxInput,
-      activePricePreset,
-      salaryUnit,
-      workMode,
-      employmentType,
-      address,
-      peopleNeeded,
-      contactPhone,
-      startDate,
-      experienceLevel,
-      educationLevel,
-      genderRequirement,
-      minAge,
-      maxAge,
-      minHeightCm,
-      maxHeightCm,
-      hashtagInput,
-      hashtags,
-      selectedImages,
+      postType: formState.postType,
+      title: formState.title,
+      description: formState.description,
+      fieldId: formState.fieldId,
+      fieldName: formState.fieldName,
+      subcategoryId: formState.subcategoryId,
+      subcategoryName: formState.subcategoryName,
+      apiCategoryId: formState.apiCategoryId,
+      budgetMinInput: formState.budgetMinInput,
+      budgetMaxInput: formState.budgetMaxInput,
+      activePricePreset: formState.activePricePreset,
+      salaryUnit: formState.salaryUnit,
+      workMode: formState.workMode,
+      employmentType: formState.employmentType,
+      address: formState.address,
+      peopleNeeded: formState.peopleNeeded,
+      contactPhone: formState.contactPhone,
+      startDate: formState.startDate,
+      experienceLevel: formState.experienceLevel,
+      educationLevel: formState.educationLevel,
+      genderRequirement: formState.genderRequirement,
+      minAge: formState.minAge,
+      maxAge: formState.maxAge,
+      minHeightCm: formState.minHeightCm,
+      maxHeightCm: formState.maxHeightCm,
+      hashtagInput: formState.hashtagInput,
+      hashtags: formState.hashtags,
+      selectedImages: formState.selectedImages,
       categoriesList,
-      selectedDeadlinePreset,
+      selectedDeadlinePreset: formState.selectedDeadlinePreset,
       isEditMode,
       loading,
       editingTask,
@@ -579,35 +675,35 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
       isFormValid,
     },
     actions: {
-      setPostType,
-      setTitle,
-      setDescription,
-      setFieldId,
-      setFieldName,
-      setSubcategoryId,
-      setSubcategoryName,
-      setApiCategoryId,
-      setBudgetMinInput,
-      setBudgetMaxInput,
-      setActivePricePreset,
-      setSalaryUnit,
-      setWorkMode,
-      setEmploymentType,
-      setAddress,
-      setPeopleNeeded,
-      setContactPhone,
-      setStartDate,
-      setExperienceLevel,
-      setEducationLevel,
-      setGenderRequirement,
-      setMinAge,
-      setMaxAge,
-      setMinHeightCm,
-      setMaxHeightCm,
-      setHashtagInput,
-      setHashtags,
-      setSelectedImages,
-      setSelectedDeadlinePreset,
+      setPostType: (val: any) => setField('postType', val),
+      setTitle: (val: any) => setField('title', val),
+      setDescription: (val: any) => setField('description', val),
+      setFieldId: (val: any) => setField('fieldId', val),
+      setFieldName: (val: any) => setField('fieldName', val),
+      setSubcategoryId: (val: any) => setField('subcategoryId', val),
+      setSubcategoryName: (val: any) => setField('subcategoryName', val),
+      setApiCategoryId: (val: any) => setField('apiCategoryId', val),
+      setBudgetMinInput: (val: any) => setField('budgetMinInput', val),
+      setBudgetMaxInput: (val: any) => setField('budgetMaxInput', val),
+      setActivePricePreset: (val: any) => setField('activePricePreset', val),
+      setSalaryUnit: (val: any) => setField('salaryUnit', val),
+      setWorkMode: (val: any) => setField('workMode', val),
+      setEmploymentType: (val: any) => setField('employmentType', val),
+      setAddress: (val: any) => setField('address', val),
+      setPeopleNeeded: (val: any) => setField('peopleNeeded', val),
+      setContactPhone: (val: any) => setField('contactPhone', val),
+      setStartDate: (val: any) => setField('startDate', val),
+      setExperienceLevel: (val: any) => setField('experienceLevel', val),
+      setEducationLevel: (val: any) => setField('educationLevel', val),
+      setGenderRequirement: (val: any) => setField('genderRequirement', val),
+      setMinAge: (val: any) => setField('minAge', val),
+      setMaxAge: (val: any) => setField('maxAge', val),
+      setMinHeightCm: (val: any) => setField('minHeightCm', val),
+      setMaxHeightCm: (val: any) => setField('maxHeightCm', val),
+      setHashtagInput: (val: any) => setField('hashtagInput', val),
+      setHashtags: (val: any) => setField('hashtags', val),
+      setSelectedImages: (val: any) => setField('selectedImages', val),
+      setSelectedDeadlinePreset: (val: any) => setField('selectedDeadlinePreset', val),
       handlePostTypeChange,
       increasePeople,
       decreasePeople,
@@ -619,24 +715,24 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
       handleDiscardDraft,
     },
     modals: {
-      categoryModalVisible,
-      setCategoryModalVisible,
-      workModeModalVisible,
-      setWorkModeModalVisible,
-      employmentModalVisible,
-      setEmploymentModalVisible,
-      experienceModalVisible,
-      setExperienceModalVisible,
-      educationModalVisible,
-      setEducationModalVisible,
-      genderModalVisible,
-      setGenderModalVisible,
-      ageModalVisible,
-      setAgeModalVisible,
-      heightModalVisible,
-      setHeightModalVisible,
-      datePickerVisible,
-      setDatePickerVisible,
-    }
+      categoryModalVisible: modalsState.categoryModalVisible,
+      setCategoryModalVisible: (val: boolean) => setModalVisible('categoryModalVisible', val),
+      workModeModalVisible: modalsState.workModeModalVisible,
+      setWorkModeModalVisible: (val: boolean) => setModalVisible('workModeModalVisible', val),
+      employmentModalVisible: modalsState.employmentModalVisible,
+      setEmploymentModalVisible: (val: boolean) => setModalVisible('employmentModalVisible', val),
+      experienceModalVisible: modalsState.experienceModalVisible,
+      setExperienceModalVisible: (val: boolean) => setModalVisible('experienceModalVisible', val),
+      educationModalVisible: modalsState.educationModalVisible,
+      setEducationModalVisible: (val: boolean) => setModalVisible('educationModalVisible', val),
+      genderModalVisible: modalsState.genderModalVisible,
+      setGenderModalVisible: (val: boolean) => setModalVisible('genderModalVisible', val),
+      ageModalVisible: modalsState.ageModalVisible,
+      setAgeModalVisible: (val: boolean) => setModalVisible('ageModalVisible', val),
+      heightModalVisible: modalsState.heightModalVisible,
+      setHeightModalVisible: (val: boolean) => setModalVisible('heightModalVisible', val),
+      datePickerVisible: modalsState.datePickerVisible,
+      setDatePickerVisible: (val: boolean) => setModalVisible('datePickerVisible', val),
+    },
   };
 };

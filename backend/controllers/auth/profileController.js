@@ -3,7 +3,7 @@ const response = require('../../utils/responseHandler');
 const { sendDeletionOtpEmail } = require('../../services/emailService');
 const { setOtpCache, getOtpCache, delOtpCache } = require('./otpCacheHelper');
 const { AUTH_CONFIG } = require('../../utils/constants');
-const { localGenerateVerificationToken } = require('./authHelpers');
+const { localGenerateVerificationToken } = require('./authHelper');
 
 module.exports = {
   async sendDeletionOtp(req, res) {
@@ -37,7 +37,7 @@ module.exports = {
       await setOtpCache(key, otpData, 300); // 5 minutes TTL
 
       // 4. Send email
-      const isDev = process.env.NODE_ENV === 'development';
+      const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'staging';
       const allowDebugOtp = AUTH_CONFIG.ALLOW_DEBUG_OTP;
       if (isDev && allowDebugOtp) {
         console.log(`✉️ [DELETION OTP] Generating OTP for ${cleanEmail}: ${otp.slice(0, 3)}***`);

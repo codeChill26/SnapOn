@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../../context/AuthContext';
 import { activityService } from '../../../services/activityService';
@@ -24,6 +24,8 @@ export const useActivityData = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const didInitialLoadRef = useRef(false);
+
   // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -32,43 +34,15 @@ export const useActivityData = () => {
     return () => clearTimeout(handler);
   }, [searchInput]);
 
-  // Load activities on changes
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const params = {
-        view: activeTab,
-        status: statusFilter,
-        search: searchQuery || undefined,
-        page: 1,
-        limit: 10,
-      };
-      const [res, summaryData] = await Promise.all([
-        activityService.getActivities(params),
-        activityService.getActivitySummary(),
-      ]);
-      setActivities(res.data);
-      setPage(1);
-      setTotalPages(res.pagination.totalPages);
-      setSummary(summaryData);
-    } catch (err) {
-      console.warn('Error loading activities:', err);
-      setErrorMessage('Không thể tải dữ liệu hoạt động. Vui lòng kiểm tra lại kết nối.');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab, statusFilter, searchQuery]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  // Reload lists when focus screen (so updates from detail pages apply)
+  // Unified Focus Effect handles both initial load and background refresh
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
-      const refetchQuietly = async () => {
+      const fetchData = async () => {
+        if (!didInitialLoadRef.current) {
+          setLoading(true);
+        }
+        setErrorMessage(null);
         try {
           const params = {
             view: activeTab,
@@ -86,12 +60,20 @@ export const useActivityData = () => {
             setPage(1);
             setTotalPages(res.pagination.totalPages);
             setSummary(summaryData);
+            didInitialLoadRef.current = true;
           }
         } catch (err) {
-          console.warn('Quiet refetch error:', err);
+          console.warn('Error loading activities:', err);
+          if (!didInitialLoadRef.current) {
+            setErrorMessage('Không thể tải dữ liệu hoạt động. Vui lòng kiểm tra lại kết nối.');
+          }
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
         }
       };
-      void refetchQuietly();
+      void fetchData();
       return () => {
         isMounted = false;
       };
@@ -241,24 +223,28 @@ export const useActivityData = () => {
   }, [activities, activeTab]);
 
   return {
-    activeTab,
-    statusFilter,
-    searchInput,
-    setSearchInput,
-    searchQuery,
-    activities,
-    summary,
-    loading,
-    loadingMore,
-    refreshing,
-    errorMessage,
-    completionRate,
-    firstName,
-    focusItem,
-    handleRefresh,
-    handleLoadMore,
-    handleTabChange,
-    handleStatCardPress,
-    handleResetFilters,
+    state: {
+      activeTab,
+      statusFilter,
+      searchInput,
+      searchQuery,
+      activities,
+      summary,
+      loading,
+      loadingMore,
+      refreshing,
+      errorMessage,
+      completionRate,
+      firstName,
+      focusItem,
+    },
+    actions: {
+      setSearchInput,
+      handleRefresh,
+      handleLoadMore,
+      handleTabChange,
+      handleStatCardPress,
+      handleResetFilters,
+    },
   };
 };
