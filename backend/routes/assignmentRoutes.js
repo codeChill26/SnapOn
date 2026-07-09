@@ -22,7 +22,14 @@ router.patch(
   assignmentController.declineAssignment
 );
 
-// PATCH /api/assignments/:id/complete - Poster completes assignment
+// PATCH /api/assignments/:id/submit - Worker báo "Đã hoàn thành" (bật auto-release 72h)
+router.patch(
+  '/:id/submit',
+  authenticate,
+  assignmentController.submitAssignment
+);
+
+// PATCH /api/assignments/:id/complete - Poster nghiệm thu (nhả tiền)
 router.patch(
   '/:id/complete',
   authenticate,

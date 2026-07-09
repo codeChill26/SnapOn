@@ -63,23 +63,23 @@ export const walletService = {
     };
   },
 
-  async topupMock(amount: number): Promise<Wallet> {
-    const response = await api.post<ApiResponse<Wallet>>('/wallet/topup/mock', { amount });
-    return mapWallet(response.data.data);
-  },
+  // Escrow-per-job: nạp tiền vào ví đã bị gỡ bỏ.
+  // Poster thanh toán trực tiếp từng job qua PayOS (applicationService/matchingService).
+  // Ví giờ là sổ thu nhập của người làm: nhận tiền công → rút về ngân hàng.
 
-  async createPayOSPayment(amount: number): Promise<{ checkoutUrl: string; orderCode: number }> {
-    const response = await api.post<ApiResponse<{ checkoutUrl: string; orderCode: number }>>('/wallet/topup/payos', { amount });
-    return response.data.data;
-  },
-
-  async confirmPayOSPayment(orderCode: number): Promise<{ wallet: Wallet; alreadyProcessed: boolean; success?: boolean; message?: string }> {
-    const response = await api.post<ApiResponse<{ wallet: any; alreadyProcessed: boolean; success?: boolean; message?: string }>>('/wallet/topup/payos/confirm', { orderCode });
+  async withdraw(
+    amount: number,
+    bankName: string,
+    bankAccountNumber: string
+  ): Promise<{ wallet: Wallet; request: any }> {
+    const response = await api.post<ApiResponse<{ wallet: any; request: any }>>('/wallet/withdraw', {
+      amount,
+      bankName,
+      bankAccountNumber,
+    });
     return {
       wallet: mapWallet(response.data.data.wallet),
-      alreadyProcessed: response.data.data.alreadyProcessed,
-      success: response.data.data.success,
-      message: response.data.data.message,
+      request: response.data.data.request,
     };
   },
 };

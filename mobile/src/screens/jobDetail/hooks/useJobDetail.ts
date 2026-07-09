@@ -37,6 +37,7 @@ export const useJobDetail = () => {
       (app) =>
         app.assignmentStatus === 'ASSIGNED' ||
         app.assignmentStatus === 'IN_PROGRESS' ||
+        app.assignmentStatus === 'SUBMITTED' ||
         app.assignmentStatus === 'COMPLETED'
     );
   }, [applications]);
@@ -226,22 +227,76 @@ export const useJobDetail = () => {
     );
   };
 
-  const handleCompleteAssignment = async (workerApp: TaskApplication) => {
-    if (!workerApp.assignmentId) return;
+  // Worker báo "Đã hoàn thành" → chờ poster nghiệm thu (tự giải ngân sau 72h)
+  const handleSubmitAssignment = async () => {
+    if (!userApplication?.assignmentId) return;
     Alert.alert(
-      'Hoàn tất công việc',
-      `Bạn xác nhận ứng viên ${workerApp.taskerName} đã hoàn thành công việc?`,
+      'Báo hoàn thành công việc',
+      'Xác nhận bạn đã hoàn thành công việc này? Chủ công việc sẽ nghiệm thu và tiền công sẽ được giải ngân (tự động sau 72 giờ nếu không có phản hồi).',
       [
         { text: 'Quay lại', style: 'cancel' },
         {
-          text: 'Hoàn tất',
+          text: 'Báo hoàn thành',
+          onPress: async () => {
+            try {
+              await applicationService.submitAssignment(userApplication.assignmentId!);
+              showToast.success('Thành công', 'Đã báo hoàn thành. Chờ chủ công việc nghiệm thu.');
+              void loadTaskDetail();
+            } catch (err: any) {
+              showToast.error('Lỗi', err.response?.data?.message || err.message || 'Báo hoàn thành thất bại.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Poster nghiệm thu → NHẢ tiền ký quỹ cho worker
+  const handleCompleteAssignment = async (workerApp: TaskApplication) => {
+    if (!workerApp.assignmentId) return;
+    Alert.alert(
+      'Nghiệm thu công việc',
+      `Bạn xác nhận ứng viên ${workerApp.taskerName} đã hoàn thành công việc? Tiền ký quỹ sẽ được giải ngân cho người làm.`,
+      [
+        { text: 'Quay lại', style: 'cancel' },
+        {
+          text: 'Nghiệm thu & Trả tiền',
           onPress: async () => {
             try {
               await applicationService.completeAssignment(workerApp.assignmentId!);
-              showToast.success('Thành công', 'Đã đánh dấu hoàn thành công việc.');
+              showToast.success('Thành công', 'Đã nghiệm thu và giải ngân tiền công.');
               void loadTaskDetail();
             } catch (err: any) {
-              showToast.error('Lỗi', err.message || 'Xác nhận hoàn thành thất bại.');
+              showToast.error('Lỗi', err.message || 'Nghiệm thu thất bại.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Poster khiếu nại kết quả (khi worker đã báo xong) → admin phân xử
+  const handleDisputeAssignment = async (workerApp: TaskApplication) => {
+    if (!task) return;
+    Alert.alert(
+      'Khiếu nại kết quả',
+      `Bạn không đồng ý với kết quả của ${workerApp.taskerName}? Tiền ký quỹ sẽ bị đóng băng và quản trị viên sẽ xem xét, phân xử.`,
+      [
+        { text: 'Quay lại', style: 'cancel' },
+        {
+          text: 'Gửi khiếu nại',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await applicationService.disputeEscrow(
+                task.id,
+                `Poster khiếu nại kết quả công việc "${task.title}" của ${workerApp.taskerName}.`,
+                workerApp.taskerId
+              );
+              showToast.success('Đã gửi khiếu nại', 'Quản trị viên sẽ xem xét và phân xử.');
+              void loadTaskDetail();
+            } catch (err: any) {
+              showToast.error('Lỗi', err.response?.data?.message || err.message || 'Gửi khiếu nại thất bại.');
             }
           },
         },
@@ -299,7 +354,9 @@ export const useJobDetail = () => {
     handleDeleteTask,
     handleAcceptAssignment,
     handleDeclineAssignment,
+    handleSubmitAssignment,
     handleCompleteAssignment,
     handleCancelAssignment,
+    handleDisputeAssignment,
   };
 };

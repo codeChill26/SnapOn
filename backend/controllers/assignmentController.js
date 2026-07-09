@@ -1,64 +1,22 @@
-const assignedTaskModel = require('../models/assignedTaskModel');
+const assignmentService = require('../services/assignmentService');
 const taskModel = require('../models/taskModel');
-const taskApplicationModel = require('../models/taskApplicationModel');
-const escrowService = require('../services/escrowService');
-const pool = require('../config/db');
 const { success, error } = require('../utils/responseHandler');
-const { TASK_STATUS, APPLICATION_STATUS } = require('../utils/constants');
 
+/**
+ * Assignment Controller — thin layer: validate → assignmentService → respond + emit.
+ * All transactional logic lives in services/assignmentService.js.
+ */
 const assignmentController = {
   /**
    * PATCH /api/assignments/:id/accept
    * Worker accepts the job assignment
    */
   async acceptAssignment(req, res) {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-
-      // 1. Fetch assignment
-      const assignment = await assignedTaskModel.findById(id, client);
-      if (!assignment) {
-        await client.query('ROLLBACK');
-        return error(res, 'Không tìm thấy thông tin giao việc.', 404);
-      }
-
-      // 2. Verify worker
-      if (assignment.tasker_id !== userId) {
-        await client.query('ROLLBACK');
-        return error(res, 'Bạn không thể chấp nhận công việc này.', 403);
-      }
-
-      if (assignment.status !== 'ASSIGNED') {
-        await client.query('ROLLBACK');
-        return error(res, `Trạng thái công việc không hợp lệ: ${assignment.status}`, 400);
-      }
-
-      // 3. Re-verify the active jobs limit (max 3 concurrent IN_PROGRESS)
-      const activeJobsCount = await assignedTaskModel.countActiveByTaskerId(userId, client);
-      if (activeJobsCount >= 3) {
-        await client.query('ROLLBACK');
-        return error(res, 'Bạn không thể nhận thêm việc vì đang làm 3 hoặc nhiều hơn công việc cùng lúc.', 400);
-      }
-
-      // 4. Update assignment to IN_PROGRESS
-      await assignedTaskModel.updateStatus(id, 'IN_PROGRESS', client);
-
-      // 5. Update task to IN_PROGRESS if we have met or exceeded the hiring quota (people_needed)
-      const task = await taskModel.findById(assignment.task_id);
-      if (task && task.status === TASK_STATUS.OPEN) {
-        const activeAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
-        const inProgressCount = activeAssignments.filter(a => a.status === 'IN_PROGRESS').length;
-        const peopleNeeded = task.people_needed || 1;
-        if (inProgressCount >= peopleNeeded) {
-          await taskModel.updateStatus(assignment.task_id, TASK_STATUS.IN_PROGRESS, client);
-        }
-      }
-
-      await client.query('COMMIT');
+      const { assignment, task } = await assignmentService.accept({
+        assignmentId: req.params.id,
+        userId: req.user.id,
+      });
 
       // Notify poster via socket
       const io = req.app.get('io');
@@ -72,11 +30,8 @@ const assignmentController = {
 
       return success(res, null, 'Chấp nhận công việc thành công.');
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Accept assignment error:', err);
-      return error(res, 'Chấp nhận công việc thất bại.', 500);
-    } finally {
-      client.release();
+      return error(res, err.statusCode ? err.message : 'Chấp nhận công việc thất bại.', err.statusCode || 500);
     }
   },
 
@@ -85,43 +40,11 @@ const assignmentController = {
    * Worker declines the job assignment
    */
   async declineAssignment(req, res) {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-
-      // 1. Fetch assignment
-      const assignment = await assignedTaskModel.findById(id, client);
-      if (!assignment) {
-        await client.query('ROLLBACK');
-        return error(res, 'Không tìm thấy thông tin giao việc.', 404);
-      }
-
-      // 2. Verify worker
-      if (assignment.tasker_id !== userId) {
-        await client.query('ROLLBACK');
-        return error(res, 'Bạn không thể từ chối công việc này.', 403);
-      }
-
-      if (assignment.status !== 'ASSIGNED') {
-        await client.query('ROLLBACK');
-        return error(res, `Trạng thái công việc không hợp lệ: ${assignment.status}`, 400);
-      }
-
-      // 3. Update assignment to CANCELLED
-      await assignedTaskModel.updateStatus(id, 'CANCELLED', client);
-
-      // 4. Update task application status back to REJECTED (declined)
-      if (assignment.application_id) {
-        await taskApplicationModel.updateStatus(assignment.application_id, APPLICATION_STATUS.REJECTED, client);
-      }
-
-      // 5. Refund escrow so poster's funds are unlocked and they can accept another worker
-      await escrowService.refundForTasker(assignment.task_id, assignment.tasker_id, client);
-
-      await client.query('COMMIT');
+      const { assignment } = await assignmentService.decline({
+        assignmentId: req.params.id,
+        userId: req.user.id,
+      });
 
       // Notify poster
       const task = await taskModel.findById(assignment.task_id);
@@ -136,70 +59,56 @@ const assignmentController = {
 
       return success(res, null, 'Đã từ chối nhận công việc.');
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Decline assignment error:', err);
-      return error(res, 'Từ chối nhận công việc thất bại.', 500);
-    } finally {
-      client.release();
+      return error(res, err.statusCode ? err.message : 'Từ chối nhận công việc thất bại.', err.statusCode || 500);
+    }
+  },
+
+  /**
+   * PATCH /api/assignments/:id/submit
+   * Worker báo "Đã hoàn thành" → bật đồng hồ auto-release 72h.
+   * KHÔNG nhả tiền — chờ poster nghiệm thu (hoặc tự nhả sau 72h).
+   */
+  async submitAssignment(req, res) {
+    try {
+      const { assignment, escrow } = await assignmentService.submit({
+        assignmentId: req.params.id,
+        userId: req.user.id,
+      });
+
+      // Notify poster
+      const task = await taskModel.findById(assignment.task_id);
+      const io = req.app.get('io');
+      if (io && task) {
+        io.to(task.poster_id).emit('assignment_submitted', {
+          taskId: task.id,
+          taskTitle: task.title,
+          taskerName: assignment.tasker_name,
+          message: `"${assignment.tasker_name}" đã báo hoàn thành công việc "${task.title}". Vui lòng nghiệm thu trong 72 giờ (quá hạn hệ thống sẽ tự động giải ngân).`,
+        });
+      }
+
+      return success(
+        res,
+        { autoReleaseAt: escrow ? escrow.auto_release_at : null },
+        'Đã báo hoàn thành. Chờ chủ công việc nghiệm thu (tự động giải ngân sau 72 giờ).'
+      );
+    } catch (err) {
+      console.error('Submit assignment error:', err);
+      return error(res, err.statusCode ? err.message : 'Báo hoàn thành thất bại.', err.statusCode || 500);
     }
   },
 
   /**
    * PATCH /api/assignments/:id/complete
-   * Poster completes the worker's assignment
+   * Poster nghiệm thu → nhả tiền ký quỹ cho worker
    */
   async completeAssignment(req, res) {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-
-      // 1. Fetch assignment
-      const assignment = await assignedTaskModel.findById(id, client);
-      if (!assignment) {
-        await client.query('ROLLBACK');
-        return error(res, 'Không tìm thấy thông tin giao việc.', 404);
-      }
-
-      // 2. Fetch task
-      const task = await taskModel.findById(assignment.task_id);
-      if (!task) {
-        await client.query('ROLLBACK');
-        return error(res, 'Không tìm thấy công việc tương ứng.', 404);
-      }
-
-      // 3. Verify poster
-      if (task.poster_id !== userId) {
-        await client.query('ROLLBACK');
-        return error(res, 'Bạn không có quyền thực hiện hành động này.', 403);
-      }
-
-      if (assignment.status !== 'IN_PROGRESS') {
-        await client.query('ROLLBACK');
-        return error(res, 'Chỉ có thể hoàn thành công việc đang thực hiện.', 400);
-      }
-
-      // 4. Update assignment to COMPLETED
-      await assignedTaskModel.updateStatus(id, 'COMPLETED', client);
-
-      // Check if all non-cancelled assignments of this task are completed
-      const allAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
-      const activeOrAssigned = allAssignments.filter(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
-      
-      // If there are no more active or pending assignments, we can set the task to COMPLETED
-      if (activeOrAssigned.length === 0) {
-        await taskModel.updateStatus(task.id, TASK_STATUS.COMPLETED, client);
-        
-        // Release escrow only for completed assignments
-        const completedAssignments = allAssignments.filter(a => a.status === 'COMPLETED');
-        for (const assoc of completedAssignments) {
-          await escrowService.releaseForTasker(task.id, assoc.tasker_id, client);
-        }
-      }
-
-      await client.query('COMMIT');
+      const { assignment, task } = await assignmentService.complete({
+        assignmentId: req.params.id,
+        userId: req.user.id,
+      });
 
       // Notify worker
       const io = req.app.get('io');
@@ -212,11 +121,8 @@ const assignmentController = {
 
       return success(res, null, 'Đã hoàn tất công việc cho ứng viên này.');
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Complete assignment error:', err);
-      return error(res, 'Xác nhận hoàn thành thất bại.', 500);
-    } finally {
-      client.release();
+      return error(res, err.statusCode ? err.message : 'Xác nhận hoàn thành thất bại.', err.statusCode || 500);
     }
   },
 
@@ -225,55 +131,11 @@ const assignmentController = {
    * Poster cancels the worker's assignment
    */
   async cancelAssignment(req, res) {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-
-      // 1. Fetch assignment
-      const assignment = await assignedTaskModel.findById(id, client);
-      if (!assignment) {
-        await client.query('ROLLBACK');
-        return error(res, 'Không tìm thấy thông tin giao việc.', 404);
-      }
-
-      // 2. Fetch task
-      const task = await taskModel.findById(assignment.task_id);
-      if (!task) {
-        await client.query('ROLLBACK');
-        return error(res, 'Không tìm thấy công việc tương ứng.', 404);
-      }
-
-      // 3. Verify poster
-      if (task.poster_id !== userId) {
-        await client.query('ROLLBACK');
-        return error(res, 'Bạn không có quyền thực hiện hành động này.', 403);
-      }
-
-      if (!['ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)) {
-        await client.query('ROLLBACK');
-        return error(res, 'Chỉ có thể hủy công việc chưa làm hoặc đang làm.', 400);
-      }
-
-      // 4. Update assignment to CANCELLED
-      await assignedTaskModel.updateStatus(id, 'CANCELLED', client);
-
-      // Refund escrow for this specific tasker
-      await escrowService.refundForTasker(task.id, assignment.tasker_id, client);
-
-      // Check if all non-cancelled assignments of this task are completed/cancelled
-      const allAssignments = await assignedTaskModel.findListByTaskId(task.id, client);
-      const activeOrAssigned = allAssignments.filter(a => ['ASSIGNED', 'IN_PROGRESS'].includes(a.status));
-
-      if (activeOrAssigned.length === 0) {
-        if (task.status === TASK_STATUS.IN_PROGRESS) {
-          await taskModel.updateStatus(task.id, TASK_STATUS.OPEN, client);
-        }
-      }
-
-      await client.query('COMMIT');
+      const { assignment, task } = await assignmentService.cancel({
+        assignmentId: req.params.id,
+        userId: req.user.id,
+      });
 
       // Notify worker
       const io = req.app.get('io');
@@ -286,11 +148,8 @@ const assignmentController = {
 
       return success(res, null, 'Đã hủy công việc cho ứng viên này.');
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Cancel assignment error:', err);
-      return error(res, 'Hủy công việc thất bại.', 500);
-    } finally {
-      client.release();
+      return error(res, err.statusCode ? err.message : 'Hủy công việc thất bại.', err.statusCode || 500);
     }
   },
 };

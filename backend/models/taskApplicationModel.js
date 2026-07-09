@@ -5,6 +5,77 @@ const { toDbApplicationStatus, fromDbApplicationStatus, fromDbAssignedTaskStatus
  * Task Application Model — Database queries for task_applications table (Bids)
  */
 const taskApplicationModel = {
+  /** Total applications on a task. */
+  async countByTaskId(taskId, db = pool) {
+    const result = await db.query(
+      'SELECT COUNT(*) as total FROM task_applications WHERE task_id = $1',
+      [taskId]
+    );
+    return parseInt(result.rows[0].total);
+  },
+
+  /** Paginated applications of a task with tasker profile + assignment info. */
+  async listByTaskWithDetails(taskId, { limit, offset }, db = pool) {
+    const result = await db.query(
+      `SELECT ta.*,
+              u.full_name AS tasker_name, u.avatar_url AS tasker_avatar,
+              tp.average_rating, tp.bio, tp.location_text,
+              at.id AS assignment_id,
+              at.status AS assignment_status
+       FROM task_applications ta
+       JOIN users u ON ta.tasker_id = u.id
+       LEFT JOIN tasker_profiles tp ON tp.user_id = ta.tasker_id
+       LEFT JOIN assigned_tasks at ON at.application_id = ta.id
+       WHERE ta.task_id = $1
+       ORDER BY ta.id ASC
+       LIMIT $2 OFFSET $3`,
+      [taskId, limit, offset]
+    );
+    for (const r of result.rows) {
+      r.status = fromDbApplicationStatus(r.status);
+      if (r.assignment_status) {
+        r.assignment_status = fromDbAssignedTaskStatus(r.assignment_status);
+      }
+    }
+    return result.rows;
+  },
+
+  /** Total applications submitted by a tasker. */
+  async countByTaskerId(taskerId, db = pool) {
+    const result = await db.query(
+      'SELECT COUNT(*) as total FROM task_applications WHERE tasker_id = $1',
+      [taskerId]
+    );
+    return parseInt(result.rows[0].total);
+  },
+
+  /** Paginated applications of a tasker with task + assignment info. */
+  async listByTaskerWithTaskDetails(taskerId, { limit, offset }, db = pool) {
+    const result = await db.query(
+      `SELECT ta.*,
+              t.title        AS task_title,
+              t.status       AS task_status,
+              t.post_type    AS task_post_type,
+              t.salary_unit  AS task_salary_unit,
+              t.budget_min,
+              t.budget_max,
+              t.deadline_end,
+              u.full_name    AS tasker_name,
+              u.avatar_url   AS tasker_avatar,
+              at.id          AS assignment_id,
+              at.status      AS assignment_status
+       FROM task_applications ta
+       JOIN tasks             t  ON ta.task_id  = t.id
+       JOIN users             u  ON ta.tasker_id = u.id
+       LEFT JOIN assigned_tasks at ON at.application_id = ta.id
+       WHERE ta.tasker_id = $1
+       ORDER BY t.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [taskerId, limit, offset]
+    );
+    return result.rows;
+  },
+
   /**
    * Create a new application/bid
    */

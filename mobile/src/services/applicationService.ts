@@ -75,15 +75,61 @@ export const applicationService = {
     return mapApplicationFromApi(response.data.data);
   },
 
+  /**
+   * Escrow-per-job: khi ACCEPTED, backend trả về yêu cầu thanh toán PayOS
+   * (paymentRequired + checkoutUrl + orderCode) thay vì assign ngay.
+   * Match chỉ được chốt sau khi poster thanh toán thành công.
+   */
   async updateApplicationStatus(
     id: string,
-    status: 'ACCEPTED' | 'REJECTED'
-  ): Promise<TaskApplication> {
+    status: 'ACCEPTED' | 'REJECTED',
+    voucherCode?: string
+  ): Promise<{
+    application?: TaskApplication;
+    paymentRequired?: boolean;
+    checkoutUrl?: string;
+    orderCode?: number;
+    payAmount?: number;
+    discount?: number;
+    expiresAt?: string;
+  }> {
     const response = await api.patch<ApiResponse<any>>(
       `/applications/${id}/status`,
-      { status }
+      voucherCode ? { status, voucher_code: voucherCode } : { status }
     );
-    return mapApplicationFromApi(response.data.data);
+    const data = response.data.data;
+    if (data?.paymentRequired) {
+      return {
+        paymentRequired: true,
+        checkoutUrl: data.checkoutUrl,
+        orderCode: data.orderCode,
+        payAmount: data.payAmount,
+        discount: data.discount,
+        expiresAt: data.expiresAt,
+        application: data.selectedApplication ? mapApplicationFromApi(data.selectedApplication) : undefined,
+      };
+    }
+    return { application: mapApplicationFromApi(data) };
+  },
+
+  /** Xác nhận thanh toán escrow sau khi quay lại từ PayOS (polling). */
+  async confirmEscrowPayment(orderCode: number): Promise<{
+    success: boolean;
+    alreadyProcessed?: boolean;
+    conflict?: string;
+    status?: string;
+    message?: string;
+  }> {
+    const response = await api.post<ApiResponse<any>>('/escrows/payos/confirm', { orderCode });
+    return { ...response.data.data, message: response.data.message };
+  },
+
+  /** Poster khiếu nại kết quả công việc → escrow DISPUTED (admin phân xử). */
+  async disputeEscrow(taskId: string, reason: string, taskerId?: string): Promise<void> {
+    await api.post(`/escrows/${taskId}/dispute`, {
+      reason,
+      ...(taskerId ? { tasker_id: taskerId } : {}),
+    });
   },
 
   async acceptAssignment(id: string): Promise<void> {
@@ -92,6 +138,11 @@ export const applicationService = {
 
   async declineAssignment(id: string): Promise<void> {
     await api.patch(`/assignments/${id}/decline`);
+  },
+
+  /** Worker báo "Đã hoàn thành" → chờ poster nghiệm thu (tự giải ngân sau 72h). */
+  async submitAssignment(id: string): Promise<void> {
+    await api.patch(`/assignments/${id}/submit`);
   },
 
   async completeAssignment(id: string): Promise<void> {

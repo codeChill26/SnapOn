@@ -2,7 +2,7 @@ import axios from 'axios';
 import api from './api';
 import Config from '../constants/config';
 import { storage } from '../utils/storage';
-import { User } from '../types';
+import { User, ApiResponse } from '../types';
 import { detectBackend } from '../utils/backendDetector';
 
 // Clean axios instance without 401 interceptor — used by tokenLogin to avoid

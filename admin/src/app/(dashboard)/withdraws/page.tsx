@@ -49,9 +49,11 @@ export default function WithdrawsPage() {
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; status: 'APPROVED' | 'REJECTED'; amount: string; name: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchWithdraws = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchWithdraws = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const params: Record<string, string> = {
         page: page.toString(),
@@ -67,14 +69,20 @@ export default function WithdrawsPage() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to fetch withdrawal requests.');
+      if (!silent) setError(err.message || 'Failed to fetch withdrawal requests.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [page, limit, statusFilter]);
 
   useEffect(() => {
     fetchWithdraws();
+  }, [fetchWithdraws]);
+
+  // Near real-time: silently refresh the visible list every 15s.
+  useEffect(() => {
+    const id = setInterval(() => fetchWithdraws(true), 15000);
+    return () => clearInterval(id);
   }, [fetchWithdraws]);
 
   const handleStatusFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -176,7 +184,7 @@ export default function WithdrawsPage() {
                     <div className="flex flex-col items-center justify-center gap-2">
                       <p className="text-red-400">{error}</p>
                       <button
-                        onClick={fetchWithdraws}
+                        onClick={() => fetchWithdraws()}
                         className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 text-zinc-200 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
                       >
                         Retry Load

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Platform,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
@@ -33,6 +34,13 @@ export const ApplicantListScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
+  // Escrow-per-job: thanh toán PayOS đang chờ xác nhận sau khi duyệt ứng viên
+  const [pendingPayment, setPendingPayment] = useState<{
+    orderCode: number;
+    checkoutUrl: string;
+    applicantName: string;
+  } | null>(null);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
   useEffect(() => {
     loadApplicants();
@@ -75,9 +83,13 @@ export const ApplicantListScreen: React.FC = () => {
 
   const handleUpdateStatus = (applicantId: string, status: 'ACCEPTED' | 'REJECTED', name: string) => {
     const actionLabel = status === 'ACCEPTED' ? 'nhận (tuyển)' : 'từ chối';
+    const confirmMsg =
+      status === 'ACCEPTED'
+        ? `Bạn có chắc chắn muốn ${actionLabel} ứng viên ${name}?\n\nBạn sẽ được chuyển đến trang thanh toán PayOS. Tiền được GIỮ AN TOÀN trong ký quỹ và chỉ trả cho người làm sau khi bạn nghiệm thu công việc.`
+        : `Bạn có chắc chắn muốn ${actionLabel} ứng viên ${name}?`;
     Alert.alert(
       'Xác nhận hành động',
-      `Bạn có chắc chắn muốn ${actionLabel} ứng viên ${name}?`,
+      confirmMsg,
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -85,9 +97,25 @@ export const ApplicantListScreen: React.FC = () => {
           onPress: async () => {
             setActionInProgressId(applicantId);
             try {
-              await applicationService.updateApplicationStatus(applicantId, status);
-              Alert.alert('Thành công', `Đã cập nhật trạng thái ứng viên.`);
-              loadApplicants();
+              const result = await applicationService.updateApplicationStatus(applicantId, status);
+
+              if (result.paymentRequired && result.checkoutUrl && result.orderCode) {
+                // Escrow-per-job: mở PayOS để thanh toán, chờ xác nhận
+                setPendingPayment({
+                  orderCode: result.orderCode,
+                  checkoutUrl: result.checkoutUrl,
+                  applicantName: name,
+                });
+                const supported = await Linking.canOpenURL(result.checkoutUrl);
+                if (supported) {
+                  await Linking.openURL(result.checkoutUrl);
+                } else {
+                  Alert.alert('Lỗi', 'Không thể mở liên kết thanh toán.');
+                }
+              } else {
+                Alert.alert('Thành công', 'Đã cập nhật trạng thái ứng viên.');
+                loadApplicants();
+              }
             } catch (err: any) {
               const msg = err.response?.data?.message || err.message || 'Cập nhật trạng thái thất bại.';
               Alert.alert('Lỗi', msg);
@@ -98,6 +126,38 @@ export const ApplicantListScreen: React.FC = () => {
         },
       ]
     );
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!pendingPayment) return;
+    setConfirmingPayment(true);
+    try {
+      const res = await applicationService.confirmEscrowPayment(pendingPayment.orderCode);
+      if (res.success === false && !res.conflict) {
+        Alert.alert(
+          'Chưa thanh toán',
+          res.message || 'Thanh toán chưa hoàn tất. Vui lòng hoàn tất trên trình duyệt trước khi kiểm tra.'
+        );
+        return;
+      }
+      if (res.conflict) {
+        Alert.alert(
+          'Không thể chốt ghép việc',
+          'Thanh toán đã nhận nhưng công việc không còn khả dụng. Hệ thống sẽ hoàn tiền cho bạn.'
+        );
+      } else {
+        Alert.alert(
+          'Thành công',
+          `Đã thanh toán và giao việc cho ${pendingPayment.applicantName}. Tiền đang được giữ trong ký quỹ, sẽ trả cho người làm sau khi bạn nghiệm thu.`
+        );
+      }
+      setPendingPayment(null);
+      loadApplicants();
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.response?.data?.message || err.message || 'Không thể xác nhận thanh toán.');
+    } finally {
+      setConfirmingPayment(false);
+    }
   };
 
   const filteredApplicants = useMemo(() => {
@@ -153,6 +213,42 @@ export const ApplicantListScreen: React.FC = () => {
           </TouchableOpacity>
         </ScrollView>
       </View>
+
+      {/* Pending PayOS payment banner (escrow-per-job) */}
+      {pendingPayment && (
+        <View style={styles.paymentBanner}>
+          <Text style={styles.paymentBannerTitle}>Đang chờ thanh toán ký quỹ</Text>
+          <Text style={styles.paymentBannerDesc}>
+            Hoàn tất thanh toán PayOS cho đơn #{pendingPayment.orderCode} để chốt giao việc cho{' '}
+            {pendingPayment.applicantName}. Chỗ được giữ trong 15 phút.
+          </Text>
+          <View style={styles.paymentBannerActions}>
+            <TouchableOpacity
+              style={[styles.paymentBannerBtn, styles.paymentBtnPrimary]}
+              disabled={confirmingPayment}
+              onPress={handleConfirmPayment}
+            >
+              <Text style={styles.paymentBtnPrimaryText}>
+                {confirmingPayment ? 'Đang kiểm tra...' : 'Kiểm tra kết quả'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.paymentBannerBtn, styles.paymentBtnGhost]}
+              disabled={confirmingPayment}
+              onPress={() => Linking.openURL(pendingPayment.checkoutUrl)}
+            >
+              <Text style={styles.paymentBtnGhostText}>Mở lại trang thanh toán</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.paymentBannerBtn, styles.paymentBtnGhost]}
+              disabled={confirmingPayment}
+              onPress={() => setPendingPayment(null)}
+            >
+              <Text style={styles.paymentBtnGhostText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* List content */}
       <ScrollView
@@ -511,6 +607,55 @@ const styles = StyleSheet.create({
   },
   statusDisplayText: {
     fontSize: 13,
+    fontWeight: '700',
+  },
+  paymentBanner: {
+    margin: 16,
+    marginBottom: 0,
+    padding: 14,
+    borderRadius: HomeTheme.radius.medium,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  paymentBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#B45309',
+    marginBottom: 4,
+  },
+  paymentBannerDesc: {
+    fontSize: 12,
+    color: HomeTheme.colors.textSecondary,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  paymentBannerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  paymentBannerBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  paymentBtnPrimary: {
+    backgroundColor: HomeTheme.colors.primary,
+  },
+  paymentBtnPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  paymentBtnGhost: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: HomeTheme.colors.border,
+  },
+  paymentBtnGhostText: {
+    color: HomeTheme.colors.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
   },
 });

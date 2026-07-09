@@ -89,6 +89,28 @@ const assignedTaskModel = {
   },
 
   /**
+   * Whether this worker already has a non-cancelled assignment on the task
+   */
+  async hasActiveForTaskAndTasker(taskId, taskerId, db = pool) {
+    const dbCancelled = toDbAssignedTaskStatus('CANCELLED');
+    const result = await db.query(
+      'SELECT id FROM assigned_tasks WHERE task_id = $1 AND tasker_id = $2 AND status != $3 LIMIT 1',
+      [taskId, taskerId, dbCancelled]
+    );
+    return result.rows.length > 0;
+  },
+
+  /**
+   * Stamp the worker's "Đã hoàn thành" submission time
+   */
+  async markSubmittedAt(id, db = pool) {
+    await db.query(
+      'UPDATE assigned_tasks SET submitted_at = NOW() WHERE id = $1',
+      [id]
+    );
+  },
+
+  /**
    * Count active (IN_PROGRESS) assignments for a tasker
    */
   async countActiveByTaskerId(taskerId, db = pool) {

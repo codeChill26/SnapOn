@@ -12,7 +12,6 @@ import { authService } from '../../services/authService';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../../services/firebase';
-import { useAuth } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,15 +36,6 @@ interface Errors {
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<RegisterNavProp>();
-<<<<<<< HEAD
-  const { devLogin } = useAuth();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-=======
   const { login }  = useAuth();
   const [name, setName]                   = useState('');
   const [email, setEmail]                 = useState('');
@@ -71,22 +61,16 @@ export const RegisterScreen: React.FC = () => {
     setErrors(e);
     return Object.keys(e).length === 0;
   };
->>>>>>> backend/Deployment
 
   const handleRegister = async () => {
     if (!validate()) return;
     setLoading(true);
     try {
-<<<<<<< HEAD
-      await authService.devRegister(email, name, password, phone);
-      await devLogin(email, name);
-=======
       const uc = await createUserWithEmailAndPassword(auth, email.trim(), password);
       if (uc.user) await updateProfile(uc.user, { displayName: name.trim() });
       const idToken = await uc.user.getIdToken(true);
       await login(idToken);
       Alert.alert('Thành công', 'Đăng ký tài khoản thành công!');
->>>>>>> backend/Deployment
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
         Alert.alert(

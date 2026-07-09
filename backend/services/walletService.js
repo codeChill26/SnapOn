@@ -1,5 +1,8 @@
 const walletModel = require('../models/walletModel');
 const walletTransactionModel = require('../models/walletTransactionModel');
+const withdrawRequestModel = require('../models/withdrawRequestModel');
+const escrowModel = require('../models/escrowModel');
+const escrowService = require('./escrowService');
 const withDbTx = require('../utils/withDbTx');
 const payos = require('../config/payos');
 const pool = require('../config/db');
@@ -269,6 +272,31 @@ const walletService = {
     const { orderCode, amount, code } = webhookData;
 
     return withDbTx(async (db) => {
+      // ── Escrow-per-job funding branch ──────────────────────────────
+      // Nếu orderCode thuộc một escrow → đây là thanh toán job, không phải topup.
+      if (code === '00') {
+        const escrowResult = await escrowService.fundEscrowByOrderCode(orderCode, db);
+        if (escrowResult) {
+          if (escrowResult.alreadyProcessed) {
+            console.log(`ℹ️  Escrow orderCode ${orderCode} already processed.`);
+            return { type: 'escrow', status: 'ALREADY_PROCESSED' };
+          }
+          if (escrowResult.conflict) {
+            console.warn(`⚠️ Escrow funding conflict for orderCode ${orderCode}: ${escrowResult.conflict}`);
+            return { type: 'escrow', status: 'CONFLICT', reason: escrowResult.conflict };
+          }
+          console.log(`✅ Escrow funded via webhook: orderCode ${orderCode}, task ${escrowResult.taskId}`);
+          return { type: 'escrow', status: 'FUNDED', taskId: escrowResult.taskId };
+        }
+      } else {
+        const pendingEscrow = await escrowModel.findByOrderCode(orderCode, db);
+        if (pendingEscrow) {
+          console.log(`❌ Escrow payment failed/cancelled for orderCode ${orderCode} (chờ hết hạn 15').`);
+          return { type: 'escrow', status: 'FAILED' };
+        }
+      }
+
+      // ── Legacy wallet topup branch ─────────────────────────────────
       // Find transaction in DB
       const transaction = await walletTransactionModel.findByOrderCode(orderCode, db);
       if (!transaction) {
@@ -443,6 +471,91 @@ const walletService = {
         tx: updatedTx.rows[0],
         alreadyProcessed: false,
         success: true,
+      };
+    });
+  },
+
+  /**
+   * Create a withdrawal request.
+   *
+   * Holds the requested amount by moving it from available_balance to
+   * locked_balance (so the same funds cannot be spent/withdrawn twice while
+   * the request is pending). The money leaves the wallet only when an admin
+   * APPROVES/PAYS the request; if REJECTED, the hold is released.
+   *
+   * @param {string} userId
+   * @param {number} amount
+   * @param {string} bankName
+   * @param {string} bankAccountNumber
+   */
+  async withdraw(userId, amount, bankName, bankAccountNumber) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt < 10000) {
+      const err = new Error('Số tiền rút tối thiểu là 10.000đ');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!bankName || !String(bankName).trim() || !bankAccountNumber || !String(bankAccountNumber).trim()) {
+      const err = new Error('Vui lòng nhập đầy đủ tên ngân hàng và số tài khoản.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return withDbTx(async (db) => {
+      // Lock wallet row to prevent concurrent double-withdraw
+      const wallet = await walletModel.lockByUserId(userId, db);
+      const available = parseFloat(wallet.available_balance);
+
+      if (available < amt) {
+        const err = new Error(
+          `Số dư khả dụng không đủ. Hiện có: ${available.toLocaleString('vi-VN')}đ, cần: ${amt.toLocaleString('vi-VN')}đ`
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Hold funds: available_balance -> locked_balance (balance total unchanged)
+      await db.query(
+        `UPDATE wallets
+         SET available_balance = available_balance - $2,
+             locked_balance    = locked_balance    + $2
+         WHERE id = $1`,
+        [wallet.id, amt]
+      );
+
+      // Create the withdraw request (PENDING) — admin will process it
+      const request = await withdrawRequestModel.create(
+        {
+          userId,
+          amount: amt,
+          bankName: String(bankName).trim(),
+          bankAccountNumber: String(bankAccountNumber).trim(),
+        },
+        db
+      );
+
+      // Ledger entry: WITHDRAW held (PENDING). Settled to SUCCESS/FAILED by admin.
+      await walletTransactionModel.create(
+        {
+          walletId: wallet.id,
+          type: 'WITHDRAW',
+          amount: amt,
+          status: 'PENDING',
+          referenceId: request.id,
+        },
+        db
+      );
+
+      const updated = await walletModel.findByUserId(userId, db);
+      return {
+        request,
+        wallet: {
+          id: updated.id,
+          user_id: updated.user_id,
+          balance: parseFloat(updated.balance),
+          available_balance: parseFloat(updated.available_balance),
+          pending_balance: parseFloat(updated.locked_balance),
+        },
       };
     });
   },

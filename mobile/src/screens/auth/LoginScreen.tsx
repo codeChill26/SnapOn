@@ -28,19 +28,12 @@ interface Errors {
 
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<LoginNavProp>();
-<<<<<<< HEAD
-  const { devLogin } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-=======
   const { login } = useAuth();
   const [email, setEmail]           = useState('');
   const [password, setPassword]     = useState('');
   const [isRememberMe, setRememberMe] = useState(false);
   const [loading, setLoading]       = useState(false);
   const [errors, setErrors]         = useState<Errors>({});
->>>>>>> backend/Deployment
 
   // Restore saved credentials on mount (Remember Me)
   useEffect(() => {
@@ -119,9 +112,6 @@ export const LoginScreen: React.FC = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-<<<<<<< HEAD
-      await devLogin(email);
-=======
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const idToken        = await userCredential.user.getIdToken();
       await login(idToken);
@@ -133,7 +123,6 @@ export const LoginScreen: React.FC = () => {
         await SecureStore.deleteItemAsync('snapon_remembered_email');
         await SecureStore.deleteItemAsync('snapon_remembered_password');
       }
->>>>>>> backend/Deployment
     } catch (error: any) {
       if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
         setErrors({ email: ' ', password: 'Email hoặc mật khẩu không chính xác' });

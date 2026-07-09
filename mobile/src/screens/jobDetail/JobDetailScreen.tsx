@@ -86,8 +86,10 @@ export const JobDetailScreen: React.FC = () => {
     handleDeleteTask,
     handleAcceptAssignment,
     handleDeclineAssignment,
+    handleSubmitAssignment,
     handleCompleteAssignment,
     handleCancelAssignment,
+    handleDisputeAssignment,
   } = useJobDetail();
 
   if (loading) {
@@ -527,6 +529,8 @@ export const JobDetailScreen: React.FC = () => {
                               color:
                                 workerApp.assignmentStatus === 'COMPLETED'
                                   ? theme.colors.status.success
+                                  : workerApp.assignmentStatus === 'SUBMITTED'
+                                  ? theme.colors.status.warning
                                   : workerApp.assignmentStatus === 'IN_PROGRESS'
                                   ? theme.colors.status.info
                                   : theme.colors.status.warning,
@@ -535,6 +539,8 @@ export const JobDetailScreen: React.FC = () => {
                         >
                           {workerApp.assignmentStatus === 'COMPLETED'
                             ? 'Đã hoàn thành'
+                            : workerApp.assignmentStatus === 'SUBMITTED'
+                            ? 'Đã báo xong — chờ bạn nghiệm thu'
                             : workerApp.assignmentStatus === 'IN_PROGRESS'
                             ? 'Đang làm việc'
                             : 'Chờ bạn xác nhận'}
@@ -542,18 +548,31 @@ export const JobDetailScreen: React.FC = () => {
                       </View>
                     </View>
                     <View style={styles.workerMgmtActions}>
-                      {workerApp.assignmentStatus === 'IN_PROGRESS' && (
+                      {(workerApp.assignmentStatus === 'IN_PROGRESS' ||
+                        workerApp.assignmentStatus === 'SUBMITTED') && (
                         <TouchableOpacity
                           style={[styles.mgmtBtn, styles.mgmtBtnComplete]}
                           onPress={() => handleCompleteAssignment(workerApp)}
                           accessibilityRole="button"
-                          accessibilityLabel="Xác nhận hoàn thành công việc"
+                          accessibilityLabel="Nghiệm thu và giải ngân tiền công"
                         >
                           <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
-                          <Text style={styles.mgmtBtnText}>Hoàn tất</Text>
+                          <Text style={styles.mgmtBtnText}>Nghiệm thu</Text>
                         </TouchableOpacity>
                       )}
-                      {workerApp.assignmentStatus !== 'COMPLETED' && (
+                      {workerApp.assignmentStatus === 'SUBMITTED' && (
+                        <TouchableOpacity
+                          style={[styles.mgmtBtn, styles.mgmtBtnCancel]}
+                          onPress={() => handleDisputeAssignment(workerApp)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Khiếu nại kết quả công việc"
+                        >
+                          <Ionicons name="alert-circle-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.mgmtBtnText}>Khiếu nại</Text>
+                        </TouchableOpacity>
+                      )}
+                      {workerApp.assignmentStatus !== 'COMPLETED' &&
+                        workerApp.assignmentStatus !== 'SUBMITTED' && (
                         <TouchableOpacity
                           style={[styles.mgmtBtn, styles.mgmtBtnCancel]}
                           onPress={() => handleCancelAssignment(workerApp)}
@@ -593,6 +612,8 @@ export const JobDetailScreen: React.FC = () => {
                     name={
                       userApplication.assignmentStatus === 'IN_PROGRESS'
                         ? 'play-circle'
+                        : userApplication.assignmentStatus === 'SUBMITTED'
+                        ? 'hourglass'
                         : userApplication.assignmentStatus === 'COMPLETED'
                         ? 'checkmark-circle'
                         : userApplication.assignmentStatus === 'CANCELLED'
@@ -605,6 +626,8 @@ export const JobDetailScreen: React.FC = () => {
                     color={
                       userApplication.assignmentStatus === 'IN_PROGRESS'
                         ? theme.colors.status.info
+                        : userApplication.assignmentStatus === 'SUBMITTED'
+                        ? theme.colors.status.warning
                         : userApplication.assignmentStatus === 'COMPLETED'
                         ? theme.colors.status.success
                         : userApplication.assignmentStatus === 'CANCELLED'
@@ -623,6 +646,8 @@ export const JobDetailScreen: React.FC = () => {
                         color:
                           userApplication.assignmentStatus === 'IN_PROGRESS'
                             ? theme.colors.status.info
+                            : userApplication.assignmentStatus === 'SUBMITTED'
+                            ? theme.colors.status.warning
                             : userApplication.assignmentStatus === 'COMPLETED'
                             ? theme.colors.status.success
                             : userApplication.assignmentStatus === 'CANCELLED'
@@ -638,6 +663,8 @@ export const JobDetailScreen: React.FC = () => {
                     Trạng thái đơn:{' '}
                     {userApplication.assignmentStatus === 'IN_PROGRESS'
                       ? 'Đang làm việc'
+                      : userApplication.assignmentStatus === 'SUBMITTED'
+                      ? 'Đã báo xong — chờ nghiệm thu'
                       : userApplication.assignmentStatus === 'COMPLETED'
                       ? 'Đã hoàn tất công việc'
                       : userApplication.assignmentStatus === 'CANCELLED'
@@ -691,6 +718,53 @@ export const JobDetailScreen: React.FC = () => {
                       <Text style={styles.smallBtnText}>Từ chối</Text>
                     </TouchableOpacity>
                   </View>
+                </View>
+              )}
+
+              {/* Worker báo "Đã hoàn thành" khi đang làm việc */}
+              {userApplication.assignmentStatus === 'IN_PROGRESS' && (
+                <View
+                  style={[
+                    styles.acceptDeclineBanner,
+                    {
+                      backgroundColor: theme.colors.status.successSoft,
+                      borderColor: theme.colors.status.success,
+                      borderRadius: theme.radius.medium,
+                      padding: theme.spacing.lg,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.acceptDeclineText, { color: theme.colors.text.primary, marginBottom: theme.spacing.md }]}>
+                    Đã làm xong việc? Báo hoàn thành để chủ công việc nghiệm thu. Tiền công sẽ được giải ngân khi nghiệm thu (tự động sau 72 giờ nếu không có phản hồi).
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.smallBtn, styles.btnAccept]}
+                    onPress={handleSubmitAssignment}
+                    accessibilityRole="button"
+                    accessibilityLabel="Báo đã hoàn thành công việc"
+                  >
+                    <Ionicons name="flag" size={16} color="#FFFFFF" />
+                    <Text style={styles.smallBtnText}>Báo đã hoàn thành</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Worker đã báo xong — chờ nghiệm thu */}
+              {userApplication.assignmentStatus === 'SUBMITTED' && (
+                <View
+                  style={[
+                    styles.acceptDeclineBanner,
+                    {
+                      backgroundColor: theme.colors.brand.primarySoft,
+                      borderColor: theme.colors.brand.primaryBorder,
+                      borderRadius: theme.radius.medium,
+                      padding: theme.spacing.lg,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.acceptDeclineText, { color: theme.colors.text.primary }]}>
+                    Bạn đã báo hoàn thành. Chờ chủ công việc nghiệm thu — nếu không có phản hồi trong 72 giờ, tiền công sẽ tự động được giải ngân vào sổ thu nhập của bạn.
+                  </Text>
                 </View>
               )}
             </View>

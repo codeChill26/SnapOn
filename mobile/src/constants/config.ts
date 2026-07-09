@@ -1,9 +1,3 @@
-<<<<<<< HEAD
-import { Platform } from 'react-native';
-
-const Config = {
-  API_BASE_URL: Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api',
-=======
 const LOCAL_IP = process.env.EXPO_PUBLIC_LOCAL_IP ?? '192.168.1.5';
 
 const LOCAL_API_URL = `http://${LOCAL_IP}:3000/api`;
@@ -35,7 +29,6 @@ const Config = {
   
   // EXPO_PROJECT_ID: 'ebcc55c8-278c-4ee0-aa61-7ade2a54e646',
   EXPO_PROJECT_ID: '242e7c6a-8b3c-4113-b78b-09d385d0a34f',
->>>>>>> backend/Deployment
   FIREBASE: {
     apiKey: 'AIzaSyDSZYTXmvclmiyQ3rCxPAh1e_EToXycFbQ',
     authDomain: 'hcm202-2d75e.firebaseapp.com',

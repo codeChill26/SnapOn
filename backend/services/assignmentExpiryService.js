@@ -107,23 +107,37 @@ const assignmentExpiryService = {
    */
   startSweeper(io) {
     console.log('⏳ assignmentExpiryService Sweeper started (running every 1 minute)...');
-    
+
     setInterval(async () => {
       try {
         const dbAssignedStatus = toDbAssignedTaskStatus('ASSIGNED');
         // Tìm các bản ghi ASSIGNED đã được tạo quá 15 phút
         const expiredRes = await pool.query(
-          `SELECT id FROM assigned_tasks 
-           WHERE status = $1 
+          `SELECT id FROM assigned_tasks
+           WHERE status = $1
            AND created_at < NOW() - INTERVAL '15 minutes'`,
           [dbAssignedStatus]
         );
-        
+
         for (const row of expiredRes.rows) {
           await this.expireAssignment(row.id, io);
         }
       } catch (error) {
         console.error('[ExpiryService] Lỗi sweeper định kỳ:', error);
+      }
+
+      // Escrow per-job sweeps
+      try {
+        // 1) PENDING_PAYMENT quá 15' chưa thanh toán → EXPIRED (nhả chỗ)
+        await escrowService.expirePendingEscrows();
+      } catch (error) {
+        console.error('[ExpiryService] Lỗi expirePendingEscrows:', error);
+      }
+      try {
+        // 2) Worker đã submit, poster im lặng quá 72h → TỰ NHẢ tiền
+        await escrowService.autoReleaseDueEscrows(io);
+      } catch (error) {
+        console.error('[ExpiryService] Lỗi autoReleaseDueEscrows:', error);
       }
     }, 60000); // Chạy mỗi 1 phút
   },

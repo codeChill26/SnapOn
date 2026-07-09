@@ -1,10 +1,10 @@
 const taskModel = require('../models/taskModel');
+const categoryModel = require('../models/categoryModel');
+const skillModel = require('../models/skillModel');
 const cloudinary = require('../utils/cloudinary');
-const escrowService = require('../services/escrowService');
-const pool = require('../config/db');
+const taskService = require('../services/taskService');
 const { success, error, paginated } = require('../utils/responseHandler');
 const { TASK_STATUS } = require('../utils/constants');
-const { fromDbTaskStatus } = require('../utils/dbEnum');
 const cacheService = require('../services/cacheService');
 
 /**
@@ -122,20 +122,15 @@ const taskController = {
       // Support slug-to-UUID lookup if category_id is a slug
       let finalCategoryId = category_id;
       if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
-        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
-        if (catRes.rows[0]) {
-          finalCategoryId = catRes.rows[0].id;
-        }
+        const resolvedId = await categoryModel.findIdBySlug(category_id);
+        if (resolvedId) finalCategoryId = resolvedId;
       }
 
       // Validate that skill_ids belong to the finalCategoryId
       if (skill_ids && skill_ids.length > 0) {
-        const skillsQuery = await pool.query(
-          'SELECT category_id FROM skills WHERE id = ANY($1::uuid[])',
-          [skill_ids]
-        );
-        for (const skill of skillsQuery.rows) {
-          if (skill.category_id !== finalCategoryId) {
+        const skillCategoryIds = await skillModel.findCategoryIds(skill_ids);
+        for (const skillCategoryId of skillCategoryIds) {
+          if (skillCategoryId !== finalCategoryId) {
             return error(res, 'One or more subcategories do not belong to the selected field.', 400);
           }
         }
@@ -213,9 +208,9 @@ const taskController = {
       // Support slug-to-UUID lookup if field_id is a slug
       let finalFieldId = field_id;
       if (field_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(field_id)) {
-        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [field_id]);
-        if (catRes.rows[0]) {
-          finalFieldId = catRes.rows[0].id;
+        const resolvedFieldId = await categoryModel.findIdBySlug(field_id);
+        if (resolvedFieldId) {
+          finalFieldId = resolvedFieldId;
         } else {
           return paginated(res, [], { page: parseInt(page) || 1, limit: parseInt(limit) || 10, total: 0, totalPages: 0 }, 'Tasks retrieved successfully.');
         }
@@ -224,14 +219,14 @@ const taskController = {
       // Support slug-to-UUID lookup if category_id is a slug (which is subcategory Level 2 Skill ID in this new format)
       let finalCategoryId = category_id;
       if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
-        const skillRes = await pool.query('SELECT id FROM skills WHERE slug = $1', [category_id]);
-        if (skillRes.rows[0]) {
-          finalCategoryId = skillRes.rows[0].id;
+        const skillId = await skillModel.findIdBySlug(category_id);
+        if (skillId) {
+          finalCategoryId = skillId;
         } else {
           // If category_id did not match a skill, check category table (for backward compatibility where category_id meant Level 1)
-          const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
-          if (catRes.rows[0]) {
-            finalFieldId = catRes.rows[0].id;
+          const catId = await categoryModel.findIdBySlug(category_id);
+          if (catId) {
+            finalFieldId = catId;
             finalCategoryId = undefined;
           } else {
             return paginated(res, [], { page: parseInt(page) || 1, limit: parseInt(limit) || 10, total: 0, totalPages: 0 }, 'Tasks retrieved successfully.');
@@ -345,15 +340,7 @@ const taskController = {
       const taskResponse = { ...task };
 
       // Gán động trạng thái is_saved cho user hiện tại
-      if (userId) {
-        const savedRes = await pool.query(
-          'SELECT 1 FROM saved_tasks WHERE task_id = $1 AND user_id = $2',
-          [id, userId]
-        );
-        taskResponse.is_saved = savedRes.rows.length > 0;
-      } else {
-        taskResponse.is_saved = false;
-      }
+      taskResponse.is_saved = userId ? await taskModel.isSavedByUser(id, userId) : false;
 
       return success(res, taskResponse, 'Task retrieved successfully.');
     } catch (err) {
@@ -375,63 +362,8 @@ const taskController = {
       const { status } = req.body;
       const userId = req.user.id;
 
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-
-        // Lock base task row
-        const locked = await client.query(
-          'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
-          [id]
-        );
-        const baseTask = locked.rows[0];
-        if (!baseTask) {
-          const e = new Error('Task not found.');
-          e.statusCode = 404;
-          throw e;
-        }
-
-        // Check ownership
-        if (baseTask.poster_id !== userId) {
-          const e = new Error('You can only update your own tasks.');
-          e.statusCode = 403;
-          throw e;
-        }
-
-        const currentStatus = fromDbTaskStatus(baseTask.status);
-
-        // Validate status transition
-        const validTransitions = {
-          [TASK_STATUS.OPEN]: [TASK_STATUS.CANCELLED],
-          [TASK_STATUS.IN_PROGRESS]: [TASK_STATUS.COMPLETED, TASK_STATUS.CANCELLED],
-          [TASK_STATUS.COMPLETED]: [],
-          [TASK_STATUS.CANCELLED]: [],
-        };
-
-        const allowedStatuses = validTransitions[currentStatus] || [];
-        if (!allowedStatuses.includes(status)) {
-          const e = new Error(`Cannot transition from ${currentStatus} to ${status}.`);
-          e.statusCode = 400;
-          throw e;
-        }
-
-        await taskModel.updateStatus(id, status, client);
-
-        // Escrow side-effects
-        if (currentStatus === TASK_STATUS.IN_PROGRESS && status === TASK_STATUS.COMPLETED) {
-          await escrowService.releaseForTask(id, client);
-        }
-        if (currentStatus === TASK_STATUS.IN_PROGRESS && status === TASK_STATUS.CANCELLED) {
-          await escrowService.refundForTask(id, client);
-        }
-
-        await client.query('COMMIT');
-      } catch (txErr) {
-        try { await client.query('ROLLBACK'); } catch {}
-        throw txErr;
-      } finally {
-        client.release();
-      }
+      // Transition + escrow side-effects run transactionally in taskService
+      await taskService.updateStatus({ taskId: id, userId, status });
 
       // Clear task cache
       await invalidateTaskCache(id);
@@ -503,10 +435,8 @@ const taskController = {
       // Resolve category UUID if slug is sent
       let finalCategoryId = category_id;
       if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
-        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
-        if (catRes.rows[0]) {
-          finalCategoryId = catRes.rows[0].id;
-        }
+        const resolvedId = await categoryModel.findIdBySlug(category_id);
+        if (resolvedId) finalCategoryId = resolvedId;
       }
 
       // Verify application deadline if provided in update
@@ -555,12 +485,9 @@ const taskController = {
       // Validate that skill_ids belong to the category_id
       const finalSkillIds = skill_ids !== undefined ? skill_ids : (task.required_skills || []).map(s => s.id);
       if (finalSkillIds && finalSkillIds.length > 0) {
-        const skillsQuery = await pool.query(
-          'SELECT category_id FROM skills WHERE id = ANY($1::uuid[])',
-          [finalSkillIds]
-        );
-        for (const skill of skillsQuery.rows) {
-          if (skill.category_id !== merged.category_id) {
+        const skillCategoryIds = await skillModel.findCategoryIds(finalSkillIds);
+        for (const skillCategoryId of skillCategoryIds) {
+          if (skillCategoryId !== merged.category_id) {
             return error(res, 'One or more subcategories do not belong to the selected field.', 400);
           }
         }
@@ -632,7 +559,7 @@ const taskController = {
 
       // Update skills if skill_ids provided
       if (skill_ids !== undefined) {
-        await pool.query('DELETE FROM task_required_skills WHERE task_id = $1', [id]);
+        await taskModel.deleteRequiredSkills(id);
         if (skill_ids && skill_ids.length > 0) {
           await taskModel.addRequiredSkills(id, skill_ids);
         }
@@ -640,7 +567,7 @@ const taskController = {
 
       // Update location if location provided
       if (location !== undefined) {
-        await pool.query('DELETE FROM task_locations WHERE task_id = $1', [id]);
+        await taskModel.deleteLocations(id);
         if (location && location.address) {
           await taskModel.addLocation(id, {
             locationType: location.location_type || 'TASK_LOCATION',
@@ -796,89 +723,30 @@ const taskController = {
    * Close recruitment early for a task (Poster only)
    */
   async closeRecruitment(req, res) {
-    const client = await pool.connect();
     try {
       const { id } = req.params;
       const { closed_reason } = req.body;
       const userId = req.user.id;
 
-      await client.query('BEGIN');
-
-      // 1. Lock the task row
-      const lockedTaskRes = await client.query(
-        'SELECT * FROM tasks WHERE id = $1 FOR UPDATE',
-        [id]
-      );
-      const lockedTask = lockedTaskRes.rows[0];
-      if (!lockedTask) {
-        const e = new Error('Task not found.');
-        e.statusCode = 404;
-        throw e;
-      }
-
-      if (lockedTask.poster_id !== userId) {
-        const e = new Error('You can only close recruitment for your own tasks.');
-        e.statusCode = 403;
-        throw e;
-      }
-
-      const currentStatus = fromDbTaskStatus(lockedTask.status);
-      if (currentStatus !== TASK_STATUS.OPEN) {
-        const e = new Error('You can only close recruitment for open tasks.');
-        e.statusCode = 400;
-        throw e;
-      }
-
-      // 2. Close the task recruitment in DB
-      const updatedTask = await taskModel.closeRecruitment(id, userId, closed_reason || null, client);
-
-      // 3. Reject pending applications
-      await client.query(
-        "UPDATE task_applications SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE task_id = $1 AND status = 'pending'",
-        [id]
-      );
-
-      // 4. Cancel assignments that haven't started yet (status = 'assigned')
-      const assignedRes = await client.query(
-        "SELECT * FROM assigned_tasks WHERE task_id = $1 AND status = 'assigned' FOR UPDATE",
-        [id]
-      );
-      const unstartedAssignments = assignedRes.rows;
-
-      for (const assoc of unstartedAssignments) {
-        // Cancel assignment
-        await client.query(
-          "UPDATE assigned_tasks SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-          [assoc.id]
-        );
-
-        // Refund escrow for this tasker
-        await escrowService.refundForTasker(id, assoc.tasker_id, client);
-      }
-
-      await client.query('COMMIT');
+      // Transactional close: reject pending apps + cancel un-started
+      // assignments + refund escrows (in taskService)
+      const { updatedTask, taskTitle, rejectedTaskerIds, cancelledTaskerIds } =
+        await taskService.closeRecruitment({ taskId: id, userId, closedReason: closed_reason });
 
       // Socket.io & Notifications (outside transaction)
       const io = req.app.get('io');
       if (io) {
-        // Notify rejected taskers
-        const rejectedAppsRes = await pool.query(
-          "SELECT tasker_id FROM task_applications WHERE task_id = $1 AND status = 'rejected'",
-          [id]
-        );
-        for (const row of rejectedAppsRes.rows) {
-          io.to(row.tasker_id).emit('application_rejected', {
+        for (const taskerId of rejectedTaskerIds) {
+          io.to(taskerId).emit('application_rejected', {
             taskId: id,
-            taskTitle: lockedTask.title,
+            taskTitle,
             reason: closed_reason || 'Recruitment closed by poster.'
           });
         }
-
-        // Notify cancelled taskers
-        for (const assoc of unstartedAssignments) {
-          io.to(assoc.tasker_id).emit('assignment_cancelled', {
+        for (const taskerId of cancelledTaskerIds) {
+          io.to(taskerId).emit('assignment_cancelled', {
             taskId: id,
-            taskTitle: lockedTask.title,
+            taskTitle,
             reason: closed_reason || 'Recruitment closed by poster.'
           });
         }
@@ -889,12 +757,9 @@ const taskController = {
 
       return success(res, updatedTask, 'Recruitment closed successfully.');
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Close recruitment error:', err);
       const statusCode = err.statusCode || 500;
       return error(res, err.message || 'Failed to close recruitment.', statusCode);
-    } finally {
-      client.release();
     }
   },
 };

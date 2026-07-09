@@ -32,56 +32,78 @@ export class WithdrawService {
       throw new BadRequestError(`Cannot process withdraw request with status ${withdraw.status}`);
     }
 
-    if (status === WithdrawStatus.APPROVED || status === WithdrawStatus.PAID) {
-      // Deduct wallet balance inside a transaction
-      return prisma.$transaction(async (tx) => {
-        // Fetch user wallet
-        const wallet = await tx.wallet.findUnique({
-          where: { userId: withdraw.userId },
-        });
+    // The requested amount was already held at request time
+    // (available_balance -> locked_balance). Here we settle that hold.
+    return prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findUnique({
+        where: { userId: withdraw.userId },
+      });
 
-        if (!wallet) {
-          throw new NotFoundError('User wallet not found');
+      if (!wallet) {
+        throw new NotFoundError('User wallet not found');
+      }
+
+      const withdrawNum = Number(withdraw.amount);
+      const lockedNum = Number(wallet.lockedBalance);
+
+      if (status === WithdrawStatus.APPROVED || status === WithdrawStatus.PAID) {
+        // Pay out: release the hold AND remove it from the total balance.
+        if (lockedNum < withdrawNum) {
+          throw new BadRequestError('Số dư đang giữ không đủ để chi trả yêu cầu này.');
         }
 
-        // Decimal operations
-        const balanceNum = Number(wallet.balance);
-        const withdrawNum = Number(withdraw.amount);
-
-        if (balanceNum < withdrawNum) {
-          throw new BadRequestError('Insufficient wallet balance to approve withdrawal');
-        }
-
-        // Update Wallet balance
         await tx.wallet.update({
           where: { id: wallet.id },
           data: {
-            balance: balanceNum - withdrawNum,
-            availableBalance: Number(wallet.availableBalance) - withdrawNum,
+            lockedBalance: lockedNum - withdrawNum,
+            balance: Number(wallet.balance) - withdrawNum,
           },
         });
 
-        // Create transaction history
-        await tx.walletTransaction.create({
-          data: {
+        // Settle the held WITHDRAW ledger entry created at request time.
+        await tx.walletTransaction.updateMany({
+          where: {
             walletId: wallet.id,
-            type: WalletTransactionType.WITHDRAW,
-            amount: withdraw.amount,
-            status: TransactionStatus.SUCCESS,
             referenceId: withdraw.id,
+            type: WalletTransactionType.WITHDRAW,
           },
+          data: { status: TransactionStatus.SUCCESS },
         });
 
-        // Update request status
         return tx.withdrawRequest.update({
           where: { id },
           data: { status },
         });
-      });
-    } else if (status === WithdrawStatus.REJECTED) {
-      return this.withdrawRepository.updateStatus(id, WithdrawStatus.REJECTED);
-    }
+      }
 
-    throw new BadRequestError(`Unsupported withdrawal status: ${status}`);
+      if (status === WithdrawStatus.REJECTED) {
+        // Release the hold back to available balance (total balance unchanged).
+        if (lockedNum >= withdrawNum) {
+          await tx.wallet.update({
+            where: { id: wallet.id },
+            data: {
+              lockedBalance: lockedNum - withdrawNum,
+              availableBalance: Number(wallet.availableBalance) + withdrawNum,
+            },
+          });
+        }
+
+        await tx.walletTransaction.updateMany({
+          where: {
+            walletId: wallet.id,
+            referenceId: withdraw.id,
+            type: WalletTransactionType.WITHDRAW,
+          },
+          data: { status: TransactionStatus.FAILED },
+        });
+
+        return tx.withdrawRequest.update({
+          where: { id },
+          data: { status: WithdrawStatus.REJECTED },
+        });
+      }
+
+      throw new BadRequestError(`Unsupported withdrawal status: ${status}`);
+    });
   }
 }

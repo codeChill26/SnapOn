@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import { AppColors } from '../../theme';
@@ -9,12 +9,16 @@ import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { walletService } from '../../services/walletService';
 import { useApp } from '../../context/AppContext';
-import { Wallet, WalletTransaction } from '../../types';
+import { WalletTransaction } from '../../types';
 import { formatCurrency, formatDate, getStatusLabel } from '../../utils/format';
 import { Input } from '../../components/ui/Input';
 
-const TOPUP_PRESETS = [50000, 100000, 200000, 500000, 1000000];
-
+/**
+ * Escrow-per-job model: KHÔNG còn nạp tiền vào ví.
+ * Màn hình này là SỔ THU NHẬP của người làm việc:
+ *  - Tiền công được cộng vào khi công việc được nghiệm thu
+ *  - Rút về tài khoản ngân hàng (admin duyệt và chuyển khoản)
+ */
 export const WalletScreen: React.FC = () => {
   const { wallet, setWallet } = useApp();
   const route = useRoute<any>();
@@ -22,11 +26,13 @@ export const WalletScreen: React.FC = () => {
   const [historyY, setHistoryY] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [topupAmount, setTopupAmount] = useState<number>(100000);
-  const [customAmountText, setCustomAmountText] = useState<string>('100000');
-  const [pendingOrderCode, setPendingOrderCode] = useState<number | null>(null);
-  const [checkingPayment, setCheckingPayment] = useState(false);
-  const [topupError, setTopupError] = useState<string>('');
+
+  // Withdraw state
+  const [withdrawAmountText, setWithdrawAmountText] = useState<string>('');
+  const [bankName, setBankName] = useState<string>('');
+  const [bankAccountNumber, setBankAccountNumber] = useState<string>('');
+  const [withdrawError, setWithdrawError] = useState<string>('');
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     if (route.params?.scrollToHistory && historyY > 0) {
@@ -56,114 +62,65 @@ export const WalletScreen: React.FC = () => {
     }
   };
 
-  const MAX_TOPUP = 50_000_000;
+  const handleWithdraw = async () => {
+    const amt = parseInt((withdrawAmountText || '').replace(/[^0-9]/g, ''), 10);
+    const available = wallet?.availableBalance || 0;
 
-  const handlePresetSelect = (amount: number) => {
-    setTopupAmount(amount);
-    setCustomAmountText(amount.toString());
-    setTopupError('');
-  };
-
-  const handleCustomAmountChange = (text: string) => {
-    const cleanText = text.replace(/[^0-9]/g, '');
-    setCustomAmountText(cleanText);
-    const num = parseInt(cleanText, 10);
-    if (!isNaN(num) && num > 0) {
-      setTopupAmount(num);
-      if (num < 1000) setTopupError('Tối thiểu 1.000đ');
-      else if (num > MAX_TOPUP) setTopupError('Tối đa 50.000.000đ');
-      else setTopupError('');
-    } else {
-      setTopupAmount(0);
-      if (cleanText) setTopupError('Vui lòng nhập số tiền hợp lệ');
-      else setTopupError('');
-    }
-  };
-
-  const handleTopup = async () => {
-    if (!topupAmount || topupAmount < 1000) {
-      setTopupError('Số tiền nạp tối thiểu là 1.000đ');
+    if (!amt || amt < 10000) {
+      setWithdrawError('Số tiền rút tối thiểu là 10.000đ');
       return;
     }
-    if (topupAmount > MAX_TOPUP) {
-      setTopupError('Số tiền nạp tối đa là 50.000.000đ');
+    if (amt > available) {
+      setWithdrawError('Số tiền rút vượt quá thu nhập khả dụng');
       return;
     }
-    setTopupError('');
-
-    try {
-      setCheckingPayment(true);
-      const result = await walletService.createPayOSPayment(topupAmount);
-      setPendingOrderCode(result.orderCode);
-      
-      const supported = await Linking.canOpenURL(result.checkoutUrl);
-      if (supported) {
-        await Linking.openURL(result.checkoutUrl);
-      } else {
-        Alert.alert('Lỗi', 'Không thể mở liên kết thanh toán.');
-      }
-    } catch (error: any) {
-      console.error('PayOS topup error:', error);
-      Alert.alert('Lỗi', error.message || 'Không thể tạo liên kết thanh toán PayOS');
-    } finally {
-      setCheckingPayment(false);
+    if (!bankName.trim() || !bankAccountNumber.trim()) {
+      setWithdrawError('Vui lòng nhập tên ngân hàng và số tài khoản');
+      return;
     }
-  };
+    setWithdrawError('');
 
-  const handleCheckPaymentStatus = async () => {
-    if (!pendingOrderCode) return;
     try {
-      setCheckingPayment(true);
-      const res = await walletService.confirmPayOSPayment(pendingOrderCode);
-      
-      if (res.success === false) {
-        Alert.alert('Thông báo', res.message || 'Thanh toán chưa được hoàn tất. Vui lòng thanh toán trên trình duyệt trước.');
-        return;
-      }
-
+      setWithdrawing(true);
+      const res = await walletService.withdraw(amt, bankName.trim(), bankAccountNumber.trim());
       setWallet(res.wallet);
-      if (res.alreadyProcessed) {
-        Alert.alert('Thông báo', 'Giao dịch này đã được xử lý trước đó.');
-      } else {
-        Alert.alert('Thành công', 'Thanh toán qua PayOS thành công! Số dư ví của bạn đã được cập nhật.');
-      }
-      setPendingOrderCode(null);
+      setWithdrawAmountText('');
+      Alert.alert(
+        'Đã gửi yêu cầu rút tiền',
+        'Yêu cầu của bạn đang chờ quản trị viên duyệt và chuyển khoản. Số tiền đã được tạm giữ khỏi thu nhập khả dụng.'
+      );
       loadWalletData();
     } catch (error: any) {
-      console.error('Confirm payment error:', error);
-      Alert.alert('Kiểm tra thất bại', error.message || 'Không thể kết nối đến máy chủ.');
+      console.error('Withdraw error:', error);
+      Alert.alert('Rút tiền thất bại', error.message || 'Không thể gửi yêu cầu rút tiền.');
     } finally {
-      setCheckingPayment(false);
+      setWithdrawing(false);
     }
-  };
-
-  const handleCancelPendingPayment = () => {
-    setPendingOrderCode(null);
   };
 
   if (loading) return <LoadingSpinner fullScreen />;
 
   return (
-    <ScrollView 
-      ref={scrollViewRef} 
-      style={styles.container} 
+    <ScrollView
+      ref={scrollViewRef}
+      style={styles.container}
       contentContainerStyle={styles.content}
     >
       <Card style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Số dư khả dụng</Text>
+        <Text style={styles.balanceLabel}>Thu nhập khả dụng (chờ rút)</Text>
         <Text style={styles.balanceAmount}>
           {formatCurrency(wallet?.availableBalance || 0)}
         </Text>
         <View style={styles.balanceRow}>
           <View style={styles.balanceItem}>
-            <Text style={styles.balanceItemLabel}>Tổng số dư</Text>
+            <Text style={styles.balanceItemLabel}>Tổng thu nhập</Text>
             <Text style={styles.balanceItemValue}>
               {formatCurrency(wallet?.balance || 0)}
             </Text>
           </View>
           <View style={styles.balanceDivider} />
           <View style={styles.balanceItem}>
-            <Text style={styles.balanceItemLabel}>Đang khóa</Text>
+            <Text style={styles.balanceItemLabel}>Đang chờ xử lý</Text>
             <Text style={styles.balanceItemValue}>
               {formatCurrency(wallet?.lockedBalance || 0)}
             </Text>
@@ -171,83 +128,65 @@ export const WalletScreen: React.FC = () => {
         </View>
       </Card>
 
-      {pendingOrderCode && (
-        <Card style={styles.pendingCard}>
-          <Text style={styles.pendingTitle}>Đang xử lý nạp tiền (PayOS)</Text>
-          <Text style={styles.pendingDesc}>
-            Vui lòng hoàn tất thanh toán trên trình duyệt của bạn cho đơn hàng #{pendingOrderCode}.
-          </Text>
-          <View style={styles.pendingButtons}>
-            <Button
-              title="Kiểm tra kết quả"
-              onPress={handleCheckPaymentStatus}
-              size="md"
-              loading={checkingPayment}
-              style={styles.pendingBtn}
-            />
-            <Button
-              title="Hủy/Đóng"
-              onPress={handleCancelPendingPayment}
-              variant="outline"
-              size="md"
-              style={styles.pendingBtn}
-              disabled={checkingPayment}
-            />
-          </View>
-        </Card>
-      )}
+      <Card style={styles.infoCard} variant="glass">
+        <Text style={styles.infoText}>
+          💡 Tiền công được cộng vào đây khi công việc được nghiệm thu. Khi thuê người
+          làm, bạn thanh toán trực tiếp từng công việc qua PayOS — không cần nạp tiền trước.
+        </Text>
+      </Card>
 
       {!route.params?.scrollToHistory && (
-        <Card style={styles.topupCard} variant="glass">
-          <Text style={styles.sectionTitle}>Nạp tiền</Text>
-          <View style={styles.presetRow}>
-            {TOPUP_PRESETS.map(amount => (
-              <TouchableOpacity
-                key={amount}
-                style={[
-                  styles.presetChip,
-                  topupAmount === amount && styles.presetChipActive,
-                ]}
-                onPress={() => handlePresetSelect(amount)}
-              >
-                <Text
-                  style={[
-                    styles.presetText,
-                    topupAmount === amount && styles.presetTextActive,
-                  ]}
-                >
-                  {amount >= 1000000
-                    ? `${(amount / 1000000).toFixed(1)}M`
-                    : `${amount / 1000}K`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        <Card style={styles.withdrawCard} variant="glass">
+          <Text style={styles.sectionTitle}>Rút tiền</Text>
+          <Text style={styles.withdrawHint}>
+            Rút về tài khoản ngân hàng. Thu nhập khả dụng:{' '}
+            <Text style={styles.withdrawHintStrong}>{formatCurrency(wallet?.availableBalance || 0)}</Text>
+          </Text>
 
           <Input
-            label="Số tiền nạp tự chọn (đ)"
-            placeholder="Nhập số tiền (1.000đ – 50.000.000đ)"
-            value={customAmountText}
-            onChangeText={handleCustomAmountChange}
+            label="Số tiền rút (đ)"
+            placeholder="Tối thiểu 10.000đ"
+            value={withdrawAmountText}
+            onChangeText={(t) => {
+              setWithdrawAmountText(t.replace(/[^0-9]/g, ''));
+              setWithdrawError('');
+            }}
             keyboardType="numeric"
-            error={topupError || undefined}
+          />
+          <Input
+            label="Ngân hàng"
+            placeholder="VD: Vietcombank"
+            value={bankName}
+            onChangeText={(t) => {
+              setBankName(t);
+              setWithdrawError('');
+            }}
+          />
+          <Input
+            label="Số tài khoản"
+            placeholder="Nhập số tài khoản nhận tiền"
+            value={bankAccountNumber}
+            onChangeText={(t) => {
+              setBankAccountNumber(t.replace(/[^0-9]/g, ''));
+              setWithdrawError('');
+            }}
+            keyboardType="numeric"
+            error={withdrawError || undefined}
           />
 
-
-
           <Button
-            title={topupAmount >= 1000 && !topupError ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền hợp lệ'}
-            onPress={handleTopup}
+            title="Gửi yêu cầu rút tiền"
+            onPress={handleWithdraw}
             size="lg"
-            style={styles.topupButton}
-            disabled={topupAmount < 1000 || !!topupError}
-            loading={checkingPayment && !pendingOrderCode}
+            style={styles.withdrawButton}
+            loading={withdrawing}
+            disabled={withdrawing}
           />
         </Card>
       )}
 
       {!route.params?.hideHistory && (
-        <View 
+        <View
           style={styles.section}
           onLayout={(e) => {
             setHistoryY(e.nativeEvent.layout.y);
@@ -267,7 +206,7 @@ export const WalletScreen: React.FC = () => {
                       {tx.type === 'DEPOSIT' ? 'Nạp tiền' :
                        tx.type === 'WITHDRAW' ? 'Rút tiền' :
                        tx.type === 'ESCROW_HOLD' ? 'Giữ tiền' :
-                       tx.type === 'ESCROW_RELEASE' ? 'Giải ngân' :
+                       tx.type === 'ESCROW_RELEASE' ? 'Tiền công' :
                        tx.type === 'REFUND' ? 'Hoàn tiền' : 'Phí'}
                     </Text>
                     <Text style={styles.txDate}>{formatDate(tx.createdAt)}</Text>
@@ -350,33 +289,16 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: Colors.textWhite + '30',
   },
-  pendingCard: {
+  infoCard: {
     marginBottom: 16,
-    borderColor: Colors.warning,
-    borderWidth: 1.5,
-    backgroundColor: Colors.warning + '10',
-    padding: 16,
+    padding: 14,
   },
-  pendingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.warning,
-    marginBottom: 6,
-  },
-  pendingDesc: {
+  infoText: {
     fontSize: 13,
     color: AppColors.text.secondary,
-    marginBottom: 14,
-    lineHeight: 18,
+    lineHeight: 19,
   },
-  pendingButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  pendingBtn: {
-    flex: 1,
-  },
-  topupCard: {
+  withdrawCard: {
     marginBottom: 16,
   },
   sectionTitle: {
@@ -385,64 +307,17 @@ const styles = StyleSheet.create({
     color: AppColors.text.primary,
     marginBottom: 12,
   },
-  presetRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  presetChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: AppColors.border.subtle,
-    backgroundColor: AppColors.background.soft,
-  },
-  presetChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  presetText: {
+  withdrawHint: {
     fontSize: 13,
-    fontWeight: '600',
-    color: AppColors.text.muted,
-  },
-  presetTextActive: {
-    color: Colors.textWhite,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: AppColors.text.primary,
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  methodRow: {
-    flexDirection: 'column',
-    gap: 8,
-    marginBottom: 16,
-  },
-  methodChip: {
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: AppColors.border.subtle,
-    backgroundColor: AppColors.background.soft,
-  },
-  methodChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '08',
-  },
-  methodText: {
-    fontSize: 14,
-    fontWeight: '600',
     color: AppColors.text.secondary,
+    marginBottom: 12,
+    lineHeight: 18,
   },
-  methodTextActive: {
+  withdrawHintStrong: {
+    fontWeight: '700',
     color: Colors.primary,
   },
-  topupButton: {
+  withdrawButton: {
     marginTop: 8,
   },
   section: {

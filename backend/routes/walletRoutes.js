@@ -24,41 +24,24 @@ router.get(
   walletController.getMyTransactions
 );
 
-// DEV-only topup
-router.post(
-  '/topup/mock',
-  authenticate,
-  rateLimiter('wallet-topup', 10, 60),
-  [body('amount').notEmpty().isFloat({ min: 0.01 })],
-  validate,
-  walletController.topupMock
-);
-
 // ==========================================
-// PayOS Integration Routes (Web Flow)
+// ESCROW-PER-JOB MODEL: nạp tiền vào ví đã bị GỠ BỎ.
+// Poster thanh toán trực tiếp từng job qua PayOS (xem escrowRoutes).
+// Ví giờ chỉ là SỔ THU NHẬP của tasker: nhận tiền công → rút về ngân hàng.
 // ==========================================
 
-router.post(
-  '/topup/payos/create',
-  authenticate,
-  rateLimiter('wallet-topup', 10, 60),
-  [body('amount').notEmpty().isFloat({ min: 1000 })], // PayOS minimum is 1000 VND
-  validate,
-  walletController.createPayOSPaymentSession
-);
-
+// PayOS webhook — GIỮ NGUYÊN PATH (PayOS dashboard đã trỏ vào đây).
+// Giờ xử lý cả thanh toán escrow per-job (và topup legacy nếu còn).
 router.post(
   '/topup/payos/webhook',
   walletController.handlePayOSWebhook
 );
 
-router.get(
-  '/topup/payos/status/:orderCode',
-  authenticate,
-  walletController.checkPayOSPaymentStatus
-);
+// Trang redirect sau thanh toán (legacy path — vẫn dùng được)
+router.get('/topup/payos/success', walletController.payosSuccess);
+router.get('/topup/payos/cancel', walletController.payosCancel);
 
-// Withdrawal
+// Withdrawal — tasker rút tiền công về tài khoản ngân hàng
 router.post(
   '/withdraw',
   authenticate,
@@ -72,27 +55,4 @@ router.post(
   walletController.withdraw
 );
 
-// ==========================================
-// PayOS Integration Routes (Mobile Flow)
-// ==========================================
-
-router.post(
-  '/topup/payos',
-  authenticate,
-  rateLimiter('wallet-topup', 10, 60),
-  [body('amount').notEmpty().isFloat({ min: 1000 })],
-  validate,
-  walletController.createPayOSPayment
-);
-
-router.post(
-  '/topup/payos/confirm',
-  authenticate,
-  [body('orderCode').notEmpty()],
-  validate,
-  walletController.confirmPayOSPayment
-);
-
-router.get('/topup/payos/success', walletController.payosSuccess);
-router.get('/topup/payos/cancel', walletController.payosCancel);
 module.exports = router;

@@ -542,46 +542,81 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [jobs, fetchJobs]);
 
+  // Escrow-per-job: sau khi backend trả về checkoutUrl, mở PayOS và poll xác nhận.
+  // Match chỉ được CHỐT (status matched) khi thanh toán thành công.
+  const pollEscrowConfirm = useCallback((orderCode: number, onSuccess: () => void) => {
+    let attempts = 0;
+    const maxAttempts = 60; // ~5 phút (5s/lần)
+    const timer = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(timer);
+        return;
+      }
+      try {
+        const res = await api.post('/escrows/payos/confirm', { orderCode });
+        const data = res.data?.data;
+        if (data?.success) {
+          clearInterval(timer);
+          onSuccess();
+        }
+        // Chưa trả tiền → tiếp tục poll; conflict → dừng
+        if (data?.conflict) clearInterval(timer);
+      } catch {
+        // Lỗi tạm thời — thử lại ở nhịp sau
+      }
+    }, 5000);
+  }, []);
+
   const matchJob = useCallback((jobId: string, workerId: string) => {
-    // Check wallet balance for hirer
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
     const winner = job.applicants.find(a => a.workerId === workerId);
     const cost = winner?.bidPrice ?? job.price;
-    if (hirerWallet < cost) return; // Block if insufficient funds
 
-    // Optimistic UI update for job status
-    setJobs(prev => prev.map(j => {
-      if (j.id !== jobId) return j;
-      return {
-        ...j,
-        status: 'matched',
-        aiMatchId: workerId,
-        price: cost,
-      };
-    }));
-    if (workerId === currentUser.id) {
-      setWorkerStatus('on_job');
-      setWorkerCurrentJobId(jobId);
-    }
+    const applyMatchedState = () => {
+      setJobs(prev => prev.map(j => {
+        if (j.id !== jobId) return j;
+        return {
+          ...j,
+          status: 'matched',
+          aiMatchId: workerId,
+          price: cost,
+        };
+      }));
+      if (workerId === currentUser.id) {
+        setWorkerStatus('on_job');
+        setWorkerCurrentJobId(jobId);
+      }
+    };
 
-    // Persist match to backend database if token exists
-    // Backend escrow system handles wallet deduction (holdForMatch)
+    // Escrow-per-job: backend trả về PayOS checkoutUrl — poster thanh toán
+    // đúng số tiền job này, tiền được GIỮ trong ký quỹ đến khi nghiệm thu.
     const token = localStorage.getItem('firebaseToken');
     if (token && winner?.id) {
       api.post(`/tasks/${jobId}/manual-match`, { application_id: winner.id })
       .then(res => {
-        if (res.data.success) {
-          console.log('Manual match saved to backend');
-          fetchProfile(); // Refresh wallet balance from DB (escrow deducted)
+        const data = res.data?.data;
+        if (res.data.success && data?.paymentRequired && data?.checkoutUrl) {
+          window.open(data.checkoutUrl, '_blank');
+          pollEscrowConfirm(data.orderCode, () => {
+            applyMatchedState();
+            fetchJobs();
+            fetchProfile();
+          });
+        } else if (res.data.success) {
+          applyMatchedState();
+          fetchProfile();
         }
       })
       .catch(err => console.error('Error saving manual match to backend:', err));
     } else {
-      // Offline fallback: deduct locally
+      // Offline/demo fallback: chốt match và trừ ví cục bộ
+      if (hirerWallet < cost) return;
+      applyMatchedState();
       setHirerWallet(prev => prev - cost);
     }
-  }, [jobs, hirerWallet, currentUser.id, fetchProfile]);
+  }, [jobs, hirerWallet, currentUser.id, fetchProfile, fetchJobs, pollEscrowConfirm]);
 
   // ── Close bidding: run AI scoring algo → auto-match winner ──
   const closeBidding = useCallback((jobId: string) => {
@@ -591,43 +626,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const scored = scoreApplicants(job);
     const winner = scored[0];
 
-    // Check wallet balance
-    if (hirerWallet < winner.bidPrice) return;
+    const applyMatchedState = () => {
+      setJobs(prev => prev.map(j => {
+        if (j.id !== jobId) return j;
+        return {
+          ...j,
+          status: 'matched',
+          aiMatchId: winner.workerId,
+          price: winner.bidPrice,
+          applicants: scored,
+        };
+      }));
+      if (winner.workerId === currentUser.id) {
+        setWorkerStatus('on_job');
+        setWorkerCurrentJobId(jobId);
+      }
+    };
 
-    // Optimistic UI update for job status
-    setJobs(prev => prev.map(j => {
-      if (j.id !== jobId) return j;
-      return {
-        ...j,
-        status: 'matched',
-        aiMatchId: winner.workerId,
-        price: winner.bidPrice,
-        applicants: scored,
-      };
-    }));
-
-    if (winner.workerId === currentUser.id) {
-      setWorkerStatus('on_job');
-      setWorkerCurrentJobId(jobId);
-    }
-
-    // Persist auto-match to backend database if token exists
-    // Backend escrow system handles wallet deduction (holdForMatch)
+    // Escrow-per-job: auto-match trả về PayOS checkoutUrl — thanh toán xong mới chốt
     const token = localStorage.getItem('firebaseToken');
     if (token) {
       api.post(`/tasks/${jobId}/auto-match`)
       .then(res => {
-        if (res.data.success) {
-          console.log('Auto-match saved to backend');
-          fetchProfile(); // Refresh wallet balance from DB (escrow deducted)
+        const data = res.data?.data;
+        if (res.data.success && data?.paymentRequired && data?.checkoutUrl) {
+          window.open(data.checkoutUrl, '_blank');
+          pollEscrowConfirm(data.orderCode, () => {
+            applyMatchedState();
+            fetchJobs();
+            fetchProfile();
+          });
+        } else if (res.data.success) {
+          applyMatchedState();
+          fetchProfile();
         }
       })
       .catch(err => console.error('Error saving auto-match to backend:', err));
     } else {
-      // Offline fallback: deduct locally
+      // Offline/demo fallback
+      if (hirerWallet < winner.bidPrice) return;
+      applyMatchedState();
       setHirerWallet(prev => prev - winner.bidPrice);
     }
-  }, [jobs, hirerWallet, currentUser.id, fetchProfile]);
+  }, [jobs, hirerWallet, currentUser.id, fetchProfile, fetchJobs, pollEscrowConfirm]);
 
   const completeJob = useCallback((jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
@@ -662,32 +703,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [jobs, currentUser.id, fetchProfile]);
 
   const topUpWallet = useCallback(async (role: 'hirer' | 'worker', amount: number) => {
-    const token = localStorage.getItem('firebaseToken');
-    if (!token) {
-      if (role === 'hirer') setHirerWallet(prev => prev + amount);
-      else setWorkerWallet(prev => prev + amount);
-      return;
-    }
-
-    try {
-      const res = await api.post('/wallet/topup/mock', { amount });
-      const data = res.data;
-      if (data.success && data.data) {
-        const balance = parseFloat(data.data.available_balance || data.data.balance || 0);
-        if (role === 'worker') {
-          setWorkerWallet(balance);
-          setHirerWallet(0);
-        } else {
-          setHirerWallet(balance);
-          setWorkerWallet(0);
-        }
-      }
-    } catch (e) {
-      console.error('Error topping up wallet on backend:', e);
-      // Fallback
-      if (role === 'hirer') setHirerWallet(prev => prev + amount);
-      else setWorkerWallet(prev => prev + amount);
-    }
+    // Escrow-per-job: backend đã GỠ nạp tiền vào ví.
+    // Poster thanh toán trực tiếp từng job qua PayOS khi match.
+    // Hàm này chỉ còn cập nhật số dư demo cục bộ (không gọi backend).
+    console.warn('[SnapOn] Nạp ví đã bị gỡ (mô hình escrow-per-job) — chỉ cập nhật demo cục bộ.');
+    if (role === 'hirer') setHirerWallet(prev => prev + amount);
+    else setWorkerWallet(prev => prev + amount);
   }, []);
 
   return (

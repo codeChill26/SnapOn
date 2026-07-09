@@ -63,6 +63,34 @@ const escrowModel = {
     );
     return result.rows[0] || null;
   },
+
+  /** Find escrow by PayOS order code (payment mapping). */
+  async findByOrderCode(orderCode, db = pool) {
+    const result = await db.query(
+      'SELECT * FROM escrows WHERE order_code = $1 LIMIT 1',
+      [orderCode]
+    );
+    return result.rows[0] || null;
+  },
+
+  /** Tasker ids of escrows currently HOLDING for a task. */
+  async findHoldingTaskerIds(taskId, db = pool) {
+    const result = await db.query(
+      "SELECT tasker_id FROM escrows WHERE task_id = $1 AND status = 'HOLDING'",
+      [taskId]
+    );
+    return result.rows.map(r => r.tasker_id);
+  },
+
+  /** Lock escrow row by order code inside a transaction. */
+  async lockByOrderCode(orderCode, db) {
+    if (!db) throw new Error('lockByOrderCode requires a db client');
+    const result = await db.query(
+      'SELECT * FROM escrows WHERE order_code = $1 FOR UPDATE',
+      [orderCode]
+    );
+    return result.rows[0] || null;
+  },
 };
 
 module.exports = escrowModel;

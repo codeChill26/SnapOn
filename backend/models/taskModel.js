@@ -461,6 +461,25 @@ const taskModel = {
     return result.rows[0] || null;
   },
 
+  /** Whether the user saved this task. */
+  async isSavedByUser(taskId, userId, db = pool) {
+    const result = await db.query(
+      'SELECT 1 FROM saved_tasks WHERE task_id = $1 AND user_id = $2',
+      [taskId, userId]
+    );
+    return result.rows.length > 0;
+  },
+
+  /** Remove all required-skill links of a task (before re-adding on update). */
+  async deleteRequiredSkills(taskId, db = pool) {
+    await db.query('DELETE FROM task_required_skills WHERE task_id = $1', [taskId]);
+  },
+
+  /** Remove all locations of a task (before re-adding on update). */
+  async deleteLocations(taskId, db = pool) {
+    await db.query('DELETE FROM task_locations WHERE task_id = $1', [taskId]);
+  },
+
   /**
    * Add required skills to task
    */

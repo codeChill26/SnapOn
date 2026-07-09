@@ -1,16 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Tag, 
-  Briefcase, 
-  Flag, 
-  Image, 
+import { apiClient } from '@/lib/api-client';
+import {
+  LayoutDashboard,
+  Users,
+  Tag,
+  Briefcase,
+  Flag,
+  Image,
   Wallet,
+  Scale,
   ShieldCheck
 } from 'lucide-react';
 
@@ -21,11 +23,49 @@ const navItems = [
   { href: '/tasks', label: 'Tasks', icon: Briefcase },
   { href: '/banners', label: 'Banners', icon: Image },
   { href: '/reports', label: 'Reports', icon: Flag },
-  { href: '/withdraws', label: 'Withdrawals', icon: Wallet },
+  { href: '/withdraws', label: 'Withdrawals', icon: Wallet, badge: 'withdraws' },
+  { href: '/disputes', label: 'Disputes', icon: Scale, badge: 'disputes' },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [pendingWithdraws, setPendingWithdraws] = useState(0);
+  const [pendingDisputes, setPendingDisputes] = useState(0);
+
+  // Poll pending counts for near real-time notification badges.
+  useEffect(() => {
+    let active = true;
+
+    const fetchPending = async () => {
+      try {
+        const res = await apiClient.get('/api/withdraws', {
+          params: { status: 'PENDING', page: '1', limit: '1' },
+        });
+        if (active && res.data?.success) {
+          setPendingWithdraws(res.data.data.total || 0);
+        }
+      } catch {
+        // Silent — a transient failure shouldn't disrupt the console.
+      }
+      try {
+        const res = await apiClient.get('/api/disputes', {
+          params: { view: 'DISPUTED', page: '1', limit: '1' },
+        });
+        if (active && res.data?.success) {
+          setPendingDisputes(res.data.data.total || 0);
+        }
+      } catch {
+        // Silent
+      }
+    };
+
+    fetchPending();
+    const id = setInterval(fetchPending, 15000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden md:flex w-64 flex-col border-r border-zinc-900 bg-zinc-950">
@@ -55,6 +95,24 @@ export default function Sidebar() {
             >
               <Icon className="h-4 w-4" />
               {item.label}
+              {item.badge === 'withdraws' && pendingWithdraws > 0 && (
+                <span
+                  className={`ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold animate-pulse ${
+                    isActive ? 'bg-white text-indigo-700' : 'bg-red-500 text-white'
+                  }`}
+                >
+                  {pendingWithdraws > 99 ? '99+' : pendingWithdraws}
+                </span>
+              )}
+              {item.badge === 'disputes' && pendingDisputes > 0 && (
+                <span
+                  className={`ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold animate-pulse ${
+                    isActive ? 'bg-white text-indigo-700' : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  {pendingDisputes > 99 ? '99+' : pendingDisputes}
+                </span>
+              )}
             </Link>
           );
         })}

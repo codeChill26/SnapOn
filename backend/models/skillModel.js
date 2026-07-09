@@ -4,6 +4,22 @@ const pool = require('../config/db');
  * Skill Model — Database queries for skills table
  */
 const skillModel = {
+  /** Resolve a skill UUID from its slug. Returns null if not found. */
+  async findIdBySlug(slug, db = pool) {
+    const result = await db.query('SELECT id FROM skills WHERE slug = $1', [slug]);
+    return result.rows[0] ? result.rows[0].id : null;
+  },
+
+  /** Category ids of the given skills (for field/subcategory validation). */
+  async findCategoryIds(ids, db = pool) {
+    if (!ids || ids.length === 0) return [];
+    const result = await db.query(
+      'SELECT category_id FROM skills WHERE id = ANY($1::uuid[])',
+      [ids]
+    );
+    return result.rows.map(r => r.category_id);
+  },
+
   /**
    * Find skills by array of IDs
    */

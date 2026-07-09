@@ -231,6 +231,7 @@ model AssignedTask {
   assignedBy    AssignedBy         @map("assigned_by")
   status        AssignedTaskStatus @default(ACTIVE)
   createdAt     DateTime           @default(now()) @map("created_at")
+  submittedAt   DateTime?          @map("submitted_at")
   application   TaskApplication?   @relation(fields: [applicationId], references: [id])
   task          Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
   tasker        User               @relation("AssignedTasker", fields: [taskerId], references: [id], onDelete: Cascade)
@@ -274,6 +275,17 @@ model Escrow {
   platformFeeAmount  Decimal      @default(0) @map("platform_fee_amount") @db.Decimal(12, 2)
   insuranceFeeAmount Decimal      @default(0) @map("insurance_fee_amount") @db.Decimal(12, 2)
   status             EscrowStatus @default(HOLDING)
+  orderCode          BigInt?      @unique @map("order_code")
+  checkoutUrl        String?      @map("checkout_url")
+  expiresAt          DateTime?    @map("expires_at")
+  autoReleaseAt      DateTime?    @map("auto_release_at")
+  disputeReason      String?      @map("dispute_reason")
+  applicationId      String?      @map("application_id") @db.Uuid
+  flow               String?
+  assignedByType     String?      @map("assigned_by")
+  discountAmount     Decimal      @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  voucherId          String?      @map("voucher_id") @db.Uuid
+  createdAt          DateTime     @default(now()) @map("created_at")
   poster             User         @relation("EscrowPoster", fields: [posterId], references: [id])
   task               Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
   tasker             User         @relation("EscrowTasker", fields: [taskerId], references: [id])
@@ -478,6 +490,7 @@ enum AssignedTaskStatus {
   CANCELLED
   ASSIGNED
   IN_PROGRESS
+  SUBMITTED
 }
 
 enum WalletTransactionType {
@@ -501,6 +514,8 @@ enum EscrowStatus {
   RELEASED
   REFUNDED
   DISPUTED
+  PENDING_PAYMENT
+  EXPIRED
 }
 
 enum PaymentMethod {
@@ -533,4 +548,39 @@ enum ReportStatus {
   REVIEWED
   RESOLVED
   REJECTED
+}
+
+model Voucher {
+  id             String              @id @default(uuid()) @db.Uuid
+  code           String              @unique @db.VarChar(50)
+  discountType   String              @default("FIXED") @map("discount_type") @db.VarChar(10)
+  discountValue  Decimal             @map("discount_value") @db.Decimal(12, 2)
+  maxDiscount    Decimal?            @map("max_discount") @db.Decimal(12, 2)
+  minOrderAmount Decimal             @default(0) @map("min_order_amount") @db.Decimal(12, 2)
+  maxUses        Int                 @default(1) @map("max_uses")
+  usedCount      Int                 @default(0) @map("used_count")
+  perUserLimit   Int                 @default(1) @map("per_user_limit")
+  validFrom      DateTime            @default(now()) @map("valid_from")
+  validTo        DateTime?           @map("valid_to")
+  status         String              @default("ACTIVE") @db.VarChar(10)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  redemptions    VoucherRedemption[]
+
+  @@map("vouchers")
+}
+
+model VoucherRedemption {
+  id             String   @id @default(uuid()) @db.Uuid
+  voucherId      String   @map("voucher_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  taskId         String   @map("task_id") @db.Uuid
+  escrowId       String?  @map("escrow_id") @db.Uuid
+  discountAmount Decimal  @map("discount_amount") @db.Decimal(12, 2)
+  status         String   @default("RESERVED") @db.VarChar(10)
+  createdAt      DateTime @default(now()) @map("created_at")
+  voucher        Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+
+  @@index([voucherId], map: "voucher_redemptions_voucher_idx")
+  @@index([taskId], map: "voucher_redemptions_task_idx")
+  @@map("voucher_redemptions")
 }
