@@ -51,15 +51,20 @@ export const walletService = {
     nextCursor?: string;
   }> {
     const params: Record<string, string> = {};
-    if (cursor) params.cursor = cursor;
-    const response = await api.get<ApiResponse<{
-      transactions: any[];
-      nextCursor?: string;
-    }>>('/wallet/transactions', { params });
-    
+    if (cursor) params.page = cursor;
+    const response = await api.get<any>('/wallet/transactions', { params });
+
+    // Backend trả { data: [...], pagination: { page, totalPages } }
+    const payload = response.data;
+    const rows: any[] = Array.isArray(payload.data)
+      ? payload.data
+      : payload.data?.transactions || [];
+    const pagination = payload.pagination;
+    const hasMore = pagination && pagination.page < pagination.totalPages;
+
     return {
-      transactions: (response.data.data.transactions || []).map(mapTransaction),
-      nextCursor: response.data.data.nextCursor,
+      transactions: rows.map(mapTransaction),
+      nextCursor: hasMore ? String(pagination.page + 1) : undefined,
     };
   },
 

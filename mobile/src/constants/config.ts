@@ -2,10 +2,10 @@ const LOCAL_IP = process.env.EXPO_PUBLIC_LOCAL_IP ?? '192.168.1.5';
 
 const LOCAL_API_URL = `http://${LOCAL_IP}:3000/api`;
 // 2. Link debug của Phúc (Phúc thay domain Render của Phúc vào đây nếu có)
-const DEPLOYED_API_URL = 'https://snapon.onrender.com/api';
+const DEPLOYED_API_URL = 'https://graceful-playfulness-production.up.railway.app/api';
 
 // 1. Link debug của bạn (Vừa deploy xong)
-const MY_DEBUG_API_URL = 'https://snapon-debug.onrender.com/api';
+const MY_DEBUG_API_URL = 'https://graceful-playfulness-production.up.railway.app/api';
 
 const Config = {
   // =========================================================

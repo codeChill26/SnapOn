@@ -7,7 +7,7 @@ interface AppContextType {
   applications: TaskApplication[];
   wallet: Wallet | null;
   userRole: UserRole;
-  setTasks: (tasks: Task[]) => void;
+  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   addTask: (task: Task) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   setApplications: (apps: TaskApplication[]) => void;

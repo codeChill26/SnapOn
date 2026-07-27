@@ -9,15 +9,20 @@ import { Task } from '../../../types';
 import { JobField, JobSubcategory } from '../../../constants/jobCategories';
 import { PostTypeFilter } from '../../../components/home/HomeRoleTabs';
 
+const TASKS_PAGE_SIZE = 20;
+
 export const useHomeTasks = () => {
   const latestRequestRef = useRef(0);
   const didInitialFocusRef = useRef(false);
   const lastFetchTimeRef = useRef(0);
+  const pageRef = useRef(1);
+  const hasMoreRef = useRef(true);
 
   const { tasks, setTasks, updateTask } = useApp();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,7 +91,34 @@ export const useHomeTasks = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetching tasks from backend
+  // Build query params from current filters
+  const buildParams = useCallback(
+    (page: number): Record<string, string | number> => {
+      const params: Record<string, string | number> = {
+        page,
+        limit: TASKS_PAGE_SIZE,
+      };
+
+      if (selectedSubcategoryId) {
+        params.category_id = selectedSubcategoryId;
+      } else if (selectedFieldId) {
+        params.field_id = selectedFieldId;
+      }
+
+      if (debouncedSearch) {
+        params.search = debouncedSearch;
+      }
+
+      if (postTypeFilter !== 'ALL') {
+        params.post_type = postTypeFilter;
+      }
+
+      return params;
+    },
+    [debouncedSearch, selectedFieldId, selectedSubcategoryId, postTypeFilter]
+  );
+
+  // Fetching tasks from backend (page 1 — reset list)
   const fetchTasks = useCallback(
     async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
       const currentRequestId = ++latestRequestRef.current;
@@ -96,30 +128,13 @@ export const useHomeTasks = () => {
           setLoading(true);
         }
 
-        const params: Record<string, string | number> = {
-          page: 1,
-          limit: 20,
-        };
-
-        if (selectedSubcategoryId) {
-          params.category_id = selectedSubcategoryId;
-        } else if (selectedFieldId) {
-          params.field_id = selectedFieldId;
-        }
-
-        if (debouncedSearch) {
-          params.search = debouncedSearch;
-        }
-
-        if (postTypeFilter !== 'ALL') {
-          params.post_type = postTypeFilter;
-        }
-
-        const result = await taskService.getTasks(params);
+        const result = await taskService.getTasks(buildParams(1));
 
         if (currentRequestId === latestRequestRef.current) {
           const newTasks = result.data ?? [];
           setTasks(newTasks);
+          pageRef.current = 1;
+          hasMoreRef.current = result.pagination.page < result.pagination.totalPages;
           lastFetchTimeRef.current = Date.now();
           AsyncStorage.setItem('@snapon/cache_tasks', JSON.stringify(newTasks)).catch(() => {});
         }
@@ -130,6 +145,7 @@ export const useHomeTasks = () => {
 
         if (currentRequestId === latestRequestRef.current) {
           setTasks([]);
+          hasMoreRef.current = false;
         }
       } finally {
         if (currentRequestId === latestRequestRef.current) {
@@ -138,8 +154,38 @@ export const useHomeTasks = () => {
         }
       }
     },
-    [debouncedSearch, selectedFieldId, selectedSubcategoryId, postTypeFilter, setTasks]
+    [buildParams, setTasks]
   );
+
+  // Load next page and append (infinite scroll)
+  const loadMoreTasks = useCallback(async () => {
+    if (loading || refreshing || loadingMore || !hasMoreRef.current) return;
+
+    const currentRequestId = latestRequestRef.current;
+    const nextPage = pageRef.current + 1;
+
+    try {
+      setLoadingMore(true);
+      const result = await taskService.getTasks(buildParams(nextPage));
+
+      // Bỏ kết quả nếu bộ lọc đã thay đổi trong lúc đang tải trang kế
+      if (currentRequestId !== latestRequestRef.current) return;
+
+      const newTasks = result.data ?? [];
+      setTasks((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        return [...prev, ...newTasks.filter((t) => !seen.has(t.id))];
+      });
+      pageRef.current = result.pagination.page;
+      hasMoreRef.current = result.pagination.page < result.pagination.totalPages;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('Failed to load more tasks:', error);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, refreshing, loadingMore, buildParams, setTasks]);
 
   useEffect(() => {
     void fetchTasks();
@@ -290,6 +336,8 @@ export const useHomeTasks = () => {
   return {
     loading,
     refreshing,
+    loadingMore,
+    loadMoreTasks,
     bannerRefreshKey,
     searchQuery,
     setSearchQuery,

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import {
+  ActivityIndicator,
   RefreshControl,
   StyleSheet,
   Text,
@@ -32,6 +33,8 @@ export const HomeScreen: React.FC = () => {
   const {
     loading,
     refreshing,
+    loadingMore,
+    loadMoreTasks,
     bannerRefreshKey,
     searchQuery,
     setSearchQuery,
@@ -439,7 +442,19 @@ export const HomeScreen: React.FC = () => {
         estimatedItemSize={220}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmptyComponent}
-        ListFooterComponent={<View style={[styles.listFooter, { backgroundColor: theme.colors.background.secondary }]} />}
+        ListFooterComponent={
+          <View style={[styles.listFooter, { backgroundColor: theme.colors.background.secondary }]}>
+            {loadingMore && (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.brand.primary}
+                style={{ paddingVertical: theme.spacing.md }}
+              />
+            )}
+          </View>
+        }
+        onEndReached={loadMoreTasks}
+        onEndReachedThreshold={0.5}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
