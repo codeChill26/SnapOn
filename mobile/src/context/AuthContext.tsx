@@ -150,8 +150,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(accessToken);
       setUser(userData);
       loginInProgressRef.current = false;
-    } catch (error) {
-      console.error('Login failed:', error);
+    } catch (error: any) {
+      // Log the parts that identify the failure — bare AxiosError prints as just
+      // "AxiosError" and hides the status and server message.
+      const res = error?.response;
+      console.error('Login failed:', {
+        url: `${error?.config?.baseURL ?? ''}${error?.config?.url ?? ''}`,
+        status: res?.status ?? '(no response — network/timeout)',
+        serverMessage: res?.data?.message ?? res?.data,
+        code: error?.code,
+        message: error?.message,
+      });
       loginInProgressRef.current = false;
       throw error;
     }
