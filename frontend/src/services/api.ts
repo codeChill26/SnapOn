@@ -9,8 +9,11 @@ const api: AxiosInstance = axios.create({
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  // sync-user carries a fresh token in its body; a stale stored token
+  // in the Authorization header would override it and cause 401s.
+  const isSyncUser = config.url?.includes('/auth/sync-user');
   const token = localStorage.getItem('firebaseToken');
-  if (token) {
+  if (token && !isSyncUser) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   const appUserStr = localStorage.getItem('appUser');

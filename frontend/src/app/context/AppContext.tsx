@@ -259,11 +259,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [userRole, _setUserRole] = useState<'hirer' | 'worker' | 'admin'>(() => {
     try {
+      // Chế độ worker/hirer là lựa chọn phía client, lưu riêng để không bị
+      // reset theo role trong DB (DB chỉ còn USER/ADMIN).
+      const savedMode = localStorage.getItem('roleMode');
+      if (savedMode === 'worker' || savedMode === 'hirer' || savedMode === 'admin') {
+        return savedMode;
+      }
       const saved = localStorage.getItem('appUser');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.role) {
-          return parsed.role === 'tasker' ? 'worker' : parsed.role === 'admin' ? 'admin' : 'hirer';
+          const dbRole = String(parsed.role).toUpperCase();
+          return dbRole === 'TASKER' ? 'worker' : dbRole === 'ADMIN' ? 'admin' : 'hirer';
         }
       }
     } catch {}
@@ -309,6 +316,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('firebaseToken');
       localStorage.removeItem('appUser');
       localStorage.removeItem('wallet');
+      localStorage.removeItem('roleMode');
       setDbUser(null);
       setFirebaseUser(null);
       _setUserRole('hirer');
@@ -345,8 +353,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setFirebaseUser({ uid: data.user.firebase_uid || 'dev-user', email: data.user.email });
         }
         localStorage.setItem('appUser', JSON.stringify(data.user));
-        const dbRole = data.user.role;
-        const mappedRole = dbRole === 'tasker' ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
+        // DB role chỉ còn USER/ADMIN — so sánh không phân biệt hoa thường.
+        // Với user thường, tôn trọng chế độ worker/hirer đã chọn phía client
+        // thay vì ghi đè về 'hirer' mỗi lần fetch profile.
+        const dbRole = String(data.user.role || '').toUpperCase();
+        const savedMode = localStorage.getItem('roleMode');
+        const clientMode: 'hirer' | 'worker' = savedMode === 'worker' ? 'worker' : 'hirer';
+        const mappedRole: 'hirer' | 'worker' | 'admin' =
+          dbRole === 'ADMIN' ? 'admin' : dbRole === 'TASKER' ? 'worker' : clientMode;
         _setUserRole(mappedRole);
 
         // Fetch wallet balance from database
@@ -409,6 +423,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('firebaseToken');
         localStorage.removeItem('appUser');
         localStorage.removeItem('wallet');
+        localStorage.removeItem('roleMode');
         setDbUser(null);
         _setUserRole('hirer');
         setHirerWallet(0);
@@ -440,20 +455,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setUserRole = useCallback(async (role: 'hirer' | 'worker' | 'admin') => {
     _setUserRole(role);
+    // PUT /users/role đã deprecated phía backend (luôn reset về USER, kể cả ADMIN)
+    // nên không gọi nữa — chế độ worker/hirer chỉ lưu phía client.
+    try { localStorage.setItem('roleMode', role); } catch {}
     const token = localStorage.getItem('firebaseToken');
     if (token) {
       try {
-        const dbRole = role === 'worker' ? 'tasker' : role;
-        const res = await api.put('/users/role', { role: dbRole });
-        const data = res.data;
-        if (data.success && data.user) {
-          setDbUser(data.user);
-          localStorage.setItem('appUser', JSON.stringify(data.user));
-        }
         // Refresh wallet balance when switching roles to ensure consistency
         await fetchProfile();
       } catch (err) {
-        console.error('Error updating database role:', err);
+        console.error('Error refreshing profile after role switch:', err);
       }
     }
   }, [fetchProfile]);

@@ -1,5 +1,8 @@
 require('dotenv').config();
 
+// Install before anything else so startup failures are caught too.
+require('./utils/processGuards')();
+
 var express = require('express');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');

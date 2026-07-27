@@ -13,10 +13,16 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is missing');
 }
 
+// SSL theo connection string (giống backend/config/db.js): Supabase cần SSL,
+// Postgres local (sslmode=disable hoặc localhost) thì không hỗ trợ SSL.
+const sslDisabled =
+  databaseUrl.includes('sslmode=disable') ||
+  /@(localhost|127\.0\.0\.1)[:/]/.test(databaseUrl) ||
+  String(process.env.PGSSLMODE || '').toLowerCase() === 'disable';
+
 const pool = globalForPrisma.pool ?? new Pool({
   connectionString: databaseUrl,
-  // SSL required for Supabase; disabled for local Docker postgres
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: sslDisabled ? false : { rejectUnauthorized: false },
 });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.pool = pool;

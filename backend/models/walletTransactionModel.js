@@ -43,7 +43,6 @@ const walletTransactionModel = {
   },
 
   async findByReference(walletId, referenceId, type, db = pool) {
-    // Note: table does not have created_at column.
     const result = await db.query(
       `SELECT * FROM wallet_transactions
        WHERE wallet_id = $1 AND reference_id = $2 AND type = $3
@@ -53,13 +52,13 @@ const walletTransactionModel = {
     return result.rows[0] || null;
   },
 
-  async listByWalletId(walletId, { limit = 20, cursor } = {}, db = pool) {
+  async listByWalletId(walletId, { limit = 20 } = {}, db = pool) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
 
-    // Cursor pagination simplified since created_at is missing.
     const result = await db.query(
       `SELECT * FROM wallet_transactions
        WHERE wallet_id = $1
+       ORDER BY created_at DESC, id DESC
        LIMIT $2`,
       [walletId, safeLimit]
     );

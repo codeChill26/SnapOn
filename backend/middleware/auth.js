@@ -189,10 +189,14 @@ const authenticate = async (req, res, next) => {
     const isSyncUser = req.originalUrl && req.originalUrl.includes('/sync-user');
     
     if (isSyncUser) {
+      // Body token takes precedence: it is the fresh token from the login flow.
+      // A stale Authorization header (auto-attached by clients) must not override it.
       let token = req.body?.firebaseToken;
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.split('Bearer ')[1];
+      if (!token) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.split('Bearer ')[1];
+        }
       }
 
       if (!token) {
