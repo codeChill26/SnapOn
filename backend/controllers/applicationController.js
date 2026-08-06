@@ -459,6 +459,71 @@ const applicationController = {
       return error(res, message, status);
     }
   },
+
+  /**
+   * PATCH /api/applications/:id
+   * Tasker updates their application details
+   */
+  async updateApplication(req, res) {
+    try {
+      const { id } = req.params;
+      const taskerId = req.user.id;
+      const { bid_price, estimated_time, message } = req.body;
+
+      const application = await taskApplicationModel.findById(id);
+      if (!application) {
+        return error(res, 'Application not found.', 404);
+      }
+
+      if (application.tasker_id !== taskerId) {
+        return error(res, 'You can only update your own applications.', 403);
+      }
+
+      if (application.status !== APPLICATION_STATUS.PENDING) {
+        return error(res, 'Cannot update an application that is no longer pending.', 400);
+      }
+
+      const updated = await taskApplicationModel.update(id, {
+        bidPrice: bid_price,
+        estimatedTime: estimated_time,
+        message,
+      });
+
+      return success(res, updated, 'Application updated successfully.');
+    } catch (err) {
+      console.error('Update application error:', err);
+      return error(res, 'Failed to update application.', 500);
+    }
+  },
+
+  /**
+   * DELETE /api/applications/:id
+   * Tasker deletes their application
+   */
+  async deleteApplication(req, res) {
+    return applicationController.withdrawApplication(req, res);
+  },
+
+  /**
+   * GET /api/tasks/:taskId/my-application
+   * Get current tasker's application for a specific task
+   */
+  async getMyApplicationForTask(req, res) {
+    try {
+      const { taskId } = req.params;
+      const taskerId = req.user.id;
+
+      const application = await taskApplicationModel.findByTaskerAndTask(taskerId, taskId);
+      if (!application) {
+        return error(res, 'No application found for this task.', 404);
+      }
+
+      return success(res, application, 'Application retrieved successfully.');
+    } catch (err) {
+      console.error('Get my application for task error:', err);
+      return error(res, 'Failed to retrieve application.', 500);
+    }
+  },
 };
 
 module.exports = applicationController;
