@@ -151,9 +151,12 @@ async function verifyForgotPasswordOtp(req, res) {
       }
     });
 
-    console.log(`[FORGOT PASSWORD] OTP verified successfully for ${cleanEmail}. Reset token generated.`);
-
-    return response.success(res, { resetToken }, 'OTP verified successfully');
+    return res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully',
+      resetToken,
+      data: { resetToken }
+    });
   } catch (error) {
     console.error('❌ Verify forgot password OTP error:', error);
     return response.error(res, 'Internal server error.', 500);

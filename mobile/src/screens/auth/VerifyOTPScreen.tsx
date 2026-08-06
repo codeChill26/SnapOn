@@ -81,7 +81,7 @@ export const VerifyOTPScreen: React.FC = () => {
       console.log(`[Verify Screen] Verifying OTP for ${email}`);
       const response = await authService.verifyForgotPasswordOtp(email, otpCode);
       console.log(`[Verify Screen] OTP valid. Reset token: ${response.resetToken}`);
-      
+
       navigation.navigate('ResetPassword', { resetToken: response.resetToken });
     } catch (err: any) {
       console.error('Verify OTP screen error:', err);
