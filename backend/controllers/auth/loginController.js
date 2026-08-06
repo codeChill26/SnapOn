@@ -68,6 +68,20 @@ module.exports = {
         return { user: userVal, wallet: walletVal };
       });
 
+      const userResponse = {
+        id: user.id,
+        firebaseUid: user.firebase_uid,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        avatarUrl: user.avatar_url,
+        role: user.role || 'USER',
+        status: user.status,
+        isVerified: user.is_verified,
+        isIdVerified: user.is_id_verified,
+        createdAt: user.created_at,
+      };
+
       let debugOtp = null;
       if (!user.is_verified) {
         const token = localGenerateVerificationToken();
@@ -94,31 +108,25 @@ module.exports = {
       const refreshToken = generateRefreshToken(user);
       await saveRefreshToken(user, refreshToken, req);
 
-      return response.success(res, {
-        user: {
-          id: user.id,
-          firebaseUid: user.firebase_uid,
-          fullName: user.full_name,
-          email: user.email,
-          phone: user.phone,
-          avatarUrl: user.avatar_url,
-          role: user.role,
-          status: user.status,
-          isVerified: user.is_verified,
-          isIdVerified: user.is_id_verified,
-          createdAt: user.created_at,
-        },
+      return res.status(200).json({
+        success: true,
+        message: 'User synced successfully',
+        user: userResponse,
         wallet,
         accessToken,
         refreshToken,
-      }, 'User synced successfully');
+        data: {
+          user: userResponse,
+          wallet,
+          accessToken,
+          refreshToken,
+        }
+      });
     } catch (error) {
       console.error('❌ Sync user error:', error);
       return response.error(res, 'Sync user failed: ' + error.message, 500);
     }
   },
-
-
 
   async tokenLogin(req, res) {
     try {
@@ -158,10 +166,16 @@ module.exports = {
         createdAt: user.created_at,
       };
 
-      return response.success(res, {
+      return res.status(200).json({
+        success: true,
+        message: 'Token login successful',
         user: userResponse,
         wallet: walletResult.rows[0] || null,
-      }, 'Token login successful');
+        data: {
+          user: userResponse,
+          wallet: walletResult.rows[0] || null,
+        }
+      });
     } catch (err) {
       console.error('❌ Token login error:', err);
       return response.error(res, 'Token login failed: ' + err.message, 500);

@@ -172,12 +172,20 @@ const otpController = {
       const refreshToken = generateRefreshToken(user);
       await saveRefreshToken(user, refreshToken, req);
 
-      return response.success(res, {
+      return res.status(200).json({
+        success: true,
+        message: 'OTP verified successfully',
         user: userResponse,
         token: accessToken,
         accessToken,
         refreshToken,
-      }, 'OTP verified successfully');
+        data: {
+          user: userResponse,
+          token: accessToken,
+          accessToken,
+          refreshToken,
+        }
+      });
     } catch (err) {
       console.error('Verify OTP error:', err);
       if (err.status === 503) {
