@@ -171,6 +171,52 @@ const redisService = {
   },
 
   /**
+   * Add members to a set
+   * @param {string} key 
+   * @param {string|string[]} value 
+   */
+  async sadd(key, value) {
+    if (!this.isActive()) return false;
+    try {
+      await client.sAdd(key, value);
+      return true;
+    } catch (err) {
+      console.error(`❌ Redis SADD error for key ${key}:`, err.message);
+      return false;
+    }
+  },
+
+  /**
+   * Get members of a set
+   * @param {string} key 
+   */
+  async smembers(key) {
+    if (!this.isActive()) return [];
+    try {
+      return await client.sMembers(key);
+    } catch (err) {
+      console.error(`❌ Redis SMEMBERS error for key ${key}:`, err.message);
+      return [];
+    }
+  },
+
+  /**
+   * Set a key's time to live in seconds
+   * @param {string} key 
+   * @param {number} seconds 
+   */
+  async expire(key, seconds) {
+    if (!this.isActive()) return false;
+    try {
+      await client.expire(key, seconds);
+      return true;
+    } catch (err) {
+      console.error(`❌ Redis EXPIRE error for key ${key}:`, err.message);
+      return false;
+    }
+  },
+
+  /**
    * Disconnect client cleanly (useful for tests)
    */
   async disconnect() {

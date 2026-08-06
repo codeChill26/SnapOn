@@ -65,7 +65,7 @@ const TaskQueryController = {
           post_type: post_type || '',
           work_mode: work_mode || '',
           salary_unit: salary_unit || '',
-          currentUserId: req.user.id
+          currentUserId: req.user ? req.user.id : null
         };
 
         const sortedKeys = Object.keys(queryObj).sort();
@@ -92,7 +92,7 @@ const TaskQueryController = {
             postType: post_type,
             workMode: work_mode,
             salaryUnit: salary_unit,
-            currentUserId: req.user.id,
+            currentUserId: req.user ? req.user.id : null,
           });
         });
 
