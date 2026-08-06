@@ -255,12 +255,22 @@ const otpController = {
         createdAt: updatedUser.createdAt,
       };
 
-      return response.success(res, {
+      return res.status(200).json({
+        success: true,
+        message: 'Xác thực email thành công',
         user: userResponse,
+        token: accessToken,
         accessToken,
         refreshToken,
-        wallet: user.wallet
-      }, 'Xác thực email thành công');
+        wallet: user.wallet,
+        data: {
+          user: userResponse,
+          token: accessToken,
+          accessToken,
+          refreshToken,
+          wallet: user.wallet
+        }
+      });
     } catch (error) {
       console.error('❌ Verify email error:', error);
       return response.error(res, 'Xác thực email thất bại: ' + error.message, 500);
