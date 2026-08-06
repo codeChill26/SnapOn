@@ -232,7 +232,7 @@ const applicationController = {
          JOIN users u ON t.poster_id = u.id
          LEFT JOIN assigned_tasks at ON at.application_id = ta.id
          WHERE ta.tasker_id = $1
-         ORDER BY ta.created_at DESC
+         ORDER BY t.created_at DESC
          LIMIT $2 OFFSET $3`,
         [taskerId, currentLimit, offset]
       );
