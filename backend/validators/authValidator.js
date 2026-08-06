@@ -3,6 +3,20 @@ const { body } = require('express-validator');
 /**
  * Auth Validators — Input validation rules for authentication endpoints
  */
+const emailRule = () =>
+  body('email')
+    .customSanitizer((val) => (typeof val === 'string' ? val.trim().toLowerCase() : ''))
+    .notEmpty().withMessage('Email is required.')
+    .custom((val) => {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        throw new Error('Invalid email format.');
+      }
+      return true;
+    });
+
+/**
+ * Auth Validators — Input validation rules for authentication endpoints
+ */
 const authValidator = {
   sendOtp: [
     body('phone')
@@ -21,34 +35,22 @@ const authValidator = {
   ],
 
   verifyEmail: [
-    body('email')
-      .trim()
-      .notEmpty().withMessage('Email is required.')
-      .isEmail().withMessage('Invalid email format.'),
+    emailRule(),
     body('token')
       .trim()
       .notEmpty().withMessage('Token is required.')
   ],
 
   resendVerification: [
-    body('email')
-      .trim()
-      .notEmpty().withMessage('Email is required.')
-      .isEmail().withMessage('Invalid email format.')
+    emailRule()
   ],
 
   forgotPassword: [
-    body('email')
-      .trim()
-      .notEmpty().withMessage('Email is required.')
-      .isEmail().withMessage('Invalid email format.')
+    emailRule()
   ],
 
   verifyForgotPasswordOtp: [
-    body('email')
-      .trim()
-      .notEmpty().withMessage('Email is required.')
-      .isEmail().withMessage('Invalid email format.'),
+    emailRule(),
     body('otp')
       .trim()
       .notEmpty().withMessage('OTP is required.')
@@ -56,7 +58,7 @@ const authValidator = {
   ],
 
   resetPassword: [
-    body()
+    body('resetToken')
       .custom((value, { req }) => {
         const token = req.body.resetToken || req.body.reset_token || req.body.token;
         if (!token || typeof token !== 'string' || !token.trim()) {
@@ -76,20 +78,14 @@ const authValidator = {
   ],
 
   sendDeletionOtp: [
-    body('email')
-      .trim()
-      .notEmpty().withMessage('Email is required.')
-      .isEmail().withMessage('Invalid email format.')
+    emailRule()
   ],
 
   submitDeletionRequest: [
     body('fullName')
       .trim()
       .notEmpty().withMessage('Full name is required.'),
-    body('email')
-      .trim()
-      .notEmpty().withMessage('Email is required.')
-      .isEmail().withMessage('Invalid email format.'),
+    emailRule(),
     body('otp')
       .trim()
       .notEmpty().withMessage('OTP is required.')
