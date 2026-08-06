@@ -56,9 +56,14 @@ const authValidator = {
   ],
 
   resetPassword: [
-    body('resetToken')
-      .trim()
-      .notEmpty().withMessage('Reset token is required.'),
+    body()
+      .custom((value, { req }) => {
+        const token = req.body.resetToken || req.body.reset_token || req.body.token;
+        if (!token || typeof token !== 'string' || !token.trim()) {
+          throw new Error('Reset token is required.');
+        }
+        return true;
+      }),
     body('newPassword')
       .notEmpty().withMessage('New password is required.')
       .isLength({ min: 8 }).withMessage('Password must be at least 8 characters long.')

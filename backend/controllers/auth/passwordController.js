@@ -162,7 +162,8 @@ async function verifyForgotPasswordOtp(req, res) {
 
 async function resetPassword(req, res) {
   try {
-    const { resetToken, newPassword } = req.body;
+    const resetToken = req.body.resetToken || req.body.reset_token || req.body.token;
+    const { newPassword } = req.body;
 
     if (!resetToken || !newPassword) {
       return response.error(res, 'Reset token and new password are required.', 400);
