@@ -1,11 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckCircle } from 'lucide-react';
+import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckCircle, Bell, CheckCheck, X, Briefcase, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useLocation, useNavigate, Link, Outlet } from 'react-router';
 import { SnapOnLogo } from './SnapOnLogo';
 import api from '../../services/api';
 import { AnimatePresence, motion } from 'motion/react';
 import { WalletModal } from './WalletModal';
+
+interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  type: 'job' | 'wallet' | 'system';
+  isUnread: boolean;
+  link?: string;
+}
 
 export function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
@@ -27,6 +37,174 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
   const [showWallet, setShowWallet] = useState(false);
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([
+    {
+      id: 'n1',
+      title: 'Yêu cầu rút tiền',
+      message: 'Yêu cầu rút 2.000.000đ đã được gửi thành công và đang chờ Admin xét duyệt.',
+      time: '5 phút trước',
+      type: 'wallet',
+      isUnread: true,
+      link: '/profile'
+    },
+  ]);
+
+  const getReadNotifIds = (): Set<string> => {
+    try {
+      const saved = localStorage.getItem('readNotifIds');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
+  const saveReadNotifIds = (readSet: Set<string>) => {
+    try {
+      localStorage.setItem('readNotifIds', JSON.stringify(Array.from(readSet)));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    const loadRealNotifications = async () => {
+      try {
+        const notifs: AppNotification[] = [];
+        const readIds = getReadNotifIds();
+
+        // 1. Fetch wallet transactions (withdrawals status: PENDING, SUCCESS, FAILED)
+        try {
+          const txRes = await api.get('/wallet/transactions');
+          const txData = txRes.data;
+          const items = txData.data || txData.transactions || [];
+          if (Array.isArray(items)) {
+            items.forEach((tx: any) => {
+              const amtStr = parseFloat(tx.amount || 0).toLocaleString('vi-VN') + 'đ';
+              const createdDate = new Date(tx.created_at || Date.now());
+              const timeStr = createdDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + createdDate.toLocaleDateString('vi-VN');
+              const notifId = `tx-${tx.id}`;
+              const isRead = readIds.has(notifId);
+
+              if (tx.type === 'WITHDRAW') {
+                if (tx.status === 'PENDING') {
+                  notifs.push({
+                    id: notifId,
+                    title: '⏳ Đơn rút tiền đang chờ duyệt',
+                    message: `Yêu cầu rút ${amtStr} đang chờ Admin xét duyệt.`,
+                    time: timeStr,
+                    type: 'wallet',
+                    isUnread: !isRead,
+                    link: '/profile'
+                  });
+                } else if (tx.status === 'SUCCESS') {
+                  notifs.push({
+                    id: notifId,
+                    title: '✅ Đơn rút tiền ĐÃ ĐƯỢC DUYỆT',
+                    message: `Yêu cầu rút ${amtStr} đã được Admin duyệt và chuyển tiền về tài khoản ngân hàng của bạn!`,
+                    time: timeStr,
+                    type: 'wallet',
+                    isUnread: !isRead,
+                    link: '/profile'
+                  });
+                } else if (tx.status === 'FAILED') {
+                  notifs.push({
+                    id: notifId,
+                    title: '❌ Đơn rút tiền BỊ TỪ CHỐI',
+                    message: `Yêu cầu rút ${amtStr} bị từ chối. Số tiền đã được hoàn trả lại ví khả dụng của bạn.`,
+                    time: timeStr,
+                    type: 'wallet',
+                    isUnread: !isRead,
+                    link: '/profile'
+                  });
+                }
+              } else if (tx.type === 'DEPOSIT' && tx.status === 'SUCCESS') {
+                notifs.push({
+                  id: notifId,
+                  title: '💰 Nạp tiền thành công',
+                  message: `Ví SnapOn của bạn đã được cộng +${amtStr}.`,
+                  time: timeStr,
+                  type: 'wallet',
+                  isUnread: false,
+                  link: '/profile'
+                });
+              }
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        // 2. Fetch user applications (job applications status: ACCEPTED, REJECTED)
+        try {
+          const appRes = await api.get('/applications/my-applications');
+          const appData = appRes.data;
+          const apps = appData.data || appData.applications || [];
+          if (Array.isArray(apps)) {
+            apps.forEach((app: any) => {
+              const createdDate = new Date(app.created_at || Date.now());
+              const timeStr = createdDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + createdDate.toLocaleDateString('vi-VN');
+              const taskTitle = app.task_title || 'Công việc';
+              const notifId = `app-${app.id}`;
+              const isRead = readIds.has(notifId);
+
+              if (app.status === 'ACCEPTED') {
+                notifs.push({
+                  id: notifId,
+                  title: '🎉 Đơn ứng tuyển ĐÃ ĐƯỢC CHẤP NHẬN',
+                  message: `Chủ nhà đã chọn bạn làm công việc "${taskTitle}". Hãy kiểm tra tiến độ làm việc!`,
+                  time: timeStr,
+                  type: 'job',
+                  isUnread: !isRead,
+                  link: '/activity'
+                });
+              } else if (app.status === 'REJECTED') {
+                notifs.push({
+                  id: notifId,
+                  title: 'ℹ️ Đơn ứng tuyển chưa được chọn',
+                  message: `Đơn ứng tuyển cho công việc "${taskTitle}" đã bị từ chối hoặc hết hạn.`,
+                  time: timeStr,
+                  type: 'job',
+                  isUnread: false,
+                  link: '/activity'
+                });
+              }
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        if (notifs.length > 0) {
+          setNotifications(notifs);
+        }
+      } catch (err) {
+        console.error('Error loading real notifications:', err);
+      }
+    };
+
+    loadRealNotifications();
+  }, [firebaseUser, location.pathname]);
+
+  const unreadCount = notifications.filter(n => n.isUnread).length;
+
+  const markAllAsRead = () => {
+    const readIds = getReadNotifIds();
+    notifications.forEach(n => readIds.add(n.id));
+    saveReadNotifIds(readIds);
+    setNotifications(prev => prev.map(n => ({ ...n, isUnread: false })));
+  };
+
+  const handleNotificationClick = (notification: AppNotification) => {
+    const readIds = getReadNotifIds();
+    readIds.add(notification.id);
+    saveReadNotifIds(readIds);
+
+    setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, isUnread: false } : n));
+  };
 
   // Listen to PayOS redirect search query params
   useEffect(() => {
@@ -175,6 +353,119 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 <Wallet className="w-3.5 h-3.5" />
                 <span>{formatWallet(walletBalance)}</span>
               </button>
+            )}
+
+            {/* Notification Bell Badge & Dropdown */}
+            {firebaseUser && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className={`relative p-2 rounded-full cursor-pointer transition flex items-center justify-center ${
+                    isWorker
+                      ? 'bg-white/15 text-white hover:bg-white/25 border border-white/20'
+                      : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
+                  }`}
+                  title="Thông báo"
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold animate-pulse shadow-sm">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown Modal */}
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 text-gray-800"
+                    >
+                      <div className="p-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Bell className="w-5 h-5" />
+                          <span className="font-bold text-base">Thông báo</span>
+                          {unreadCount > 0 && (
+                            <span className="bg-white/25 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
+                              {unreadCount} mới
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {unreadCount > 0 && (
+                            <button
+                              onClick={markAllAsRead}
+                              className="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg transition flex items-center gap-1 font-medium cursor-pointer"
+                              title="Đánh dấu tất cả là đã đọc"
+                            >
+                              <CheckCheck className="w-3.5 h-3.5" />
+                              Đã đọc
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setShowNotifications(false)}
+                            className="p-1 hover:bg-white/20 rounded-full transition cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                        {notifications.length === 0 ? (
+                          <div className="py-8 text-center text-gray-400 text-sm">
+                            Chưa có thông báo nào.
+                          </div>
+                        ) : (
+                          notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              onClick={() => handleNotificationClick(n)}
+                              className={`p-3.5 transition cursor-pointer hover:bg-orange-50/50 flex gap-3 items-start ${
+                                n.isUnread ? 'bg-orange-50/30' : 'bg-white'
+                              }`}
+                            >
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                                n.type === 'wallet' ? 'bg-emerald-100 text-emerald-600' :
+                                n.type === 'job' ? 'bg-orange-100 text-orange-600' :
+                                'bg-blue-100 text-blue-600'
+                              }`}>
+                                {n.type === 'wallet' ? <Wallet className="w-4 h-4" /> :
+                                 n.type === 'job' ? <Briefcase className="w-4 h-4" /> :
+                                 <ShieldCheck className="w-4 h-4" />}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                  <h4 className={`text-xs ${n.isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
+                                    {n.title}
+                                  </h4>
+                                  <span className="text-[10px] text-gray-400 flex-shrink-0">{n.time}</span>
+                                </div>
+                                <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                                  {n.message}
+                                </p>
+                              </div>
+
+                              {n.isUnread && (
+                                <div className="w-2 h-2 rounded-full bg-orange-500 self-center flex-shrink-0" />
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="p-2.5 bg-gray-50 text-center border-t border-gray-100">
+                        <span className="text-xs text-gray-500 font-medium">Tất cả thông báo gần đây</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
 
             {firebaseUser ? (

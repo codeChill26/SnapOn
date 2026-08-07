@@ -1,7 +1,7 @@
 const walletService = require('../services/walletService');
 const { success, error, paginated } = require('../utils/responseHandler');
 
-const MAX_TOPUP_AMOUNT = 50000000;
+const MAX_TOPUP_AMOUNT = 2000000;
 
 const walletController = {
   /**
@@ -43,7 +43,7 @@ const walletController = {
       const { amount } = req.body;
       const amt = Number(amount);
       if (amt > MAX_TOPUP_AMOUNT) {
-        return error(res, 'Yêu cầu vượt quá hạn mức nạp tiền tối đa (50,000,000đ).', 400);
+        return error(res, 'Yêu cầu vượt quá hạn mức nạp tiền tối đa (2,000,000đ).', 400);
       }
       const wallet = await walletService.topupMock(userId, amount);
       return success(res, wallet, 'Topup successful.');
@@ -64,7 +64,7 @@ const walletController = {
       const { amount } = req.body;
       const amt = Number(amount);
       if (amt > MAX_TOPUP_AMOUNT) {
-        return error(res, 'Yêu cầu vượt quá hạn mức nạp tiền tối đa (50,000,000đ).', 400);
+        return error(res, 'Yêu cầu vượt quá hạn mức nạp tiền tối đa (2,000,000đ).', 400);
       }
       const session = await walletService.createPayOSPaymentSession(userId, amount);
       return success(res, session, 'PayOS payment link created successfully.');
@@ -85,7 +85,7 @@ const walletController = {
       const { amount } = req.body;
       const amt = Number(amount);
       if (amt > MAX_TOPUP_AMOUNT) {
-        return error(res, 'Yêu cầu vượt quá hạn mức nạp tiền tối đa (50,000,000đ).', 400);
+        return error(res, 'Yêu cầu vượt quá hạn mức nạp tiền tối đa (2,000,000đ).', 400);
       }
       const result = await walletService.createPayOSPayment(userId, amount);
       return success(res, result, 'PayOS payment link created successfully.');

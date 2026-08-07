@@ -226,6 +226,39 @@ const authorize = (...allowedRoles) => {
   };
 };
 
+const authenticateOptional = async (req, res, next) => {
+  let token;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split('Bearer ')[1];
+  }
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, getJwtAccessSecret());
+    attachUser(req, decoded, res, () => {});
+    return next();
+  } catch (err) {
+    try {
+      const decodedFirebaseToken = await admin.auth().verifyIdToken(token);
+      const result = await pool.query(
+        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE firebase_uid = $1',
+        [decodedFirebaseToken.uid]
+      );
+      if (result.rows.length > 0) {
+        attachUser(req, result.rows[0], res, () => {});
+      }
+    } catch (fbErr) {
+      // Ignored for optional auth
+    }
+    return next();
+  }
+};
+
 module.exports = authenticate;
 module.exports.verifyTokenForSocket = verifyTokenForSocket;
 module.exports.authorize = authorize;
+module.exports.authenticateOptional = authenticateOptional;

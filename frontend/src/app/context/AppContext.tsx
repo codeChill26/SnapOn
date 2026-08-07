@@ -160,6 +160,8 @@ interface AppContextType {
   matchJob: (jobId: string, workerId: string) => void;
   closeBidding: (jobId: string) => void;
   completeJob: (jobId: string) => void;
+  deleteJob: (jobId: string) => Promise<boolean>;
+  updateJob: (jobId: string, fields: Partial<Job>) => Promise<boolean>;
   setUserRole: (role: 'hirer' | 'worker' | 'admin') => void;
   topUpWallet: (role: 'hirer' | 'worker', amount: number) => void;
   fetchProfile: () => Promise<void>;
@@ -205,12 +207,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           applicants: []
         }));
         
-        const jobsWithApps = await Promise.all(mappedJobs.map(async (job: any) => {
+        const currentUserId = (() => {
           try {
-            const appRes = await api.get(`/tasks/${job.id}/applications`);
-            const appData = appRes.data;
-            if (appData.success && Array.isArray(appData.data)) {
-              job.applicants = appData.data.map((app: any) => ({
+            const saved = localStorage.getItem('appUser');
+            return saved ? JSON.parse(saved).id : null;
+          } catch {
+            return null;
+          }
+        })();
+
+        const jobsWithApps = await Promise.all(mappedJobs.map(async (job: any) => {
+          // Only fetch applications for tasks owned by current user (Poster)
+          if (currentUserId && (job.hirerId === currentUserId)) {
+            try {
+              const appRes = await api.get(`/tasks/${job.id}/applications`);
+              const appData = appRes.data;
+              if (appData.success && Array.isArray(appData.data)) {
+                job.applicants = appData.data.map((app: any) => ({
                   id: app.id,
                   workerId: app.tasker_id,
                   name: app.tasker_name || 'Tasker',
@@ -229,11 +242,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                   job.aiMatchId = job.applicants[0]?.workerId;
                 }
               }
-          } catch (e) {
-            console.error('Error fetching applications for task:', job.id, e);
+            } catch (e) {
+              console.error('Error fetching applications for task:', job.id, e);
+            }
           }
           return job;
         }));
+
+        // Fetch own applications for Worker role
+        if (currentUserId) {
+          try {
+            const myAppRes = await api.get('/applications/my-applications');
+            const myAppData = myAppRes.data;
+            if (myAppData.success && Array.isArray(myAppData.data)) {
+              myAppData.data.forEach((myApp: any) => {
+                const targetJob = jobsWithApps.find((j: any) => j.id === myApp.task_id);
+                if (targetJob) {
+                  const alreadyPresent = targetJob.applicants.some((a: any) => a.workerId === currentUserId);
+                  if (!alreadyPresent) {
+                    targetJob.applicants.push({
+                      id: myApp.id,
+                      workerId: myApp.tasker_id,
+                      name: myApp.tasker_name || 'Tôi',
+                      avatar: myApp.tasker_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
+                      lat: 10.7769,
+                      lng: 106.7009,
+                      distance: 0,
+                      rating: 5.0,
+                      completedJobs: 0,
+                      skills: [],
+                      appliedAt: new Date(myApp.created_at).getTime(),
+                      note: myApp.message || '',
+                      bidPrice: parseFloat(myApp.bid_price || 0)
+                    });
+                  }
+                }
+              });
+            }
+          } catch (myAppErr) {
+            // Silently ignore if not worker
+          }
+        }
 
         setJobs(jobsWithApps);
       }
@@ -259,11 +308,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [userRole, _setUserRole] = useState<'hirer' | 'worker' | 'admin'>(() => {
     try {
+      const savedMode = localStorage.getItem('userRoleMode');
+      if (savedMode && (savedMode === 'worker' || savedMode === 'hirer' || savedMode === 'admin')) {
+        return savedMode as 'hirer' | 'worker' | 'admin';
+      }
       const saved = localStorage.getItem('appUser');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.role) {
-          return parsed.role === 'tasker' ? 'worker' : parsed.role === 'admin' ? 'admin' : 'hirer';
+          return parsed.role === 'tasker' || parsed.role === 'worker' ? 'worker' : parsed.role === 'admin' ? 'admin' : 'hirer';
         }
       }
     } catch {}
@@ -308,6 +361,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       localStorage.removeItem('firebaseToken');
       localStorage.removeItem('appUser');
+      localStorage.removeItem('userRoleMode');
       localStorage.removeItem('wallet');
       setDbUser(null);
       setFirebaseUser(null);
@@ -325,7 +379,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!token) {
         setDbUser(null);
         // no-op
-        _setUserRole('hirer');
+        const savedMode = localStorage.getItem('userRoleMode') as 'hirer' | 'worker' | 'admin' | null;
+        _setUserRole(savedMode || 'hirer');
         setHirerWallet(0);
         setWorkerWallet(0);
         return;
@@ -342,10 +397,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const userObj = data.data?.user || data.user;
       if (data.success && userObj) {
         setDbUser(userObj);
-        // no-op
         localStorage.setItem('appUser', JSON.stringify(userObj));
         const dbRole = userObj.role;
-        const mappedRole = dbRole === 'tasker' ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
+        const savedMode = localStorage.getItem('userRoleMode') as 'hirer' | 'worker' | 'admin' | null;
+        let mappedRole: 'hirer' | 'worker' | 'admin' = (dbRole === 'tasker' || dbRole === 'worker') ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
+        if ((dbRole === 'USER' || !dbRole) && savedMode && (savedMode === 'worker' || savedMode === 'hirer')) {
+          mappedRole = savedMode;
+        }
         _setUserRole(mappedRole);
 
         // Fetch wallet balance from database
@@ -353,14 +411,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const walletRes = await api.get('/wallet/me');
           const walletData = walletRes.data;
           if (walletData.success && walletData.data) {
-            const balance = parseFloat(walletData.data.available_balance || walletData.data.balance || 0);
-            if (mappedRole === 'worker') {
-              setWorkerWallet(balance);
-              setHirerWallet(0);
-            } else {
-              setHirerWallet(balance);
-              setWorkerWallet(0);
-            }
+            const balance = parseFloat(walletData.data.available_balance ?? walletData.data.balance ?? 0);
+            setHirerWallet(balance);
+            setWorkerWallet(balance);
           }
         } catch (walletErr) {
           console.error('Error fetching wallet balance:', walletErr);
@@ -396,6 +449,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Clear local storage & state if logged out
         localStorage.removeItem('firebaseToken');
         localStorage.removeItem('appUser');
+        localStorage.removeItem('userRoleMode');
         localStorage.removeItem('wallet');
         setDbUser(null);
         _setUserRole('hirer');
@@ -429,6 +483,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setUserRole = useCallback(async (role: 'hirer' | 'worker' | 'admin') => {
     _setUserRole(role);
+    localStorage.setItem('userRoleMode', role);
     const token = localStorage.getItem('firebaseToken');
     if (token) {
       try {
@@ -680,12 +735,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const deleteJob = useCallback(async (jobId: string): Promise<boolean> => {
+    setJobs(prev => prev.filter(j => j.id !== jobId));
+    const token = localStorage.getItem('firebaseToken');
+    if (token) {
+      try {
+        const res = await api.delete(`/tasks/${jobId}`);
+        return res.data?.success || true;
+      } catch (err) {
+        console.error('Error deleting task on backend:', err);
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
+  const updateJob = useCallback(async (jobId: string, fields: Partial<Job>): Promise<boolean> => {
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...fields } : j));
+    const token = localStorage.getItem('firebaseToken');
+    if (token) {
+      try {
+        const res = await api.patch(`/tasks/${jobId}`, {
+          title: fields.title,
+          description: fields.description,
+          budget_min: fields.priceMin,
+          budget_max: fields.priceMax,
+        });
+        return res.data?.success || true;
+      } catch (err) {
+        console.error('Error updating task on backend:', err);
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
   return (
     <AppContext.Provider value={{
       jobs, workers: [], currentUser,
       workerStatus, workerCurrentJobId,
       hirerWallet, workerWallet,
-      addJob, applyToJob, matchJob, closeBidding, completeJob, setUserRole, topUpWallet,
+      addJob, applyToJob, matchJob, closeBidding, completeJob, deleteJob, updateJob, setUserRole, topUpWallet,
       fetchProfile, updateProfile,
       firebaseUser, authLoading, logout
     }}>

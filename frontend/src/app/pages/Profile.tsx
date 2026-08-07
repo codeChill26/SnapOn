@@ -6,11 +6,12 @@ import {
   Lock, ChevronDown, ChevronUp, MessageCircle, Search,
   Filter, SlidersHorizontal, Check, X, Plus, Trash2,
   DollarSign, CalendarDays, BadgeCheck, CornerDownRight,
-  SmilePlus, Meh, Frown, TrendingDown, Package,
+  SmilePlus, Meh, Frown, TrendingDown, Package, Landmark, CreditCard,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
 import { useApp, CATEGORIES } from '../context/AppContext';
+import { BankSelectModal } from '../components/BankSelectModal';
 
 // ─── Helper ──────────────────────────────────────────────────
 function fmt(n: number) {
@@ -32,16 +33,22 @@ function Stars({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' | '
 
 // ─── Inline editable field ────────────────────────────────────
 function EditableField({
-  label, value, icon, onSave, type = 'text',
+  label, value, icon, onSave, type = 'text', onClickCustom
 }: {
   label: string; value: string; icon: React.ReactNode;
-  onSave: (v: string) => void; type?: string;
+  onSave: (v: string) => void; type?: string; onClickCustom?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleEdit = () => { setDraft(value); setEditing(true); setTimeout(() => inputRef.current?.focus(), 50); };
+  const handleEdit = () => {
+    if (onClickCustom) {
+      onClickCustom();
+      return;
+    }
+    setDraft(value); setEditing(true); setTimeout(() => inputRef.current?.focus(), 50);
+  };
   const handleSave = () => { onSave(draft); setEditing(false); };
   const handleCancel = () => { setDraft(value); setEditing(false); };
 
@@ -433,7 +440,20 @@ function WorkerProfile() {
   const [phone,   setPhone]   = useState(currentUser.phone || '');
   const [email,   setEmail]   = useState(currentUser.email || '');
   const [area,    setArea]    = useState('Quận 1, TP.HCM');
+  const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
+  const [bankModalOpen, setBankModalOpen] = useState(false);
   const [bio,     setBio]     = useState((currentUser as any).bio || '');
+
+  const handleSaveBankName = (val: string) => {
+    setBankName(val);
+    localStorage.setItem('userBankName', val.trim());
+  };
+
+  const handleSaveBankAccountNumber = (val: string) => {
+    setBankAccountNumber(val);
+    localStorage.setItem('userBankAccountNumber', val.trim());
+  };
   const [editBio, setEditBio] = useState(false);
   const [draftBio, setDraftBio] = useState(bio);
   const [skills,  setSkills]  = useState<string[]>([]);
@@ -672,6 +692,8 @@ function WorkerProfile() {
                   <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-blue-500" />} />
                   <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
                   <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-orange-500" />} />
+                  <EditableField label="Tên ngân hàng" value={bankName || 'Chưa cập nhật'} onSave={handleSaveBankName} icon={<Landmark className="w-4 h-4 text-emerald-500" />} onClickCustom={() => setBankModalOpen(true)} />
+                  <EditableField label="Số tài khoản ngân hàng" value={bankAccountNumber || 'Chưa cập nhật'} onSave={handleSaveBankAccountNumber} icon={<CreditCard className="w-4 h-4 text-indigo-500" />} />
                 </div>
                 <div className="px-4 py-3.5 border-t border-gray-50 flex items-center gap-3 hover:bg-gray-50/80 transition cursor-pointer">
                   <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -807,6 +829,12 @@ function WorkerProfile() {
           )}
         </motion.div>
       </AnimatePresence>
+      <BankSelectModal
+        isOpen={bankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        selectedBank={bankName}
+        onSelectBank={handleSaveBankName}
+      />
     </div>
   );
 }
@@ -822,6 +850,19 @@ function HirerProfile() {
   const [phone,    setPhone]    = useState(currentUser.phone || '0912 345 678');
   const [email,    setEmail]    = useState(currentUser.email || 'hoa.nguyen@gmail.com');
   const [area,     setArea]     = useState('Quận 1, Bình Thạnh, TP.HCM');
+  const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
+  const [bankModalOpen, setBankModalOpen] = useState(false);
+
+  const handleSaveBankName = (val: string) => {
+    setBankName(val);
+    localStorage.setItem('userBankName', val.trim());
+  };
+
+  const handleSaveBankAccountNumber = (val: string) => {
+    setBankAccountNumber(val);
+    localStorage.setItem('userBankAccountNumber', val.trim());
+  };
 
   useEffect(() => {
     setPhone(currentUser.phone || '0912 345 678');
@@ -838,7 +879,7 @@ function HirerProfile() {
   const [notifRemind, setNotifRemind] = useState(true);
   const [notifPromo,  setNotifPromo]  = useState(false);
 
-  const myJobs        = jobs.filter(j => j.hirerId === currentUser.id || j.hirerName === currentUser.name || j.hirerName === 'Nguyễn Thị Hoa');
+  const myJobs        = jobs.filter(j => (currentUser?.id && j.hirerId === currentUser.id) || (currentUser?.name && j.hirerName && j.hirerName.toLowerCase() === currentUser.name.toLowerCase()) || j.hirerName === 'Nguyễn Thị Hoa');
   const activeJobs    = myJobs.filter(j => j.status === 'active');
   const matchedJobs   = myJobs.filter(j => j.status === 'matched' || j.status === 'completed');
   const totalSpent    = matchedJobs.reduce((s, j) => s + j.price, 0);
@@ -1015,6 +1056,8 @@ function HirerProfile() {
                   <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-orange-500" />} />
                   <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
                   <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-blue-500" />} />
+                  <EditableField label="Tên ngân hàng" value={bankName || 'Chưa cập nhật'} onSave={handleSaveBankName} icon={<Landmark className="w-4 h-4 text-emerald-500" />} onClickCustom={() => setBankModalOpen(true)} />
+                  <EditableField label="Số tài khoản ngân hàng" value={bankAccountNumber || 'Chưa cập nhật'} onSave={handleSaveBankAccountNumber} icon={<CreditCard className="w-4 h-4 text-indigo-500" />} />
                 </div>
               </div>
             </div>
@@ -1134,6 +1177,12 @@ function HirerProfile() {
           )}
         </motion.div>
       </AnimatePresence>
+      <BankSelectModal
+        isOpen={bankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        selectedBank={bankName}
+        onSelectBank={handleSaveBankName}
+      />
     </div>
   );
 }

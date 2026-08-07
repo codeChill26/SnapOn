@@ -359,15 +359,15 @@ exports.getPublicReviews = async (req, res, next) => {
 
 // PUT /api/users/role
 exports.updateRole = async (req, res, next) => {
-  // Deprecated. Always returns USER role.
-  console.log('PUT /api/users/role is deprecated. Bypassing and returning USER.');
+  const { role } = req.body;
+  const targetRole = role === 'worker' ? 'tasker' : (role || 'USER');
   try {
     const result = await pool.query(
       `UPDATE users
-       SET role = 'USER'
-       WHERE id = $1
+       SET role = $1
+       WHERE id = $2
        RETURNING id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, created_at`,
-      [req.user.id]
+      [targetRole, req.user.id]
     );
 
     if (result.rows.length === 0) {
@@ -376,13 +376,15 @@ exports.updateRole = async (req, res, next) => {
 
     const updatedUser = result.rows[0];
 
-    // Ensure tasker profile exists
-    await pool.query(
-      `INSERT INTO tasker_profiles (id, user_id, bio, experience, portfolio_url, location_text, latitude, longitude, average_rating)
-       VALUES (gen_random_uuid(), $1, 'Thành viên mới', '', '', '', 10.7769, 106.7009, 5.0)
-       ON CONFLICT (user_id) DO NOTHING`,
-      [req.user.id]
-    );
+    // Ensure tasker profile exists if role is tasker
+    if (targetRole === 'tasker') {
+      await pool.query(
+        `INSERT INTO tasker_profiles (id, user_id, bio, experience, portfolio_url, location_text, latitude, longitude, average_rating)
+         VALUES (gen_random_uuid(), $1, 'Thành viên mới', '', '', '', 10.7769, 106.7009, 5.0)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [req.user.id]
+      );
+    }
 
     const userObj = {
       id: updatedUser.id,
@@ -397,7 +399,7 @@ exports.updateRole = async (req, res, next) => {
       createdAt: updatedUser.created_at,
     };
 
-    return success(res, { user: userObj }, 'Role updated successfully (deprecated - always set to USER)');
+    return success(res, { user: userObj }, 'Role updated successfully');
   } catch (err) {
     next(err);
   }

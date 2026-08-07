@@ -4,7 +4,7 @@ import {
   ChevronLeft, MapPin, Clock, Users, Star, Sparkles, CheckCircle2, CheckCheck,
   Bot, Award, MessageCircle, PartyPopper, Briefcase, Send, Lock, AlertCircle,
   ChevronDown, ChevronUp, User, ShieldCheck, TrendingDown, TrendingUp, Zap,
-  Target, BarChart3, FlameKindling, ExternalLink, X,
+  Target, BarChart3, FlameKindling, ExternalLink, X, Edit3, Trash2, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, haversineDistance, scoreApplicants } from '../context/AppContext';
@@ -406,7 +406,7 @@ function WorkerJobDetailView() {
 function HirerJobDetailView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { jobs, matchJob, closeBidding, completeJob, hirerWallet } = useApp();
+  const { jobs, matchJob, closeBidding, completeJob, deleteJob, updateJob, hirerWallet } = useApp();
   const [manualPicked, setManualPicked] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -418,7 +418,48 @@ function HirerJobDetailView() {
   const [profileWorkerId, setProfileWorkerId] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editPriceMin, setEditPriceMin] = useState(0);
+  const [editPriceMax, setEditPriceMax] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   const job = jobs.find(j => j.id === id);
+
+  useEffect(() => {
+    if (job) {
+      setEditTitle(job.title || '');
+      setEditDesc(job.description || '');
+      setEditPriceMin(job.priceMin || 0);
+      setEditPriceMax(job.priceMax || 0);
+    }
+  }, [job]);
+
+  const handleConfirmDelete = async () => {
+    if (!job) return;
+    setIsDeleting(true);
+    const success = await deleteJob(job.id);
+    setIsDeleting(false);
+    if (success) {
+      navigate('/profile', { replace: true });
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!job) return;
+    setIsSavingEdit(true);
+    await updateJob(job.id, {
+      title: editTitle,
+      description: editDesc,
+      priceMin: editPriceMin,
+      priceMax: editPriceMax,
+    });
+    setIsSavingEdit(false);
+    setShowEditModal(false);
+  };
 
   useEffect(() => {
     if (!job) return;
@@ -507,6 +548,41 @@ function HirerJobDetailView() {
               className="w-1.5 h-1.5 bg-green-300 rounded-full" />
             AI đang tìm kiếm người gần nhất
           </div>
+        </div>
+      )}
+
+      {/* Edit & Delete Action Bar for Hirer */}
+      {job.status === 'active' && (
+        <div className="mb-4">
+          {job.applicants.length === 0 ? (
+            <div className="bg-orange-50/60 border border-orange-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-2 text-xs text-orange-800">
+                <span className="text-base flex-shrink-0">💡</span>
+                <span>Chưa có ứng viên. Bạn có thể chỉnh sửa yêu cầu công việc hoặc hủy bài đăng này.</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs bg-white border border-orange-300 text-orange-700 hover:bg-orange-100 transition font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hủy bài
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 leading-relaxed font-semibold">
+                Công việc đã có <strong className="text-amber-900">{job.applicants.length} ứng viên</strong> nộp đơn. Để bảo vệ quyền lợi ứng viên, bạn không thể chỉnh sửa hoặc hủy bài đăng này.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -931,6 +1007,131 @@ function HirerJobDetailView() {
           </p>
         </div>
       )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 text-center relative overflow-hidden"
+            >
+              <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <Trash2 className="w-7 h-7 text-red-500" />
+              </div>
+              <h3 className="text-gray-900 font-bold text-base mb-1">Xác nhận hủy bài đăng?</h3>
+              <p className="text-gray-500 text-xs leading-relaxed mb-5">
+                Bài đăng "{job.title}" sẽ bị xóa khỏi hệ thống. Thao tác này không thể hoàn tác.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Quay lại
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isDeleting ? 'Đang xóa...' : 'Hủy bài đăng'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Edit Task Modal ── */}
+      <AnimatePresence>
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 relative overflow-hidden text-gray-800"
+            >
+              <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-orange-500" />
+                  <h3 className="font-bold text-base text-gray-900">Chỉnh sửa bài đăng</h3>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-1 text-gray-400 hover:bg-gray-100 rounded-full transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-left">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Tên công việc</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mô tả công việc</label>
+                  <textarea
+                    rows={3}
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Giá tối thiểu (VNĐ)</label>
+                    <input
+                      type="number"
+                      value={editPriceMin}
+                      onChange={(e) => setEditPriceMin(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Giá tối đa (VNĐ)</label>
+                    <input
+                      type="number"
+                      value={editPriceMax}
+                      onChange={(e) => setEditPriceMax(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={isSavingEdit || !editTitle.trim() || !editDesc.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSavingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

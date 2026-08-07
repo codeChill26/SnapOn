@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X, Wallet, CheckCircle, ArrowLeft, Sparkles, Shield, TrendingUp,
-  CreditCard, Zap, Clock, ChevronRight, BadgeCheck, ArrowUpRight, Gift, ArrowDownLeft, Landmark
+  CreditCard, Zap, Clock, ChevronRight, BadgeCheck, ArrowUpRight, Gift, ArrowDownLeft, Landmark, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { useApp } from '../context/AppContext';
 import api from '../../services/api';
+import { BankSelectModal } from './BankSelectModal';
 
 type Step = 'select' | 'loading' | 'waiting_payment' | 'qr' | 'success';
 
@@ -72,6 +73,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [bankModalOpen, setBankModalOpen] = useState(false);
 
   // Stable QR value — generated once when entering QR step
   const qrValueRef = useRef('');
@@ -88,6 +90,11 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       setErrorMsg('');
       setInitialBalance(balance);
       setOrderCode(null);
+
+      const savedBank = localStorage.getItem('userBankName') || '';
+      const savedAcc = localStorage.getItem('userBankAccountNumber') || '';
+      setBankName(savedBank);
+      setBankAccountNumber(savedAcc);
     }
   }, [open, balance]);
 
@@ -209,6 +216,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
   const handleWithdraw = async () => {
     const amt = parseInt(withdrawAmount.replace(/\D/g, ''), 10);
     if (!amt || amt <= 0) { setErrorMsg('Vui lòng nhập số tiền hợp lệ.'); return; }
+    if (amt > 2000000) { setErrorMsg('Số tiền rút mỗi lần tối đa là 2.000.000₫.'); return; }
     if (!bankName.trim()) { setErrorMsg('Vui lòng nhập tên ngân hàng.'); return; }
     if (!bankAccountNumber.trim()) { setErrorMsg('Vui lòng nhập số tài khoản.'); return; }
     if (amt > balance) { setErrorMsg('Số dư không đủ để rút.'); return; }
@@ -218,8 +226,14 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       setErrorMsg('');
       const res = await api.post('/wallet/withdraw', { amount: amt, bankName: bankName.trim(), bankAccountNumber: bankAccountNumber.trim() });
       if (res.data.success) {
+        localStorage.setItem('userBankName', bankName.trim());
+        localStorage.setItem('userBankAccountNumber', bankAccountNumber.trim());
         setWithdrawSuccess(true);
+        setWithdrawAmount('');
         await fetchProfile();
+        setTimeout(() => {
+          setWithdrawSuccess(false);
+        }, 4000);
       } else {
         throw new Error(res.data.message || 'Không thể tạo yêu cầu rút tiền.');
       }
@@ -269,6 +283,49 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
             onClick={(e) => e.target === e.currentTarget && onClose()}
           >
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[420px] overflow-hidden relative">
+
+              {/* Centered Success Modal Popup Overlay */}
+              <AnimatePresence>
+                {withdrawSuccess && (
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-5">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.85, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.85, y: 10 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 320 }}
+                      className="bg-white rounded-3xl p-6 text-center shadow-2xl border border-emerald-100 max-w-[340px] w-full relative overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawSuccess(false)}
+                        className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+
+                      <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                        <CheckCircle className="w-8 h-8 text-emerald-500" />
+                      </div>
+
+                      <h3 className="text-gray-900 text-base font-bold mb-1">
+                        Yêu cầu rút tiền đã được gửi!
+                      </h3>
+
+                      <p className="text-gray-500 text-xs leading-relaxed mb-5">
+                        Số dư khả dụng đã được cập nhật. Yêu cầu của bạn đang chờ Admin xét duyệt.
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawSuccess(false)}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3 rounded-xl shadow-md transition cursor-pointer"
+                      >
+                        Đã hiểu
+                      </button>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
 
               {/* ═══════════ HEADER — Wallet Card Style ═══════════ */}
               <div className={`bg-gradient-to-br ${accentGradient} px-6 pt-5 pb-6 relative overflow-hidden`}>
@@ -438,7 +495,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
 
                         {/* Custom Amount Input */}
                         <div className="mt-4 text-left">
-                          <label className="block text-xs text-gray-400 mb-1.5 font-medium">Hoặc nhập số tiền khác</label>
+                          <label className="block text-xs text-gray-400 mb-1.5 font-medium">Hoặc nhập số tiền khác (tối đa 2.000.000₫)</label>
                           <div className="relative">
                             <input
                               type="text"
@@ -455,11 +512,14 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                           {selected !== null && selected < 1000 && (
                             <p className="text-red-500 text-[10px] mt-1 font-semibold">Số tiền nạp tối thiểu là 1.000₫</p>
                           )}
+                          {selected !== null && selected > 2000000 && (
+                            <p className="text-red-500 text-[10px] mt-1 font-semibold">Số tiền nạp tối đa mỗi giao dịch là 2.000.000₫</p>
+                          )}
                         </div>
 
                         {/* Summary */}
                         <AnimatePresence>
-                          {selected && selected >= 1000 && (
+                          {selected && selected >= 1000 && selected <= 2000000 && (
                             <motion.div
                               initial={{ opacity: 0, height: 0, marginTop: 0 }}
                               animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
@@ -494,19 +554,21 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                         {/* CTA Buttons */}
                         <div className="flex flex-col gap-2 mt-5">
                           <motion.button
-                            whileHover={selected && selected >= 1000 ? { scale: 1.01 } : {}}
-                            whileTap={selected && selected >= 1000 ? { scale: 0.98 } : {}}
-                            disabled={!selected || selected < 1000 || paymentLoading}
+                            whileHover={selected && selected >= 1000 && selected <= 2000000 ? { scale: 1.01 } : {}}
+                            whileTap={selected && selected >= 1000 && selected <= 2000000 ? { scale: 0.98 } : {}}
+                            disabled={!selected || selected < 1000 || selected > 2000000 || paymentLoading}
                             onClick={handlePayOSTopUp}
                             className={`w-full py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 ${
-                              selected && selected >= 1000
+                              selected && selected >= 1000 && selected <= 2000000
                                 ? `bg-gradient-to-r ${accentGradient} text-white shadow-lg hover:shadow-xl`
                                 : 'bg-gray-100 text-gray-300 cursor-not-allowed'
                             }`}
                             style={{ fontWeight: 700 }}
                           >
                             {selected ? (
-                              selected >= 1000 ? (
+                              selected > 2000000 ? (
+                                'Số tiền tối đa 2.000.000₫'
+                              ) : selected >= 1000 ? (
                                 <>
                                   <CreditCard className="w-4 h-4" />
                                   {paymentLoading ? 'Đang kết nối...' : `Nạp tiền qua PayOS ${fmtShort(selected)}`}
@@ -519,16 +581,6 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                               'Chọn mệnh giá để tiếp tục'
                             )}
                           </motion.button>
-
-                          {selected && selected >= 1000 && (
-                            <button
-                              onClick={() => setStep('qr')}
-                              className="w-full py-2 rounded-xl text-[11px] text-gray-400 hover:text-gray-600 transition"
-                              style={{ fontWeight: 500 }}
-                            >
-                              🧪 Chế độ thử nghiệm (Nạp ảo)
-                            </button>
-                          )}
                         </div>
 
                         {/* Trust badges */}
@@ -558,11 +610,50 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                           <p className="text-gray-800 text-sm" style={{ fontWeight: 700 }}>Rút tiền về tài khoản ngân hàng</p>
                         </div>
 
-                        <p className="text-xs text-gray-400 mb-4">
+                        <p className="text-xs text-gray-400 mb-3">
                           Số dư khả dụng: <span style={{ fontWeight: 700 }} className="text-gray-800">{fmt(balance)}</span>
                         </p>
 
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 text-[11px] text-amber-800 space-y-1">
+                          <div className="flex items-center gap-1 font-bold text-amber-900">
+                            <Shield className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Quy định rút tiền:</span>
+                          </div>
+                          <div>• Tối đa <strong>2.000.000₫</strong> / 1 lần rút</div>
+                          <div>• Hạn mức tối đa <strong>20.000.000₫</strong> / 24 giờ</div>
+                          <div>• Yêu cầu sẽ gửi đến <strong>Admin xét duyệt</strong></div>
+                        </div>
+
                         <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Tên ngân hàng</label>
+                            <button
+                              type="button"
+                              onClick={() => setBankModalOpen(true)}
+                              className="w-full px-4 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-semibold focus:bg-white focus:outline-none transition-all flex items-center justify-between hover:border-gray-300 cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <Landmark className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                <span className={bankName ? 'text-gray-800 font-bold' : 'text-gray-400 font-normal'}>
+                                  {bankName || 'Chọn ngân hàng...'}
+                                </span>
+                              </div>
+                              <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Số tài khoản</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={bankAccountNumber}
+                              onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                              placeholder="Nhập số tài khoản..."
+                              className="w-full px-4 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-medium focus:bg-white focus:outline-none transition-all focus:border-gray-300"
+                            />
+                          </div>
+
                           <div>
                             <label className="block text-xs text-gray-400 mb-1.5 font-medium">Số tiền rút</label>
                             <div className="relative">
@@ -578,29 +669,6 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                               />
                               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
                             </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Tên ngân hàng</label>
-                            <input
-                              type="text"
-                              value={bankName}
-                              onChange={(e) => setBankName(e.target.value)}
-                              placeholder="VD: Vietcombank, Techcombank..."
-                              className="w-full px-4 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-medium focus:bg-white focus:outline-none transition-all focus:border-gray-300"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Số tài khoản</label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={bankAccountNumber}
-                              onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
-                              placeholder="Nhập số tài khoản..."
-                              className="w-full px-4 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-medium focus:bg-white focus:outline-none transition-all focus:border-gray-300"
-                            />
                           </div>
                         </div>
 
@@ -636,23 +704,6 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                           )}
                         </motion.button>
 
-                        {withdrawSuccess && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mt-4 p-4 rounded-2xl bg-green-50 border border-green-100 text-center"
-                          >
-                            <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                            <p className="text-green-800 text-sm font-bold">Yêu cầu rút tiền đã được gửi!</p>
-                            <p className="text-green-600 text-xs mt-1">Vui lòng chờ admin xử lý.</p>
-                            <button
-                              onClick={() => { setWithdrawSuccess(false); setWithdrawAmount(''); setBankName(''); setBankAccountNumber(''); }}
-                              className="mt-3 text-xs text-green-600 underline"
-                            >
-                              Tiếp tục
-                            </button>
-                          </motion.div>
-                        )}
                       </>
                     )}
                   </motion.div>
@@ -945,6 +996,13 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
           </motion.div>
         </>
       )}
+
+      <BankSelectModal
+        isOpen={bankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        selectedBank={bankName}
+        onSelectBank={(selected) => setBankName(selected)}
+      />
     </AnimatePresence>
   );
 }

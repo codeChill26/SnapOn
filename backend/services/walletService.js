@@ -429,6 +429,93 @@ const walletService = {
       };
     });
   },
+
+  /**
+   * Submit withdrawal request for Admin approval
+   */
+  async withdraw(userId, amount, bankName, bankAccountNumber) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new CustomError('Số tiền rút không hợp lệ', 400);
+    }
+    if (amt > 2000000) {
+      throw new CustomError('Số tiền rút mỗi lần tối đa là 2.000.000đ.', 400);
+    }
+    if (!bankName || !bankAccountNumber) {
+      throw new CustomError('Vui lòng cung cấp đầy đủ thông tin ngân hàng và số tài khoản.', 400);
+    }
+
+    return withDbTx(async (db) => {
+      const wallet = await walletModel.lockByUserId(userId, db);
+      if (!wallet) {
+        throw new CustomError('Ví người dùng không tồn tại.', 404);
+      }
+
+      const avail = parseFloat(wallet.available_balance);
+      if (avail < amt) {
+        throw new CustomError(`Số dư khả dụng không đủ để rút. Số dư hiện có: ${avail.toLocaleString('vi-VN')}đ`, 400);
+      }
+
+      // Check daily (24h) withdrawal limit (20,000,000 VND max per 24h)
+      const dailyRes = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS daily_sum
+         FROM wallet_transactions
+         WHERE wallet_id = $1
+           AND type = 'WITHDRAW'
+           AND status IN ('PENDING', 'SUCCESS')
+           AND created_at >= NOW() - INTERVAL '24 hours'`,
+        [wallet.id]
+      );
+      const dailySum = parseFloat(dailyRes.rows[0].daily_sum || 0);
+      if (dailySum + amt > 20000000) {
+        const remainingLimit = Math.max(0, 20000000 - dailySum);
+        throw new CustomError(
+          `Hạn mức rút tiền tối đa trong 24 giờ là 20.000.000đ. Trong 24h qua bạn đã yêu cầu rút ${dailySum.toLocaleString('vi-VN')}đ. Hạn mức còn lại: ${remainingLimit.toLocaleString('vi-VN')}đ.`,
+          400
+        );
+      }
+
+      // Lock funds by moving from available_balance to locked_balance until Admin approves or rejects
+      await db.query(
+        `UPDATE wallets
+         SET available_balance = available_balance - $2,
+             locked_balance = locked_balance + $2
+         WHERE id = $1`,
+        [wallet.id, amt]
+      );
+
+      // Create withdraw_requests record
+      const reqRes = await db.query(
+        `INSERT INTO withdraw_requests (id, user_id, amount, bank_name, bank_account_number, status)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, 'PENDING')
+         RETURNING *`,
+        [userId, amt, bankName.trim(), bankAccountNumber.trim()]
+      );
+      const withdrawReq = reqRes.rows[0];
+
+      // Save pending transaction with valid UUID reference_id pointing to withdraw_requests.id
+      const tx = await walletTransactionModel.create(
+        {
+          walletId: wallet.id,
+          type: 'WITHDRAW',
+          amount: amt,
+          status: 'PENDING',
+          referenceId: withdrawReq.id,
+        },
+        db
+      );
+
+      return {
+        transactionId: tx.id,
+        withdrawRequestId: withdrawReq.id,
+        amount: amt,
+        bankName: bankName.trim(),
+        bankAccountNumber: bankAccountNumber.trim(),
+        status: 'PENDING',
+        message: `Yêu cầu rút ${amt.toLocaleString('vi-VN')}đ đã được gửi thành công! Admin sẽ kiểm tra và xét duyệt.`,
+      };
+    });
+  },
 };
 
 module.exports = walletService;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router";
 import {
   loginWithEmail,
@@ -9,11 +9,9 @@ import { auth } from "../../imports/firebase";
 import { useApp } from "../context/AppContext";
 import api from "../../services/api";
 
-
-
 export default function Login() {
   const navigate = useNavigate();
-  const { fetchProfile } = useApp();
+  const { fetchProfile, firebaseUser } = useApp();
 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState("");
@@ -21,6 +19,14 @@ export default function Login() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Redirect to Home if user is already logged in
+  useEffect(() => {
+    const token = localStorage.getItem("firebaseToken");
+    if (token || firebaseUser) {
+      navigate("/", { replace: true });
+    }
+  }, [firebaseUser, navigate]);
 
   const syncUserWithBackend = async (token: string) => {
     const response = await api.post("/auth/sync-user", { firebaseToken: token });
@@ -33,33 +39,30 @@ export default function Login() {
     return data;
   };
 
-
-
   const handleEmailAuth = async () => {
     try {
       setLoading(true);
       setError("");
-
-
 
       const user = isRegisterMode
         ? await registerWithEmail(email, password)
         : await loginWithEmail(email, password);
 
       const token = await user.getIdToken();
+      localStorage.setItem("firebaseToken", token);
 
       const syncData = await syncUserWithBackend(token);
-
-      localStorage.setItem("firebaseToken", token);
-      localStorage.setItem("appUser", JSON.stringify(syncData.user));
-      localStorage.setItem("wallet", JSON.stringify(syncData.wallet));
+      const userObj = syncData.user || syncData.data?.user;
+      const walletObj = syncData.wallet || syncData.data?.wallet;
+      if (userObj) localStorage.setItem("appUser", JSON.stringify(userObj));
+      if (walletObj) localStorage.setItem("wallet", JSON.stringify(walletObj));
 
       console.log("Synced user:", syncData);
       
       // Update global context
       await fetchProfile();
 
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (err: any) {
       setError(err.message || "Đăng nhập thất bại.");
     } finally {
@@ -78,19 +81,20 @@ export default function Login() {
 
       const user = await loginWithGoogle();
       const token = await user.getIdToken();
+      localStorage.setItem("firebaseToken", token);
 
       const syncData = await syncUserWithBackend(token);
-
-      localStorage.setItem("firebaseToken", token);
-      localStorage.setItem("appUser", JSON.stringify(syncData.user));
-      localStorage.setItem("wallet", JSON.stringify(syncData.wallet));
+      const userObj = syncData.user || syncData.data?.user;
+      const walletObj = syncData.wallet || syncData.data?.wallet;
+      if (userObj) localStorage.setItem("appUser", JSON.stringify(userObj));
+      if (walletObj) localStorage.setItem("wallet", JSON.stringify(walletObj));
 
       console.log("Synced Google user:", syncData);
       
       // Update global context
       await fetchProfile();
 
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (err: any) {
       setError(err.message || "Đăng nhập Google thất bại.");
     } finally {
