@@ -432,8 +432,12 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 // WORKER PROFILE
 // ═════════════════════════════════════════════════════════════
 function WorkerProfile() {
-  const { jobs, currentUser, updateProfile } = useApp();
+  const { jobs, currentUser, updateProfile, fetchJobs } = useApp();
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'feedback' | 'settings'>('profile');
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   // Editable fields
   const [name,    setName]    = useState(currentUser.name || '');
@@ -464,7 +468,30 @@ function WorkerProfile() {
     setName(currentUser.name || '');
     setPhone(currentUser.phone || '');
     setEmail(currentUser.email || '');
+    setBio(currentUser.bio || '');
+    setSkills(currentUser.skills || []);
   }, [currentUser]);
+
+  const handleSaveBio = async () => {
+    setBio(draftBio);
+    setEditBio(false);
+    await updateProfile({ bio: draftBio });
+  };
+
+  const handleRemoveSkill = async (skillToRemove: string) => {
+    const updated = skills.filter(sk => sk !== skillToRemove);
+    setSkills(updated);
+    await updateProfile({ skills: updated });
+  };
+
+  const handleAddSkill = async (skillToAdd: string) => {
+    if (!skillToAdd.trim()) return;
+    const updated = [...skills, skillToAdd.trim()];
+    setSkills(updated);
+    setNewSkill('');
+    setAddingSkill(false);
+    await updateProfile({ skills: updated });
+  };
 
   const handleSavePhone = async (val: string) => {
     setPhone(val);
@@ -491,9 +518,16 @@ function WorkerProfile() {
     setWorkerReviews(prev => prev.map(r => r.id === id ? { ...r, reply: text } : r));
   };
 
-  const appliedJobs = jobs.filter(j => j.applicants.some(a => a.workerId === currentUser.id));
-  const wonJobs     = appliedJobs.filter(j => j.aiMatchId === currentUser.id);
-  const totalEarned = wonJobs.reduce((s, j) => s + j.price, 0);
+  const appliedJobs = jobs.filter(j => 
+    j.applicants.some(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi' || ((currentUser as any).dbUser?.id && a.workerId === (currentUser as any).dbUser.id)) ||
+    j.aiMatchId === currentUser.id ||
+    (j as any).assignedWorker?.id === currentUser.id
+  );
+  const wonJobs = appliedJobs.filter(j => {
+    const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
+    return j.aiMatchId === currentUser.id || app?.status === 'ACCEPTED' || j.status === 'completed' || j.status === 'matched';
+  });
+  const totalEarned = wonJobs.reduce((s, j) => s + Math.round(j.price * 0.92), 0);
   const avgRating   = workerReviews.reduce((s, r) => s + r.rating, 0) / (workerReviews.length || 1);
 
   const TABS = [
@@ -555,7 +589,7 @@ function WorkerProfile() {
         {/* Stats row */}
         <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
           {[
-            { v: (currentUser as any).completed_jobs || 0, l: 'Việc done' },
+            { v: Math.max(wonJobs.length, (currentUser as any).completed_jobs || 0), l: 'Việc done' },
             { v: appliedJobs.length,        l: 'Đã apply' },
             { v: workerReviews.length,       l: 'Đánh giá' },
             { v: fmt(totalEarned) + '₫',    l: 'Tổng thu' },
@@ -628,7 +662,7 @@ function WorkerProfile() {
                   ) : (
                     <div className="flex gap-2">
                       <button onClick={() => setEditBio(false)} className="text-xs text-gray-400">Huỷ</button>
-                      <button onClick={() => { setBio(draftBio); setEditBio(false); }}
+                      <button onClick={handleSaveBio}
                         className="text-xs bg-orange-500 text-white px-3 py-1 rounded-full" style={{ fontWeight: 600 }}>
                         Lưu
                       </button>
@@ -639,7 +673,7 @@ function WorkerProfile() {
                   <textarea value={draftBio} onChange={e => setDraftBio(e.target.value)} rows={3}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300" />
                 ) : (
-                  <p className="text-gray-600 text-sm leading-relaxed">{bio}</p>
+                  <p className="text-gray-600 text-sm leading-relaxed">{bio || 'Chưa có giới thiệu bản thân.'}</p>
                 )}
               </div>
 
@@ -655,7 +689,7 @@ function WorkerProfile() {
                   {skills.map(s => (
                     <div key={s} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100 group">
                       <span className="text-xs" style={{ fontWeight: 500 }}>{s}</span>
-                      <button onClick={() => setSkills(prev => prev.filter(sk => sk !== s))}
+                      <button onClick={() => handleRemoveSkill(s)}
                         className="opacity-0 group-hover:opacity-100 transition ml-0.5">
                         <X className="w-3 h-3 text-blue-400 hover:text-red-500 transition" />
                       </button>
@@ -668,13 +702,13 @@ function WorkerProfile() {
                         value={newSkill}
                         onChange={e => setNewSkill(e.target.value)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter' && newSkill.trim()) { setSkills(p => [...p, newSkill.trim()]); setNewSkill(''); setAddingSkill(false); }
+                          if (e.key === 'Enter' && newSkill.trim()) { handleAddSkill(newSkill); }
                           if (e.key === 'Escape') { setNewSkill(''); setAddingSkill(false); }
                         }}
                         placeholder="Kỹ năng mới..."
                         className="text-xs border border-blue-300 rounded-full px-3 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
                       />
-                      <button onClick={() => { if (newSkill.trim()) { setSkills(p => [...p, newSkill.trim()]); setNewSkill(''); } setAddingSkill(false); }}
+                      <button onClick={() => { if (newSkill.trim()) handleAddSkill(newSkill); else setAddingSkill(false); }}
                         className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
                         <Check className="w-3.5 h-3.5 text-white" />
                       </button>
@@ -735,13 +769,13 @@ function WorkerProfile() {
               ) : (
                 appliedJobs.map(job => {
                   const applicant = job.applicants.find(a => a.workerId === currentUser.id);
-                  const isWinner  = job.aiMatchId === currentUser.id;
+                  const isWinner  = job.aiMatchId === currentUser.id || applicant?.status === 'ACCEPTED';
                   return (
                     <Link key={job.id} to={`/job/${job.id}`}>
                       <motion.div
                         whileHover={{ y: -1 }}
                         className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition ${
-                          isWinner ? 'border-green-200' : 'border-gray-100'
+                          isWinner ? 'border-green-200 shadow-green-50' : 'border-gray-100'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -765,8 +799,12 @@ function WorkerProfile() {
                                 {applicant?.bidPrice ? applicant.bidPrice.toLocaleString('vi-VN') + '₫' : job.price.toLocaleString('vi-VN') + '₫'}
                                 <span className="text-xs text-gray-400 ml-1" style={{ fontWeight: 400 }}>giá chào</span>
                               </span>
+                              {isWinner && (
+                                <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
+                                  💵 Nhận thực tế (92%): {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫
+                                </span>
+                              )}
                               <span className="text-gray-400 text-xs flex items-center gap-1"><Clock className="w-3 h-3" />{job.duration}h</span>
-                              {applicant && <span className="text-blue-500 text-xs">📍 {applicant.distance} km</span>}
                             </div>
                           </div>
                         </div>
@@ -843,12 +881,16 @@ function WorkerProfile() {
 // HIRER PROFILE
 // ═════════════════════════════════════════════════════════════
 function HirerProfile() {
-  const { jobs, currentUser, updateProfile } = useApp();
+  const { jobs, currentUser, updateProfile, fetchJobs } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'feedback' | 'settings'>('overview');
 
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
   // Editable fields
-  const [phone,    setPhone]    = useState(currentUser.phone || '0912 345 678');
-  const [email,    setEmail]    = useState(currentUser.email || 'hoa.nguyen@gmail.com');
+  const [phone,    setPhone]    = useState(currentUser.phone || '');
+  const [email,    setEmail]    = useState(currentUser.email || '');
   const [area,     setArea]     = useState('Quận 1, Bình Thạnh, TP.HCM');
   const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
   const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
@@ -865,8 +907,8 @@ function HirerProfile() {
   };
 
   useEffect(() => {
-    setPhone(currentUser.phone || '0912 345 678');
-    setEmail(currentUser.email || 'hoa.nguyen@gmail.com');
+    setPhone(currentUser.phone || '');
+    setEmail(currentUser.email || '');
   }, [currentUser]);
 
   const handleSavePhone = async (val: string) => {
@@ -879,7 +921,11 @@ function HirerProfile() {
   const [notifRemind, setNotifRemind] = useState(true);
   const [notifPromo,  setNotifPromo]  = useState(false);
 
-  const myJobs        = jobs.filter(j => (currentUser?.id && j.hirerId === currentUser.id) || (currentUser?.name && j.hirerName && j.hirerName.toLowerCase() === currentUser.name.toLowerCase()) || j.hirerName === 'Nguyễn Thị Hoa');
+  const myJobs = jobs.filter(j => 
+    (currentUser?.id && j.hirerId === currentUser.id) ||
+    ((currentUser as any)?.dbUser?.id && j.hirerId === (currentUser as any).dbUser.id) ||
+    (currentUser?.name && j.hirerName && (j.hirerName.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(j.hirerName.toLowerCase())))
+  );
   const activeJobs    = myJobs.filter(j => j.status === 'active');
   const matchedJobs   = myJobs.filter(j => j.status === 'matched' || j.status === 'completed');
   const totalSpent    = matchedJobs.reduce((s, j) => s + j.price, 0);

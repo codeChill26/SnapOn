@@ -79,6 +79,25 @@ const walletService = {
     const safeLimit = Math.max(1, Math.min(parseInt(limit) || 20, 100));
     const offset = (currentPage - 1) * safeLimit;
 
+    // Auto-sync status between withdraw_requests and wallet_transactions
+    try {
+      await pool.query(`
+        UPDATE wallet_transactions wt
+        SET status = CASE
+          WHEN wr.status = 'APPROVED' THEN 'SUCCESS'
+          WHEN wr.status = 'REJECTED' THEN 'FAILED'
+          ELSE wt.status
+        END
+        FROM withdraw_requests wr
+        WHERE wt.reference_id = wr.id
+          AND wt.type = 'WITHDRAW'
+          AND wt.status = 'PENDING'
+          AND wr.status IN ('APPROVED', 'REJECTED')
+      `);
+    } catch (e) {
+      console.error('Error auto-syncing withdraw transactions:', e);
+    }
+
     const countRes = await pool.query(
       'SELECT COUNT(*) as total FROM wallet_transactions WHERE wallet_id = $1',
       [wallet.id]
@@ -86,15 +105,26 @@ const walletService = {
     const total = parseInt(countRes.rows[0].total);
 
     const result = await pool.query(
-      `SELECT * FROM wallet_transactions
-       WHERE wallet_id = $1
-       ORDER BY created_at DESC
+      `SELECT wt.*, wr.status as req_status
+       FROM wallet_transactions wt
+       LEFT JOIN withdraw_requests wr ON wt.reference_id = wr.id
+       WHERE wt.wallet_id = $1
+       ORDER BY wt.created_at DESC
        LIMIT $2 OFFSET $3`,
       [wallet.id, safeLimit, offset]
     );
 
+    const rows = result.rows.map(row => {
+      let status = row.status;
+      if (row.type === 'WITHDRAW' && row.req_status) {
+        if (row.req_status === 'REJECTED') status = 'FAILED';
+        if (row.req_status === 'APPROVED') status = 'SUCCESS';
+      }
+      return { ...row, status };
+    });
+
     return {
-      transactions: result.rows,
+      transactions: rows,
       pagination: {
         page: currentPage,
         limit: safeLimit,
@@ -456,7 +486,21 @@ const walletService = {
         throw new CustomError(`Số dư khả dụng không đủ để rút. Số dư hiện có: ${avail.toLocaleString('vi-VN')}đ`, 400);
       }
 
-      // Check daily (24h) withdrawal limit (20,000,000 VND max per 24h)
+      // 1. Check if user already has an active pending withdrawal request
+      const pendingCheck = await db.query(
+        `SELECT id FROM wallet_transactions
+         WHERE wallet_id = $1 AND type = 'WITHDRAW' AND status = 'PENDING'
+         LIMIT 1`,
+        [wallet.id]
+      );
+      if (pendingCheck.rows.length > 0) {
+        throw new CustomError(
+          'Bạn đang có 1 yêu cầu rút tiền đang chờ Admin xét duyệt. Vui lòng chờ Admin xử lý xong trước khi tạo yêu cầu mới.',
+          400
+        );
+      }
+
+      // 2. Check daily (24h) withdrawal limit (20,000,000 VND max per 24h)
       const dailyRes = await db.query(
         `SELECT COALESCE(SUM(amount), 0) AS daily_sum
          FROM wallet_transactions
@@ -475,14 +519,8 @@ const walletService = {
         );
       }
 
-      // Lock funds by moving from available_balance to locked_balance until Admin approves or rejects
-      await db.query(
-        `UPDATE wallets
-         SET available_balance = available_balance - $2,
-             locked_balance = locked_balance + $2
-         WHERE id = $1`,
-        [wallet.id, amt]
-      );
+      // Do NOT deduct balance or lock money on request creation.
+      // Money will be deducted from balance & available_balance only when Admin approves.
 
       // Create withdraw_requests record
       const reqRes = await db.query(

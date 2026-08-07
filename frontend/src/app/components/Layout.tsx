@@ -38,18 +38,11 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   const [showWallet, setShowWallet] = useState(false);
   const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifTab, setNotifTab] = useState<'wallet' | 'job'>('wallet');
+  const [liveToast, setLiveToast] = useState<{ title: string; message: string; type: string } | null>(null);
+  const knownNotifIdsRef = React.useRef<Set<string>>(new Set());
 
-  const [notifications, setNotifications] = useState<AppNotification[]>([
-    {
-      id: 'n1',
-      title: 'Yêu cầu rút tiền',
-      message: 'Yêu cầu rút 2.000.000đ đã được gửi thành công và đang chờ Admin xét duyệt.',
-      time: '5 phút trước',
-      type: 'wallet',
-      isUnread: true,
-      link: '/profile'
-    },
-  ]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const getReadNotifIds = (): Set<string> => {
     try {
@@ -86,11 +79,11 @@ export function Layout({ children }: { children?: React.ReactNode }) {
               const amtStr = parseFloat(tx.amount || 0).toLocaleString('vi-VN') + 'đ';
               const createdDate = new Date(tx.created_at || Date.now());
               const timeStr = createdDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + createdDate.toLocaleDateString('vi-VN');
-              const notifId = `tx-${tx.id}`;
+              const notifId = `tx-${tx.id}-${tx.status}`;
               const isRead = readIds.has(notifId);
 
               if (tx.type === 'WITHDRAW') {
-                if (tx.status === 'PENDING') {
+                if (tx.status === 'PENDING' || tx.status === 'pending') {
                   notifs.push({
                     id: notifId,
                     title: '⏳ Đơn rút tiền đang chờ duyệt',
@@ -100,7 +93,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                     isUnread: !isRead,
                     link: '/profile'
                   });
-                } else if (tx.status === 'SUCCESS') {
+                } else if (tx.status === 'SUCCESS' || tx.status === 'APPROVED') {
                   notifs.push({
                     id: notifId,
                     title: '✅ Đơn rút tiền ĐÃ ĐƯỢC DUYỆT',
@@ -110,11 +103,11 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                     isUnread: !isRead,
                     link: '/profile'
                   });
-                } else if (tx.status === 'FAILED') {
+                } else if (tx.status === 'FAILED' || tx.status === 'REJECTED') {
                   notifs.push({
                     id: notifId,
                     title: '❌ Đơn rút tiền BỊ TỪ CHỐI',
-                    message: `Yêu cầu rút ${amtStr} bị từ chối. Số tiền đã được hoàn trả lại ví khả dụng của bạn.`,
+                    message: `Yêu cầu rút ${amtStr} đã bị Admin từ chối. Vui lòng kiểm tra lại thông tin.`,
                     time: timeStr,
                     type: 'wallet',
                     isUnread: !isRead,
@@ -138,7 +131,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           // ignore
         }
 
-        // 2. Fetch user applications (job applications status: ACCEPTED, REJECTED)
+        // 2. Fetch user applications (worker job applications status: ACCEPTED, REJECTED)
         try {
           const appRes = await api.get('/applications/my-applications');
           const appData = appRes.data;
@@ -151,25 +144,40 @@ export function Layout({ children }: { children?: React.ReactNode }) {
               const notifId = `app-${app.id}`;
               const isRead = readIds.has(notifId);
 
-              if (app.status === 'ACCEPTED') {
+              const grossVal = parseFloat(app.bid_price || app.budget_min || 0);
+              const netVal = Math.round(grossVal * 0.92);
+              const feeVal = Math.round(grossVal * 0.08);
+
+              if (app.task_status === 'COMPLETED' && (app.status === 'ACCEPTED' || app.assignment_id)) {
+                const compNotifId = `app-completed-${app.id}`;
+                notifs.push({
+                  id: compNotifId,
+                  title: '💰 Công việc hoàn thành - Đã nhận tiền',
+                  message: `Công việc "${taskTitle}" đã hoàn thành thành công! Ví của bạn đã được cộng +${netVal.toLocaleString('vi-VN')}₫ (giá chốt ${grossVal.toLocaleString('vi-VN')}₫ đã trừ 8% phí hệ thống ${feeVal.toLocaleString('vi-VN')}₫).`,
+                  time: timeStr,
+                  type: 'job',
+                  isUnread: !readIds.has(compNotifId),
+                  link: '/profile'
+                });
+              } else if (app.status === 'ACCEPTED' || app.assignment_id) {
                 notifs.push({
                   id: notifId,
                   title: '🎉 Đơn ứng tuyển ĐÃ ĐƯỢC CHẤP NHẬN',
-                  message: `Chủ nhà đã chọn bạn làm công việc "${taskTitle}". Hãy kiểm tra tiến độ làm việc!`,
+                  message: `Người đăng việc đã chấp nhận bạn làm công việc "${taskTitle}". Hãy bắt đầu thực hiện!`,
                   time: timeStr,
                   type: 'job',
                   isUnread: !isRead,
-                  link: '/activity'
+                  link: '/profile'
                 });
-              } else if (app.status === 'REJECTED') {
+              } else if (app.status === 'REJECTED' && app.task_status === 'CLOSED') {
                 notifs.push({
                   id: notifId,
                   title: 'ℹ️ Đơn ứng tuyển chưa được chọn',
-                  message: `Đơn ứng tuyển cho công việc "${taskTitle}" đã bị từ chối hoặc hết hạn.`,
+                  message: `Đơn ứng tuyển cho công việc "${taskTitle}" chưa được chọn lần này.`,
                   time: timeStr,
                   type: 'job',
                   isUnread: false,
-                  link: '/activity'
+                  link: '/profile'
                 });
               }
             });
@@ -178,7 +186,55 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           // ignore
         }
 
+        // 3. Hirer notifications: Applicants who applied to tasks posted by current Hirer
+        try {
+          const currentUserId = currentUser?.id;
+          const tasksRes = await api.get('/tasks');
+          const allTasks = tasksRes.data?.data || [];
+          if (Array.isArray(allTasks)) {
+            for (const t of allTasks) {
+              if (currentUserId && (t.poster_id === currentUserId || t.posterId === currentUserId)) {
+                try {
+                  const appsRes = await api.get(`/tasks/${t.id}/applications`);
+                  const appsList = appsRes.data?.data || [];
+                  if (Array.isArray(appsList)) {
+                    appsList.forEach((app: any) => {
+                      const notifId = `hirer-app-${app.id}`;
+                      const isRead = readIds.has(notifId);
+                      const appliedDate = app.created_at ? new Date(app.created_at) : new Date();
+                      const timeStr = appliedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + appliedDate.toLocaleDateString('vi-VN');
+                      const bidPriceFmt = parseFloat(app.bid_price || 0).toLocaleString('vi-VN') + 'đ';
+
+                      notifs.push({
+                        id: notifId,
+                        title: '📩 Có ứng viên nộp đơn ứng tuyển!',
+                        message: `${app.tasker_name || 'Người làm'} vừa nộp đơn ứng tuyển cho bài đăng "${t.title}" với giá thầu ${bidPriceFmt}.`,
+                        time: timeStr,
+                        type: 'job',
+                        isUnread: !isRead,
+                        link: `/job/${t.id}`
+                      });
+                    });
+                  }
+                } catch (err) {
+                  // Ignore tasks that do not belong to current user (backend returns 403)
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+
         if (notifs.length > 0) {
+          // Detect newly arrived unread notifications
+          const newUnreads = notifs.filter(n => n.isUnread && !knownNotifIdsRef.current.has(n.id));
+          if (newUnreads.length > 0 && knownNotifIdsRef.current.size > 0) {
+            const newest = newUnreads[0];
+            setLiveToast({ title: newest.title, message: newest.message, type: newest.type });
+            setTimeout(() => setLiveToast(null), 6000);
+          }
+          notifs.forEach(n => knownNotifIdsRef.current.add(n.id));
           setNotifications(notifs);
         }
       } catch (err) {
@@ -187,9 +243,20 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     };
 
     loadRealNotifications();
-  }, [firebaseUser, location.pathname]);
+
+    const interval = setInterval(loadRealNotifications, 5000);
+    window.addEventListener('notification-updated', loadRealNotifications);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notification-updated', loadRealNotifications);
+    };
+  }, [firebaseUser, location.pathname, showNotifications]);
 
   const unreadCount = notifications.filter(n => n.isUnread).length;
+  const walletUnreadCount = notifications.filter(n => n.type === 'wallet' && n.isUnread).length;
+  const jobUnreadCount = notifications.filter(n => n.type === 'job' && n.isUnread).length;
+  const filteredNotifs = notifications.filter(n => n.type === notifTab);
 
   const markAllAsRead = () => {
     const readIds = getReadNotifIds();
@@ -202,8 +269,11 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     const readIds = getReadNotifIds();
     readIds.add(notification.id);
     saveReadNotifIds(readIds);
-
     setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, isUnread: false } : n));
+    setShowNotifications(false);
+    if (notification.link) {
+      navigate(notification.link);
+    }
   };
 
   // Listen to PayOS redirect search query params
@@ -287,10 +357,35 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-
-      {/* Sidebar removed for Hirer/Worker */}
-
-
+      {/* Real-Time Floating Notification Toast Banner */}
+      <AnimatePresence>
+        {liveToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-[10000] max-w-sm w-[90%] bg-white/95 backdrop-blur-md border border-orange-200 rounded-2xl p-4 shadow-2xl flex items-start gap-3 cursor-pointer"
+            onClick={() => {
+              setShowNotifications(true);
+              setLiveToast(null);
+            }}
+          >
+            <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 font-bold text-base">
+              🔔
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-gray-900 truncate">{liveToast.title}</h4>
+              <p className="text-[11px] text-gray-600 leading-tight line-clamp-2 mt-0.5">{liveToast.message}</p>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setLiveToast(null); }}
+              className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <header className={`sticky top-0 z-50 shadow-sm border-b transition-colors duration-300 ${isWorker
@@ -415,13 +510,49 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                         </div>
                       </div>
 
+                      {/* 2 Sub-Tabs Header */}
+                      <div className="flex border-b border-gray-100 bg-gray-50/80 p-1.5 gap-1.5">
+                        <button
+                          onClick={() => setNotifTab('wallet')}
+                          className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                            notifTab === 'wallet'
+                              ? 'bg-white shadow-sm text-emerald-600 border border-gray-200/60'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          <Wallet className="w-3.5 h-3.5" /> Nạp / Rút tiền
+                          {walletUnreadCount > 0 && (
+                            <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                              {walletUnreadCount}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => setNotifTab('job')}
+                          className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                            notifTab === 'job'
+                              ? 'bg-white shadow-sm text-orange-600 border border-gray-200/60'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          <Briefcase className="w-3.5 h-3.5" /> Công việc
+                          {jobUnreadCount > 0 && (
+                            <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                              {jobUnreadCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Notification Items List */}
                       <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
-                        {notifications.length === 0 ? (
-                          <div className="py-8 text-center text-gray-400 text-sm">
-                            Chưa có thông báo nào.
+                        {filteredNotifs.length === 0 ? (
+                          <div className="py-10 text-center text-gray-400 text-xs font-medium">
+                            {notifTab === 'wallet' ? 'Chưa có thông báo Nạp/Rút tiền.' : 'Chưa có thông báo Công việc.'}
                           </div>
                         ) : (
-                          notifications.map((n) => (
+                          filteredNotifs.map((n) => (
                             <div
                               key={n.id}
                               onClick={() => handleNotificationClick(n)}
@@ -431,12 +562,9 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                             >
                               <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
                                 n.type === 'wallet' ? 'bg-emerald-100 text-emerald-600' :
-                                n.type === 'job' ? 'bg-orange-100 text-orange-600' :
-                                'bg-blue-100 text-blue-600'
+                                'bg-orange-100 text-orange-600'
                               }`}>
-                                {n.type === 'wallet' ? <Wallet className="w-4 h-4" /> :
-                                 n.type === 'job' ? <Briefcase className="w-4 h-4" /> :
-                                 <ShieldCheck className="w-4 h-4" />}
+                                {n.type === 'wallet' ? <Wallet className="w-4 h-4" /> : <Briefcase className="w-4 h-4" />}
                               </div>
 
                               <div className="flex-1 min-w-0">
@@ -460,7 +588,9 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                       </div>
 
                       <div className="p-2.5 bg-gray-50 text-center border-t border-gray-100">
-                        <span className="text-xs text-gray-500 font-medium">Tất cả thông báo gần đây</span>
+                        <span className="text-xs text-gray-500 font-medium">
+                          {notifTab === 'wallet' ? 'Thông báo giao dịch ví' : 'Thông báo ứng tuyển & khớp việc'}
+                        </span>
                       </div>
                     </motion.div>
                   )}

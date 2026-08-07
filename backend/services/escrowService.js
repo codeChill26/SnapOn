@@ -4,9 +4,9 @@ const CustomError = require('../utils/CustomError');
 
 function getPlatformFeeRate() {
   const raw = process.env.PLATFORM_FEE_RATE;
-  if (raw == null || raw === '') return 0.1; // default 10%
+  if (raw == null || raw === '') return 0.08; // default 8% platform fee (92% for worker)
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0 || n > 1) return 0.1;
+  if (!Number.isFinite(n) || n < 0 || n > 1) return 0.08;
   return n;
 }
 

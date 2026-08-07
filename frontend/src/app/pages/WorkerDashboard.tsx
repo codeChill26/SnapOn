@@ -148,14 +148,17 @@ export default function WorkerDashboard() {
   const currentJob = workerCurrentJobId ? jobs.find(j => j.id === workerCurrentJobId) : null;
   const isOnJob = workerStatus === 'on_job';
 
-  const activeJobs = jobs.filter(j => j.status === 'active' && j.expiresAt > Date.now());
+  const activeJobs = jobs.filter(j => j.status === 'active' && (j.expiresAt > Date.now() || !j.expiresAt));
 
   const jobsWithDistance = activeJobs
     .map(job => ({
       job,
-      distance: haversineDistance(myLocation.lat, myLocation.lng, job.location.lat, job.location.lng),
+      distance: haversineDistance(myLocation.lat, myLocation.lng, job.location?.lat || 10.7769, job.location?.lng || 106.7009),
     }))
-    .filter(({ distance }) => distance <= radiusKm)
+    .filter(({ job, distance }) => {
+      const isOnline = !job.location?.address || job.location.address.toLowerCase().includes('online') || (job as any).workMode === 'REMOTE' || (job as any).taskType === 'ONLINE';
+      return isOnline || distance <= radiusKm;
+    })
     .filter(({ job }) => !activeCategory || job.category === activeCategory);
 
   const sortedJobs = [...jobsWithDistance].sort((a, b) => {
@@ -527,74 +530,6 @@ export default function WorkerDashboard() {
         </div>
       </div>
 
-      {/* ── MY LOCATION ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-gray-700" style={{ fontWeight: 600 }}>
-            <MapPin className="w-4 h-4 inline mr-1 text-orange-500" />Vị trí của tôi
-          </h3>
-          <button
-            onClick={useGPS}
-            disabled={geoLoading}
-            className="flex items-center gap-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-full transition disabled:opacity-50"
-            style={{ fontWeight: 500 }}
-          >
-            {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-            {geoLoading ? 'Đang lấy...' : 'GPS'}
-          </button>
-        </div>
-
-        {/* GPS error + address search fallback */}
-        <AnimatePresence>
-          {geoError && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-amber-700 mb-3">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>{geoError}</span>
-              </div>
-              <div className="mb-3">
-                <p className="text-xs text-gray-500 mb-1.5" style={{ fontWeight: 500 }}>🔍 Tìm kiếm địa chỉ thủ công:</p>
-                <LocationSearchBox onSelect={(loc) => { setMyLocation(loc); setGeoError(null); }} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Current address display */}
-        <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-sm text-gray-600 mb-3">
-          📍 {myLocation.address}
-        </div>
-
-        {/* Radius */}
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-sm text-gray-500">Bán kính:</span>
-          <div className="flex gap-2">
-            {[2, 5, 10, 20].map(r => (
-              <button
-                key={r}
-                onClick={() => setRadiusKm(r)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition ${radiusKm === r ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-orange-300'}`}
-                style={{ fontWeight: radiusKm === r ? 600 : 400 }}
-              >{r} km</button>
-            ))}
-          </div>
-        </div>
-
-        {showMap && (
-          <div className="mt-3">
-            <MapPicker value={myLocation} onChange={setMyLocation} height="240px" />
-          </div>
-        )}
-        <button onClick={() => setShowMap(!showMap)} className="mt-1 text-xs text-blue-500 hover:text-blue-600">
-          {showMap ? '▲ Ẩn bản đồ' : '▼ Chọn trên bản đồ'}
-        </button>
-      </div>
-
       {/* ── CATEGORIES ── */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
         <button
@@ -615,11 +550,11 @@ export default function WorkerDashboard() {
       {/* ── SORT ── */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <p className="text-gray-700" style={{ fontWeight: 600 }}>
-          {sortedJobs.length} việc
-          <span className="text-gray-400 text-sm" style={{ fontWeight: 400 }}> trong bán kính {radiusKm}km</span>
+          {sortedJobs.length} công việc Online
+          <span className="text-gray-400 text-sm font-normal"> (Toàn quốc)</span>
         </p>
         <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
-          {[{ key: 'distance', label: '📍 Gần nhất' }, { key: 'price', label: '💰 Giá cao' }, { key: 'newest', label: '🕐 Mới nhất' }].map(({ key, label }) => (
+          {[{ key: 'price', label: '💰 Giá thầu cao' }, { key: 'newest', label: '🕐 Mới nhất' }].map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setSortBy(key as any)}
@@ -656,7 +591,7 @@ export default function WorkerDashboard() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.92 }}
                   onClick={() => openApply(job.id)}
-                  className="absolute bottom-4 right-4 bg-orange-500 hover:bg-orange-600 text-white text-xs px-4 py-1.5 rounded-full transition shadow-lg shadow-orange-200 flex items-center gap-1.5"
+                  className="absolute bottom-4 right-4 bg-orange-500 hover:bg-orange-600 text-white text-xs px-4 py-1.5 rounded-full transition shadow-lg shadow-orange-200 flex items-center gap-1.5 cursor-pointer"
                   style={{ fontWeight: 700 }}
                 >
                   <Briefcase className="w-3.5 h-3.5" /> Apply ⚡
@@ -666,12 +601,12 @@ export default function WorkerDashboard() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-          <div className="text-5xl mb-4">🔍</div>
-          <p className="text-gray-500" style={{ fontWeight: 500 }}>Không có việc trong bán kính {radiusKm}km</p>
-          <p className="text-gray-400 text-sm mt-1">Thử tăng bán kính hoặc thay đổi địa chỉ</p>
-          <button onClick={() => setRadiusKm(20)} className="mt-4 bg-orange-500 text-white px-6 py-2 rounded-full text-sm hover:bg-orange-600 transition" style={{ fontWeight: 500 }}>
-            Mở rộng ra 20km
+        <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+          <div className="text-5xl mb-3">🌐</div>
+          <p className="text-gray-800 font-bold text-base">Chưa có việc Online trong danh mục này</p>
+          <p className="text-gray-400 text-xs mt-1">Hãy thử chọn "Tất cả" để xem toàn bộ công việc từ xa đang mở.</p>
+          <button onClick={() => setActiveCategory(null)} className="mt-4 bg-orange-500 text-white px-6 py-2.5 rounded-xl text-xs font-bold hover:bg-orange-600 transition shadow-md cursor-pointer">
+            Xem tất cả việc Online
           </button>
         </div>
       )}

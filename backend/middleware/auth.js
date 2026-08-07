@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 /** Look up a user by their database UUID */
 async function findUserById(userId) {
   const result = await pool.query(
-    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE id = $1',
+    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] || null;
@@ -18,6 +18,14 @@ function attachUser(req, user, res, next) {
     return error(res, 'Your account has been banned.', 403);
   }
 
+  let skillsArr = [];
+  if (user.skills) {
+    if (Array.isArray(user.skills)) skillsArr = user.skills;
+    else if (typeof user.skills === 'string') {
+      try { skillsArr = JSON.parse(user.skills); } catch { skillsArr = []; }
+    }
+  }
+
   req.user = {
     id: user.id,
     firebaseUid: user.firebase_uid || user.firebaseUid,
@@ -25,10 +33,14 @@ function attachUser(req, user, res, next) {
     email: user.email,
     phone: user.phone,
     avatarUrl: user.avatar_url || user.avatarUrl,
+    coverUrl: user.cover_url || user.coverUrl || '',
     role: user.role,
     status: user.status,
     isVerified: user.is_verified ?? user.isVerified,
     isIdVerified: user.is_id_verified ?? user.isIdVerified,
+    bio: user.bio || '',
+    headline: user.headline || '',
+    skills: skillsArr,
     createdAt: user.created_at || user.createdAt,
   };
 
@@ -131,7 +143,7 @@ const authenticate = async (req, res, next) => {
         const decodedFirebaseToken = await admin.auth().verifyIdToken(token);
 
         const result = await pool.query(
-          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE firebase_uid = $1',
+          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at FROM users WHERE firebase_uid = $1',
           [decodedFirebaseToken.uid]
         );
 
@@ -245,7 +257,7 @@ const authenticateOptional = async (req, res, next) => {
     try {
       const decodedFirebaseToken = await admin.auth().verifyIdToken(token);
       const result = await pool.query(
-        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, role, status, is_verified, is_id_verified, created_at FROM users WHERE firebase_uid = $1',
+        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at FROM users WHERE firebase_uid = $1',
         [decodedFirebaseToken.uid]
       );
       if (result.rows.length > 0) {

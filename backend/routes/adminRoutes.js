@@ -218,7 +218,7 @@ router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN')
   try {
     const result = await withDbTx(async (db) => {
       const txRes = await db.query(
-        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 FOR UPDATE`,
+        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
         [id]
       );
       if (txRes.rows.length === 0) {
@@ -234,10 +234,10 @@ router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN')
       }
 
       const amt = parseFloat(tx.amount);
-      // Deduct locked_balance and total balance upon approval
+      // Deduct available_balance and total balance upon approval
       await db.query(
         `UPDATE wallets
-         SET locked_balance = locked_balance - $2,
+         SET available_balance = available_balance - $2,
              balance = balance - $2
          WHERE id = $1`,
         [tx.wallet_id, amt]
@@ -245,8 +245,15 @@ router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN')
 
       const updatedTx = await db.query(
         `UPDATE wallet_transactions SET status = 'SUCCESS' WHERE id = $1 RETURNING *`,
-        [id]
+        [tx.id]
       );
+
+      if (tx.reference_id) {
+        await db.query(
+          `UPDATE withdraw_requests SET status = 'APPROVED' WHERE id = $1`,
+          [tx.reference_id]
+        );
+      }
 
       return updatedTx.rows[0];
     });
@@ -264,7 +271,7 @@ router.patch('/withdrawals/:id/reject', verifyFirebaseToken, authorize('ADMIN'),
   try {
     const result = await withDbTx(async (db) => {
       const txRes = await db.query(
-        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 FOR UPDATE`,
+        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
         [id]
       );
       if (txRes.rows.length === 0) {
@@ -279,20 +286,18 @@ router.patch('/withdrawals/:id/reject', verifyFirebaseToken, authorize('ADMIN'),
         throw err;
       }
 
-      const amt = parseFloat(tx.amount);
-      // Return locked_balance back to available_balance upon rejection
-      await db.query(
-        `UPDATE wallets
-         SET locked_balance = locked_balance - $2,
-             available_balance = available_balance + $2
-         WHERE id = $1`,
-        [tx.wallet_id, amt]
-      );
-
+      // Balance was not deducted during request creation, so rejection simply sets status to FAILED
       const updatedTx = await db.query(
         `UPDATE wallet_transactions SET status = 'FAILED' WHERE id = $1 RETURNING *`,
-        [id]
+        [tx.id]
       );
+
+      if (tx.reference_id) {
+        await db.query(
+          `UPDATE withdraw_requests SET status = 'REJECTED' WHERE id = $1`,
+          [tx.reference_id]
+        );
+      }
 
       return updatedTx.rows[0];
     });

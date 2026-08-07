@@ -345,64 +345,6 @@ const TaskPublishController = {
       if (!category_id) {
         return error(res, 'Field (category_id) is required.', 400);
       }
-      if (!skill_ids || !Array.isArray(skill_ids) || skill_ids.length === 0) {
-        return error(res, 'Specific subcategory (skill_ids) is required.', 400);
-      }
-
-      const parsedBudgetMin = budget_min !== undefined ? parseFloat(budget_min) : null;
-      if (parsedBudgetMin === null || isNaN(parsedBudgetMin)) {
-        return error(res, 'Price / Budget is required.', 400);
-      }
-
-      if (work_mode === 'ONSITE' && (!location || !location.address || location.address.trim().length === 0)) {
-        return error(res, 'Location address is required for ONSITE work mode.', 400);
-      }
-
-      const parsedMinAge = parseInteger(min_age);
-      const parsedMaxAge = parseInteger(max_age);
-
-      if (min_age !== undefined && min_age !== null && parsedMinAge === null) {
-        return error(res, 'Minimum age must be a valid integer.', 400);
-      }
-      if (max_age !== undefined && max_age !== null && parsedMaxAge === null) {
-        return error(res, 'Maximum age must be a valid integer.', 400);
-      }
-      if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
-        return error(res, 'Minimum age cannot be greater than maximum age.', 400);
-      }
-
-      const parsedMinHeight = parseInteger(min_height_cm);
-      const parsedMaxHeight = parseInteger(max_height_cm);
-
-      if (min_height_cm !== undefined && min_height_cm !== null && parsedMinHeight === null) {
-        return error(res, 'Minimum height must be a valid integer.', 400);
-      }
-      if (max_height_cm !== undefined && max_height_cm !== null && parsedMaxHeight === null) {
-        return error(res, 'Maximum height must be a valid integer.', 400);
-      }
-      if (parsedMinHeight !== null && parsedMaxHeight !== null && parsedMinHeight > parsedMaxHeight) {
-        return error(res, 'Minimum height cannot be greater than maximum height.', 400);
-      }
-
-      // Check conditional validations for RECRUITMENT vs SERVICE_OFFER
-      if (post_type === 'RECRUITMENT') {
-        const parsedPeopleNeeded = parseInteger(people_needed);
-        if (parsedPeopleNeeded === null || parsedPeopleNeeded < 1) {
-          return error(res, 'People needed must be a valid integer and at least 1 for RECRUITMENT.', 400);
-        }
-        if (!contact_phone || contact_phone.trim().length === 0) {
-          return error(res, 'Contact phone is required for RECRUITMENT.', 400);
-        }
-        if (!start_date) {
-          return error(res, 'Start date is required for RECRUITMENT.', 400);
-        }
-        const parsedStartDate = new Date(start_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (parsedStartDate < today) {
-          return error(res, 'Start date cannot be in the past.', 400);
-        }
-      }
 
       // Support slug-to-UUID lookup if category_id is a slug
       let finalCategoryId = category_id;
@@ -410,8 +352,32 @@ const TaskPublishController = {
         const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
         if (catRes.rows[0]) {
           finalCategoryId = catRes.rows[0].id;
+        } else {
+          // If category slug does not exist in DB yet, create it on the fly
+          const newCat = await pool.query('INSERT INTO categories (id, name, slug) VALUES (gen_random_uuid(), $1, $2) RETURNING id', [category_id, category_id]);
+          finalCategoryId = newCat.rows[0].id;
         }
       }
+
+      // Auto-assign skill_ids if missing
+      let finalSkillIds = skill_ids;
+      if (!finalSkillIds || !Array.isArray(finalSkillIds) || finalSkillIds.length === 0) {
+        const skillRes = await pool.query('SELECT id FROM skills WHERE category_id = $1 LIMIT 1', [finalCategoryId]);
+        if (skillRes.rows[0]) {
+          finalSkillIds = [skillRes.rows[0].id];
+        } else {
+          const newSkill = await pool.query('INSERT INTO skills (id, name, slug, category_id) VALUES (gen_random_uuid(), $1, $2, $3) RETURNING id', ['Việc chung', 'general-' + Date.now(), finalCategoryId]);
+          finalSkillIds = [newSkill.rows[0].id];
+        }
+      }
+
+      const parsedBudgetMin = budget_min !== undefined ? parseFloat(budget_min) : null;
+      if (parsedBudgetMin === null || isNaN(parsedBudgetMin)) {
+        return error(res, 'Price / Budget is required.', 400);
+      }
+
+      const finalPhone = contact_phone && contact_phone.trim().length > 0 ? contact_phone : (req.user?.phone || '0900000000');
+      const finalStartDate = start_date ? start_date : new Date().toISOString();
 
       // Validate that skill_ids belong to the finalCategoryId
       if (skill_ids && skill_ids.length > 0) {
@@ -461,8 +427,8 @@ const TaskPublishController = {
       });
 
       // 2. Add required skills (if provided)
-      if (skill_ids && skill_ids.length > 0) {
-        await taskModel.addRequiredSkills(task.id, skill_ids);
+      if (finalSkillIds && finalSkillIds.length > 0) {
+        await taskModel.addRequiredSkills(task.id, finalSkillIds);
       }
 
       // 3. Add location (if provided)

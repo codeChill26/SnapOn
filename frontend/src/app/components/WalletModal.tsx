@@ -74,6 +74,29 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [bankModalOpen, setBankModalOpen] = useState(false);
+  const [hasPendingWithdraw, setHasPendingWithdraw] = useState(false);
+  const [pendingWithdrawInfo, setPendingWithdrawInfo] = useState<any>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const checkPendingWithdraw = async () => {
+      try {
+        const res = await api.get('/wallet/transactions');
+        const items = res.data?.data || res.data?.transactions || [];
+        const pending = items.find((t: any) => t.type === 'WITHDRAW' && t.status === 'PENDING');
+        if (pending) {
+          setHasPendingWithdraw(true);
+          setPendingWithdrawInfo(pending);
+        } else {
+          setHasPendingWithdraw(false);
+          setPendingWithdrawInfo(null);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkPendingWithdraw();
+  }, [open, mode, withdrawSuccess]);
 
   // Stable QR value — generated once when entering QR step
   const qrValueRef = useRef('');
@@ -231,6 +254,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
         setWithdrawSuccess(true);
         setWithdrawAmount('');
         await fetchProfile();
+        window.dispatchEvent(new Event('notification-updated'));
         setTimeout(() => {
           setWithdrawSuccess(false);
         }, 4000);
@@ -624,6 +648,20 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                           <div>• Yêu cầu sẽ gửi đến <strong>Admin xét duyệt</strong></div>
                         </div>
 
+                        {hasPendingWithdraw && (
+                          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-center mb-4">
+                            <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
+                              <Clock className="w-5 h-5 animate-pulse" />
+                            </div>
+                            <h4 className="text-amber-900 font-bold text-sm mb-1">
+                              Đang có 1 yêu cầu rút tiền chờ duyệt
+                            </h4>
+                            <p className="text-amber-700 text-xs leading-relaxed">
+                              Yêu cầu rút {pendingWithdrawInfo ? parseFloat(pendingWithdrawInfo.amount || 0).toLocaleString('vi-VN') + 'đ' : ''} đang chờ Admin xét duyệt. Vui lòng chờ Admin xử lý xong trước khi tạo đơn rút tiền mới.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="space-y-3">
                           <div>
                             <label className="block text-xs text-gray-400 mb-1.5 font-medium">Tên ngân hàng</label>
@@ -660,12 +698,13 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                               <input
                                 type="text"
                                 inputMode="numeric"
+                                disabled={hasPendingWithdraw}
                                 value={withdrawAmount}
                                 onChange={(e) => setWithdrawAmount(e.target.value.replace(/\D/g, ''))}
                                 placeholder="Nhập số tiền..."
-                                className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
-                                  isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
-                                }`}
+                                className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
+                                  hasPendingWithdraw ? 'bg-gray-100 cursor-not-allowed opacity-60' : 'bg-gray-50/80'
+                                } ${isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'}`}
                               />
                               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
                             </div>
@@ -679,14 +718,14 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                         )}
 
                         <motion.button
-                          whileHover={!withdrawLoading && withdrawAmount && bankName && bankAccountNumber ? { scale: 1.01 } : {}}
-                          whileTap={!withdrawLoading && withdrawAmount && bankName && bankAccountNumber ? { scale: 0.98 } : {}}
-                          disabled={withdrawLoading || !withdrawAmount || !bankName || !bankAccountNumber}
+                          whileHover={!withdrawLoading && !hasPendingWithdraw && withdrawAmount && bankName && bankAccountNumber ? { scale: 1.01 } : {}}
+                          whileTap={!withdrawLoading && !hasPendingWithdraw && withdrawAmount && bankName && bankAccountNumber ? { scale: 0.98 } : {}}
+                          disabled={withdrawLoading || hasPendingWithdraw || !withdrawAmount || !bankName || !bankAccountNumber}
                           onClick={handleWithdraw}
                           className={`w-full py-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 mt-4 ${
-                            withdrawAmount && bankName && bankAccountNumber
-                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:shadow-xl'
-                              : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                            !hasPendingWithdraw && withdrawAmount && bankName && bankAccountNumber
+                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:shadow-xl cursor-pointer'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
                           }`}
                           style={{ fontWeight: 700 }}
                         >
@@ -695,6 +734,11 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                               <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                                 className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
                               Đang xử lý...
+                            </>
+                          ) : hasPendingWithdraw ? (
+                            <>
+                              <Clock className="w-4 h-4 text-gray-400" />
+                              Đang chờ Admin duyệt đơn trước đó
                             </>
                           ) : (
                             <>

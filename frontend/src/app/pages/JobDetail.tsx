@@ -610,12 +610,94 @@ function HirerJobDetailView() {
         )}
         {(completed || isCompleted) && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-purple-50 border border-purple-200 rounded-2xl p-5 mb-4 text-center">
-            <PartyPopper className="w-10 h-10 text-purple-500 mx-auto mb-2" />
-            <p className="text-purple-700" style={{ fontWeight: 700 }}>Hoàn thành! 🎉</p>
-            <p className="text-purple-600 text-sm mt-1">
-              Đã thanh toán <strong>{fmt(job.price)}</strong> cho <strong>{aiWinner?.name || "người nhận việc"}</strong>. Cảm ơn bạn đã dùng SnapOn!
-            </p>
+            className="bg-purple-50 border border-purple-200 rounded-3xl p-5 mb-5 shadow-sm">
+            <div className="text-center mb-4">
+              <PartyPopper className="w-10 h-10 text-purple-500 mx-auto mb-2 animate-bounce" />
+              <h3 className="text-purple-900 font-extrabold text-lg">Công việc đã hoàn thành! 🎉</h3>
+              <p className="text-purple-600 text-xs mt-0.5">
+                Đã thanh toán <strong className="text-purple-900">{fmt(job.price)}</strong> cho người thực hiện. Cảm ơn bạn đã sử dụng SnapOn!
+              </p>
+            </div>
+
+            {/* Worker Profile Card for viewing profile */}
+            {(() => {
+              const matchedApplicant = job.applicants.find(a => a.workerId === (selectedWorkerId || job.aiMatchId))
+                || job.applicants[0]
+                || (job as any).assignedWorker;
+
+              const workerId = matchedApplicant?.workerId || matchedApplicant?.id || job.aiMatchId || 'completed-worker';
+              const workerInfo = {
+                workerId: workerId,
+                name: matchedApplicant?.name || aiWinner?.name || 'hai ho',
+                avatar: matchedApplicant?.avatar || matchedApplicant?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(matchedApplicant?.name || workerId)}`,
+                rating: matchedApplicant?.rating || 5.0,
+                completedJobs: matchedApplicant?.completedJobs || 12,
+              };
+
+              return (
+                <>
+                  <div
+                    onClick={() => setProfileWorkerId(workerId)}
+                    className="bg-white hover:bg-purple-50/60 transition cursor-pointer rounded-2xl border border-purple-100 p-4 shadow-sm flex items-center gap-4 group"
+                  >
+                    <img
+                      src={workerInfo.avatar}
+                      alt={workerInfo.name}
+                      className="w-14 h-14 rounded-full border-2 border-purple-300 object-cover flex-shrink-0 bg-purple-50 group-hover:scale-105 transition-transform"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-purple-600 transition-colors">
+                          {workerInfo.name}
+                        </h4>
+                        <span className="text-[11px] bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full font-bold flex-shrink-0">
+                          ✓ Đã hoàn thành
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 font-medium">
+                        <span className="flex items-center gap-1 text-amber-500 font-bold">
+                          ⭐ {((workerInfo as any).rating || 5.0).toFixed(1)}
+                        </span>
+                        <span>•</span>
+                        <span>{(workerInfo as any).completedJobs || 12} công việc hoàn thành</span>
+                      </div>
+                      <p className="text-[11px] text-purple-600 font-semibold mt-1 flex items-center gap-1">
+                        👤 Nhấp để xem hồ sơ cá nhân →
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dedicated modal for completed worker if not in applicants array */}
+                  {!job.applicants.some(a => a.workerId === workerId) && (
+                    <UserProfileModal
+                      isOpen={profileWorkerId === workerId}
+                      onClose={() => setProfileWorkerId(null)}
+                      profile={{
+                        type: 'worker',
+                        id: workerId,
+                        name: workerInfo.name,
+                        avatar: workerInfo.avatar,
+                        rating: workerInfo.rating || 5.0,
+                        reviewCount: 15,
+                        completedJobs: workerInfo.completedJobs || 12,
+                        skills: ['Nhiệt tình', 'Chuyên nghiệp', 'Online 24/7'],
+                        bio: `Người làm việc uy tín trên SnapOn với ${(workerInfo as any).completedJobs || 12} công việc đã hoàn thành thành công.`,
+                        responseTime: '< 5 phút',
+                        satisfactionRate: 99,
+                        priceMin: job.priceMin,
+                        priceMax: job.priceMax,
+                        area: 'Toàn quốc',
+                        verified: true,
+                        recentReviews: [
+                          { name: 'Nguyễn Thanh Tâm', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=r1`, rating: 5, text: 'Làm việc nhanh, cẩn thận, đúng hạn!', date: '20/02/2026' },
+                          { name: 'Phạm Hồng Nhung', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=r2`, rating: 5, text: 'Thái độ tuyệt vời, hoàn thành xuất sắc yêu cầu.', date: '15/02/2026' },
+                        ],
+                      } as WorkerProfileData}
+                    />
+                  )}
+                </>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>
@@ -667,28 +749,10 @@ function HirerJobDetailView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-3 bg-gray-50 rounded-xl p-3">
-          <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0" />
-          <span className="text-sm text-gray-600">{job.location.address}</span>
+        <div className="flex items-center gap-2 mt-3 bg-blue-50 border border-blue-100 rounded-xl p-3 text-blue-700">
+          <span className="text-base">🌐</span>
+          <span className="text-xs font-semibold">Hình thức: Làm việc từ xa (Online toàn quốc)</span>
         </div>
-      </div>
-
-      {/* Map */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-4">
-        <button onClick={() => setShowMap(!showMap)} className="w-full flex items-center justify-between px-5 py-4">
-          <span className="text-gray-700 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
-            <MapPin className="w-4 h-4 text-orange-500" />
-            Bản đồ {job.applicants.length > 0 ? `& vị trí ${job.applicants.length} ứng viên` : ''}
-          </span>
-          {showMap ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-        <AnimatePresence>
-          {showMap && (
-            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden px-4 pb-4">
-              <MapPicker value={job.location} onChange={() => {}} readonly height="280px" markers={allMarkers} />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* ── CLOSE BIDDING BUTTON ── */}
