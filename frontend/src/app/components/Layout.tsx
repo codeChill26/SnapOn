@@ -188,37 +188,64 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
         // 3. Hirer notifications: Applicants who applied to tasks posted by current Hirer
         try {
-          const currentUserId = currentUser?.id;
-          const tasksRes = await api.get('/tasks');
-          const allTasks = tasksRes.data?.data || [];
-          if (Array.isArray(allTasks)) {
-            for (const t of allTasks) {
-              if (currentUserId && (t.poster_id === currentUserId || t.posterId === currentUserId)) {
-                try {
-                  const appsRes = await api.get(`/tasks/${t.id}/applications`);
-                  const appsList = appsRes.data?.data || [];
-                  if (Array.isArray(appsList)) {
-                    appsList.forEach((app: any) => {
-                      const notifId = `hirer-app-${app.id}`;
-                      const isRead = readIds.has(notifId);
-                      const appliedDate = app.created_at ? new Date(app.created_at) : new Date();
-                      const timeStr = appliedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + appliedDate.toLocaleDateString('vi-VN');
-                      const bidPriceFmt = parseFloat(app.bid_price || 0).toLocaleString('vi-VN') + 'đ';
+          const myTasksRes = await api.get('/tasks/my-tasks').catch(() => null);
+          let myTasks = myTasksRes?.data?.data || myTasksRes?.data?.tasks || [];
+          if (!Array.isArray(myTasks)) {
+            myTasks = [];
+          }
 
+          if (Array.isArray(myTasks)) {
+            for (const t of myTasks) {
+              if (!t || !t.id) continue;
+              try {
+                const appsRes = await api.get(`/tasks/${t.id}/applications`).catch(() => null);
+                const appsList = appsRes?.data?.data || [];
+                if (Array.isArray(appsList)) {
+                  appsList.forEach((app: any) => {
+                    const notifId = `hirer-app-${app.id}`;
+                    const isRead = readIds.has(notifId);
+                    const appliedDate = app.created_at ? new Date(app.created_at) : new Date();
+                    const timeStr = appliedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + appliedDate.toLocaleDateString('vi-VN');
+                    const bidPriceFmt = parseFloat(app.bid_price || app.bidPrice || 0).toLocaleString('vi-VN') + 'đ';
+
+                    if (!notifs.some(n => n.id === notifId)) {
                       notifs.push({
                         id: notifId,
                         title: '📩 Có ứng viên nộp đơn ứng tuyển!',
-                        message: `${app.tasker_name || 'Người làm'} vừa nộp đơn ứng tuyển cho bài đăng "${t.title}" với giá thầu ${bidPriceFmt}.`,
+                        message: `${app.tasker_name || app.name || 'Người làm'} vừa nộp đơn ứng tuyển cho bài đăng "${t.title}" với giá thầu ${bidPriceFmt}.`,
                         time: timeStr,
                         type: 'job',
                         isUnread: !isRead,
                         link: `/job/${t.id}`
                       });
+                    }
+                  });
+                }
+              } catch (err) {
+                // ignore
+              }
+
+              // Also check if task object in AppContext has applicants loaded
+              if (Array.isArray(t.applicants) && t.applicants.length > 0) {
+                t.applicants.forEach((app: any) => {
+                  const notifId = `hirer-app-${app.id || app.workerId}`;
+                  if (!notifs.some(n => n.id === notifId)) {
+                    const isRead = readIds.has(notifId);
+                    const appliedDate = app.appliedAt ? new Date(app.appliedAt) : new Date();
+                    const timeStr = appliedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + appliedDate.toLocaleDateString('vi-VN');
+                    const bidPriceFmt = parseFloat(app.bidPrice || app.bid_price || 0).toLocaleString('vi-VN') + 'đ';
+
+                    notifs.push({
+                      id: notifId,
+                      title: '📩 Có ứng viên nộp đơn ứng tuyển!',
+                      message: `${app.name || app.tasker_name || 'Người làm'} vừa nộp đơn ứng tuyển cho bài đăng "${t.title}" với giá thầu ${bidPriceFmt}.`,
+                      time: timeStr,
+                      type: 'job',
+                      isUnread: !isRead,
+                      link: `/job/${t.id}`
                     });
                   }
-                } catch (err) {
-                  // Ignore tasks that do not belong to current user (backend returns 403)
-                }
+                });
               }
             }
           }
@@ -226,17 +253,15 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           // ignore
         }
 
-        if (notifs.length > 0) {
-          // Detect newly arrived unread notifications
-          const newUnreads = notifs.filter(n => n.isUnread && !knownNotifIdsRef.current.has(n.id));
-          if (newUnreads.length > 0 && knownNotifIdsRef.current.size > 0) {
-            const newest = newUnreads[0];
-            setLiveToast({ title: newest.title, message: newest.message, type: newest.type });
-            setTimeout(() => setLiveToast(null), 6000);
-          }
-          notifs.forEach(n => knownNotifIdsRef.current.add(n.id));
-          setNotifications(notifs);
+        // Detect newly arrived unread notifications
+        const newUnreads = notifs.filter(n => n.isUnread && !knownNotifIdsRef.current.has(n.id));
+        if (newUnreads.length > 0 && knownNotifIdsRef.current.size > 0) {
+          const newest = newUnreads[0];
+          setLiveToast({ title: newest.title, message: newest.message, type: newest.type });
+          setTimeout(() => setLiveToast(null), 6000);
         }
+        notifs.forEach(n => knownNotifIdsRef.current.add(n.id));
+        setNotifications(notifs);
       } catch (err) {
         console.error('Error loading real notifications:', err);
       }

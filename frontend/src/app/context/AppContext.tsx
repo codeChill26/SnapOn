@@ -155,8 +155,8 @@ interface AppContextType {
   workerCurrentJobId: string | null;
   hirerWallet: number;
   workerWallet: number;
-  addJob: (job: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>) => string;
-  applyToJob: (jobId: string, worker: Worker, note: string, bidPrice: number) => void;
+  addJob: (job: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>) => Promise<string>;
+  applyToJob: (jobId: string, worker: Worker, note: string, bidPrice: number) => Promise<{ success: boolean; message?: string }>;
   matchJob: (jobId: string, workerId: string) => void;
   closeBidding: (jobId: string) => void;
   completeJob: (jobId: string) => void;
@@ -268,7 +268,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           try {
             const myTaskRes = await api.get('/tasks/my-tasks').catch(() => null);
             if (myTaskRes && myTaskRes.data?.success && Array.isArray(myTaskRes.data.data)) {
-              myTaskRes.data.data.forEach((task: any) => {
+              await Promise.all(myTaskRes.data.data.map(async (task: any) => {
                 let existing = jobsWithApps.find((j: any) => j.id === task.id);
                 if (!existing) {
                   const categoryIcon = CATEGORIES.find(c => c.id === task.category_slug)?.icon || '⚡';
@@ -311,7 +311,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                   };
                   jobsWithApps.push(existing);
                 }
-              });
+
+                // Fetch applicants for this task
+                try {
+                  const appRes = await api.get(`/tasks/${task.id}/applications`).catch(() => null);
+                  if (appRes && appRes.data?.success && Array.isArray(appRes.data.data)) {
+                    existing.applicants = appRes.data.data.map((app: any) => ({
+                      id: app.id,
+                      workerId: app.tasker_id,
+                      name: app.tasker_name || 'Tasker',
+                      avatar: app.tasker_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.tasker_id}`,
+                      lat: parseFloat(app.latitude || 10.7769),
+                      lng: parseFloat(app.longitude || 106.7009),
+                      distance: parseFloat(app.distance || 0),
+                      rating: parseFloat(app.average_rating || 5.0),
+                      completedJobs: parseInt(app.completed_jobs || 0),
+                      skills: app.skills || [],
+                      appliedAt: new Date(app.created_at).getTime(),
+                      note: app.message || '',
+                      bidPrice: parseFloat(app.bid_price || 0)
+                    }));
+                    if (existing.status === 'matched' && existing.applicants.length > 0 && !existing.aiMatchId) {
+                      existing.aiMatchId = existing.applicants[0]?.workerId;
+                    }
+                  }
+                } catch (appErr) {}
+              }));
             }
           } catch (myTaskErr) {
             // Silently ignore
@@ -627,40 +652,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchProfile]);
 
-  const addJob = useCallback((jobData: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>) => {
+  const addJob = useCallback(async (jobData: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>): Promise<string> => {
     const id = 'j' + Date.now();
+    let createdTaskId = id;
 
-    // Call backend API in background to save
-    api.post('/tasks', {
-      title: jobData.title,
-      description: jobData.description,
-      category_id: jobData.category,
-      task_type: 'ONLINE',
-      work_mode: 'REMOTE',
-      post_type: 'RECRUITMENT',
-      budget_min: jobData.priceMin,
-      budget_max: jobData.priceMax,
-      contact_phone: (currentUser as any)?.phone || '0900000000',
-      start_date: new Date().toISOString(),
-      location: {
-        location_type: 'TASK_LOCATION',
-        address: jobData.location?.address || '🌐 Làm việc Online (Toàn quốc)',
-        latitude: jobData.location?.lat || 10.7769,
-        longitude: jobData.location?.lng || 106.7009,
-      }
-    })
-    .then(res => {
-      if (res.data.success) {
+    try {
+      const res = await api.post('/tasks', {
+        title: jobData.title,
+        description: jobData.description,
+        category_id: jobData.category,
+        task_type: 'ONLINE',
+        work_mode: 'REMOTE',
+        post_type: 'RECRUITMENT',
+        budget_min: jobData.priceMin,
+        budget_max: jobData.priceMax,
+        contact_phone: (currentUser as any)?.phone || '0900000000',
+        start_date: new Date().toISOString(),
+        location: {
+          location_type: 'TASK_LOCATION',
+          address: jobData.location?.address || '🌐 Làm việc Online (Toàn quốc)',
+          latitude: jobData.location?.lat || 10.7769,
+          longitude: jobData.location?.lng || 106.7009,
+        }
+      });
+      if (res.data?.success && res.data?.data?.id) {
+        createdTaskId = res.data.data.id;
         console.log('Task saved to backend database:', res.data.data);
-        fetchJobs();
+        await fetchJobs();
       }
-    })
-    .catch(err => console.error('Error saving task to backend:', err));
+    } catch (err) {
+      console.error('Error saving task to backend:', err);
+      throw err;
+    }
 
     const postedAt = Date.now();
     const newJob: Job = {
       ...jobData,
-      id,
+      id: createdTaskId,
       postedAt,
       expiresAt: postedAt + 30 * 24 * 3600 * 1000,
       status: 'active',
@@ -670,51 +698,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       applicants: [],
     };
     setJobs(prev => [newJob, ...prev]);
-    return id;
+    return createdTaskId;
   }, [currentUser, fetchJobs]);
 
-  const applyToJob = useCallback((jobId: string, worker: Worker, note: string, bidPrice: number) => {
-    // Send application to backend database
-    api.post(`/tasks/${jobId}/applications`, {
-      bid_price: bidPrice,
-      estimated_time: '2 hours',
-      message: note
-    })
-    .then(res => {
-      if (res.data.success) {
-        console.log('Application bid saved to backend database:', res.data.data);
-        fetchJobs();
-        setTimeout(() => {
-          window.dispatchEvent(new Event('notification-updated'));
-        }, 500);
+  const applyToJob = useCallback(async (jobId: string, worker: Worker, note: string, bidPrice: number): Promise<{ success: boolean; message?: string }> => {
+    let apiSuccess = false;
+    let errorMessage = '';
+
+    const token = localStorage.getItem('firebaseToken');
+    if (token) {
+      try {
+        const res = await api.post(`/tasks/${jobId}/applications`, {
+          bid_price: bidPrice,
+          estimated_time: '2 hours',
+          message: note
+        });
+        if (res.data?.success) {
+          apiSuccess = true;
+          console.log('Application bid saved to backend database:', res.data.data);
+          await fetchJobs();
+          setTimeout(() => {
+            window.dispatchEvent(new Event('notification-updated'));
+          }, 500);
+        }
+      } catch (err: any) {
+        console.error('Error saving application to backend:', err);
+        const status = err.response?.status;
+        const backendMsg = err.response?.data?.message;
+        if (status === 409) {
+          errorMessage = 'Bạn đã ứng tuyển công việc này rồi!';
+        } else if (backendMsg) {
+          errorMessage = backendMsg;
+        } else {
+          errorMessage = 'Không thể gửi đơn ứng tuyển. Vui lòng thử lại sau.';
+        }
+        return { success: false, message: errorMessage };
       }
-    })
-    .catch(err => console.error('Error saving application to backend:', err));
+    } else {
+      apiSuccess = true;
+    }
 
     const job = jobs.find(j => j.id === jobId);
-    if (!job) return;
-    const dist = haversineDistance(job.location.lat, job.location.lng, worker.lat, worker.lng);
-    const applicant: Applicant = {
-      workerId: worker.id,
-      name: worker.name,
-      avatar: worker.avatar,
-      lat: worker.lat,
-      lng: worker.lng,
-      distance: Math.round(dist * 10) / 10,
-      rating: worker.rating,
-      completedJobs: worker.completedJobs,
-      skills: worker.skills,
-      appliedAt: Date.now(),
-      note,
-      bidPrice: Math.max(job.priceMin, Math.min(job.priceMax, bidPrice)),
-    };
-    setJobs(prev => prev.map(j => {
-      if (j.id !== jobId) return j;
-      const alreadyApplied = j.applicants.some(a => a.workerId === worker.id);
-      if (alreadyApplied) return j;
-      const newApplicants = [...j.applicants, applicant].sort((a, b) => a.distance - b.distance);
-      return { ...j, applicants: newApplicants, aiMatchId: newApplicants[0]?.workerId };
-    }));
+    if (job) {
+      const dist = haversineDistance(job.location.lat, job.location.lng, worker.lat, worker.lng);
+      const applicant: Applicant = {
+        workerId: worker.id,
+        name: worker.name,
+        avatar: worker.avatar,
+        lat: worker.lat,
+        lng: worker.lng,
+        distance: Math.round(dist * 10) / 10,
+        rating: worker.rating,
+        completedJobs: worker.completedJobs,
+        skills: worker.skills,
+        appliedAt: Date.now(),
+        note,
+        bidPrice: Math.max(job.priceMin, Math.min(job.priceMax, bidPrice)),
+      };
+      setJobs(prev => prev.map(j => {
+        if (j.id !== jobId) return j;
+        const alreadyApplied = j.applicants.some(a => a.workerId === worker.id);
+        if (alreadyApplied) return j;
+        const newApplicants = [...j.applicants, applicant].sort((a, b) => a.distance - b.distance);
+        return { ...j, applicants: newApplicants, aiMatchId: newApplicants[0]?.workerId };
+      }));
+    }
+
+    return { success: true, message: 'Ứng tuyển thành công!' };
   }, [jobs, fetchJobs]);
 
   const matchJob = useCallback((jobId: string, workerId: string) => {
@@ -926,8 +976,8 @@ export function useApp() {
       workerCurrentJobId: null as string | null,
       hirerWallet: 0,
       workerWallet: 0,
-      addJob: () => '',
-      applyToJob: () => {},
+      addJob: async () => '',
+      applyToJob: async () => ({ success: false }),
       matchJob: () => {},
       closeBidding: () => {},
       completeJob: () => {},

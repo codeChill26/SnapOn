@@ -53,9 +53,12 @@ export default function PostJob() {
       setUserRole('hirer');
     }
   }, [currentUser.role, setUserRole]);
+
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [newJobId, setNewJobId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [form, setForm] = useState<FormData>({
     title: '', description: '', category: '', categoryIcon: '',
     duration: 1, priceMin: 150000, priceMax: 300000,
@@ -66,31 +69,59 @@ export default function PostJob() {
   const validate = (): boolean => {
     const e: typeof errors = {};
     if (step === 1) {
-      if (!form.category)          e.category    = 'Vui lòng chọn danh mục';
-      if (!form.title.trim())      e.title       = 'Vui lòng nhập tiêu đề';
-      if (!form.description.trim())e.description = 'Vui lòng mô tả công việc';
+      if (!form.category) {
+        e.category = 'Vui lòng chọn danh mục';
+      }
+      
+      if (!form.title.trim()) {
+        e.title = 'Vui lòng nhập tiêu đề';
+      } else if (form.title.trim().length < 5) {
+        e.title = 'Tiêu đề phải từ 5 ký tự trở lên';
+      } else if (form.title.trim().length > 255) {
+        e.title = 'Tiêu đề không được vượt quá 255 ký tự';
+      }
+
+      if (!form.description.trim()) {
+        e.description = 'Vui lòng mô tả công việc';
+      } else if (form.description.trim().length < 10) {
+        e.description = 'Mô tả công việc phải từ 10 ký tự trở lên';
+      } else if (form.description.trim().length > 2000) {
+        e.description = 'Mô tả không được vượt quá 2000 ký tự';
+      }
+
       if (form.priceMin >= form.priceMax) e.price = 'Giá tối thiểu phải nhỏ hơn tối đa';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = () => {
-    const onlineLocation = form.location || { lat: 10.7769, lng: 106.7009, address: 'Làm việc Online (Toàn quốc)' };
-    const cat = CATEGORIES.find(c => c.id === form.category)!;
-    const id = addJob({
-      title: form.title,
-      description: form.description,
-      category: form.category,
-      categoryIcon: cat.icon,
-      duration: form.duration,
-      price: form.priceMin,
-      priceMin: form.priceMin,
-      priceMax: form.priceMax,
-      location: onlineLocation,
-    });
-    setNewJobId(id);
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      const onlineLocation = form.location || { lat: 10.7769, lng: 106.7009, address: 'Làm việc Online (Toàn quốc)' };
+      const cat = CATEGORIES.find(c => c.id === form.category);
+      const id = await addJob({
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        categoryIcon: cat?.icon || '⚡',
+        duration: form.duration,
+        price: form.priceMin,
+        priceMin: form.priceMin,
+        priceMax: form.priceMax,
+        location: onlineLocation,
+      });
+      setNewJobId(id);
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error('Error submitting job:', err);
+      const msg = err.response?.data?.errors?.[0]?.message || err.response?.data?.message || 'Không thể đăng công việc. Vui lòng kiểm tra lại thông tin và thử lại.';
+      setSubmitError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -355,6 +386,13 @@ export default function PostJob() {
         </div>
       )}
 
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm flex items-center justify-between">
+          <span>⚠️ {submitError}</span>
+          <button onClick={() => setSubmitError('')} className="text-red-500 font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="fixed bottom-0 left-0 right-0 md:relative md:bottom-auto p-4 bg-white md:bg-transparent border-t border-gray-100 md:border-0 md:mt-6">
         {step < 2 ? (
@@ -364,10 +402,16 @@ export default function PostJob() {
             Xem trước bài đăng →
           </button>
         ) : (
-          <button onClick={handleSubmit}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+          <button onClick={handleSubmit} disabled={isSubmitting}
+            className={`w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
             style={{ fontWeight: 700, fontSize: '1rem' }}>
-            <PlusCircle className="w-5 h-5" /> Đăng việc ngay!
+            {isSubmitting ? (
+              <span>Đang lưu...</span>
+            ) : (
+              <>
+                <PlusCircle className="w-5 h-5" /> Đăng việc ngay!
+              </>
+            )}
           </button>
         )}
       </div>

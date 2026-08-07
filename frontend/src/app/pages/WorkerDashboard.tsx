@@ -207,29 +207,38 @@ export default function WorkerDashboard() {
     setApplyNote('');
   };
 
-  const confirmApply = () => {
+  const [toastState, setToastState] = useState<{ show: boolean; message: string; isError: boolean }>({ show: false, message: '', isError: false });
+
+  const confirmApply = async () => {
     if (!applyingJobId || sending) return;
     setSending(true);
-    setTimeout(() => {
-      const workerWithLoc: Worker = {
-        id: activeWorker.id,
-        name: activeWorker.name,
-        avatar: activeWorker.avatar,
-        lat: myLocation.lat,
-        lng: myLocation.lng,
-        skills: (currentUser as any).skills || [],
-        rating: activeWorker.rating,
-        completedJobs: activeWorker.completedJobs,
-        bio: activeWorker.bio,
-      };
-      applyToJob(applyingJobId, workerWithLoc, applyNote || 'Tôi sẵn sàng làm ngay!', applyBid);
-      setAppliedJobs(prev => new Set([...prev, applyingJobId]));
+    const targetJobId = applyingJobId;
+    const workerWithLoc: Worker = {
+      id: activeWorker.id,
+      name: activeWorker.name,
+      avatar: activeWorker.avatar,
+      lat: myLocation.lat,
+      lng: myLocation.lng,
+      skills: (currentUser as any).skills || [],
+      rating: activeWorker.rating,
+      completedJobs: activeWorker.completedJobs,
+      bio: activeWorker.bio,
+    };
+    const res = await applyToJob(targetJobId, workerWithLoc, applyNote || 'Tôi sẵn sàng làm ngay!', applyBid);
+    setSending(false);
+    if (res.success) {
+      setAppliedJobs(prev => new Set([...prev, targetJobId]));
       setApplyingJobId(null);
       setApplyNote('');
-      setSending(false);
-      setApplySuccess(true);
-      setTimeout(() => setApplySuccess(false), 3500);
-    }, 600);
+      setToastState({ show: true, message: res.message || 'Apply thành công! Đợi kết quả nhé 🎉', isError: false });
+      setTimeout(() => setToastState({ show: false, message: '', isError: false }), 3500);
+    } else {
+      setAppliedJobs(prev => new Set([...prev, targetJobId]));
+      setApplyingJobId(null);
+      setApplyNote('');
+      setToastState({ show: true, message: res.message || 'Có lỗi xảy ra khi ứng tuyển!', isError: true });
+      setTimeout(() => setToastState({ show: false, message: '', isError: false }), 4000);
+    }
   };
 
   const applyingJob = applyingJobId ? jobs.find(j => j.id === applyingJobId) : null;
@@ -237,17 +246,19 @@ export default function WorkerDashboard() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-28 md:pb-10">
 
-      {/* Success toast */}
+      {/* Toast notification */}
       <AnimatePresence>
-        {applySuccess && (
+        {toastState.show && (
           <motion.div
             initial={{ opacity: 0, y: -30, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] bg-green-500 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2"
+            className={`fixed top-20 left-1/2 -translate-x-1/2 z-[9999] text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 ${
+              toastState.isError ? 'bg-amber-600' : 'bg-green-500'
+            }`}
           >
-            <CheckCircle2 className="w-5 h-5" />
-            <span style={{ fontWeight: 600 }}>Apply thành công! Đợi kết quả nhé 🎉</span>
+            {toastState.isError ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+            <span style={{ fontWeight: 600 }}>{toastState.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -582,7 +593,7 @@ export default function WorkerDashboard() {
                 <div className="absolute bottom-4 right-4 bg-gray-500/90 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm" style={{ fontWeight: 600 }}>
                   🔒 Đang bận
                 </div>
-              ) : appliedJobs.has(job.id) ? (
+              ) : (appliedJobs.has(job.id) || job.applicants.some(a => a.workerId === currentUser.id)) ? (
                 <div className="absolute bottom-4 right-4 bg-green-500 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md" style={{ fontWeight: 600 }}>
                   <CheckCircle2 className="w-3.5 h-3.5" /> Đã apply
                 </div>

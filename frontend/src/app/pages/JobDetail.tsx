@@ -12,6 +12,8 @@ import { CountdownTimer } from '../components/CountdownTimer';
 import { MapPicker } from '../components/MapPicker';
 import { UserProfileModal, type HirerProfileData, type WorkerProfileData } from '../components/UserProfileModal';
 
+import api from '../../services/api';
+
 function fmt(n: number) { return n.toLocaleString('vi-VN') + '₫'; }
 function pct(v: number)  { return Math.round(v * 100) + '%'; }
 
@@ -60,6 +62,38 @@ function WorkerJobDetailView() {
     if (job) setBidPrice(Math.round((job.priceMin + job.priceMax) / 2 / 10000) * 10000);
   }, [job?.id]);
 
+  useEffect(() => {
+    if (!id || !job) return;
+    const token = localStorage.getItem('firebaseToken');
+    if (!token) return;
+
+    api.get(`/tasks/${id}/my-application`)
+      .then(res => {
+        if (res.data?.success && res.data.data) {
+          const app = res.data.data;
+          setApplied(true);
+          if (job && !job.applicants.some(a => a.workerId === currentUser.id)) {
+            job.applicants.push({
+              id: app.id,
+              workerId: app.tasker_id,
+              name: currentUser.name || 'Tôi',
+              avatar: currentUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
+              lat: 10.7769,
+              lng: 106.7009,
+              distance: 0,
+              rating: 5.0,
+              completedJobs: 0,
+              skills: [],
+              appliedAt: new Date(app.created_at).getTime(),
+              note: app.message || '',
+              bidPrice: parseFloat(app.bid_price || 0)
+            });
+          }
+        }
+      })
+      .catch(() => {});
+  }, [id, job, currentUser.id]);
+
   if (!job) return <NotFound />;
 
   const alreadyApplied = job.applicants.some(a => a.workerId === currentUser.id);
@@ -77,7 +111,7 @@ function WorkerJobDetailView() {
     : bidRatio < 0.6 ? { label: 'Cạnh tranh tốt ✅', color: 'text-blue-600', bg: 'bg-blue-50' }
     : { label: 'Trung bình', color: 'text-amber-600', bg: 'bg-amber-50' };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     const workerWithLoc = {
       id: currentUser.id,
       name: currentUser.name,
@@ -89,9 +123,13 @@ function WorkerJobDetailView() {
       completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
       bio: (currentUser as any).bio || '',
     };
-    applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
-    setApplied(true);
-    setShowApplyForm(false);
+    const res = await applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
+    if (res.success) {
+      setApplied(true);
+      setShowApplyForm(false);
+    } else {
+      alert(res.message || 'Gửi đơn ứng tuyển thất bại.');
+    }
   };
 
   return (
@@ -438,6 +476,39 @@ function HirerJobDetailView() {
     }
   }, [job]);
 
+  useEffect(() => {
+    if (!id || !job) return;
+    const token = localStorage.getItem('firebaseToken');
+    if (!token) return;
+
+    api.get(`/tasks/${id}/applications`)
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mappedApps = res.data.data.map((app: any) => ({
+            id: app.id,
+            workerId: app.tasker_id,
+            name: app.tasker_name || 'Tasker',
+            avatar: app.tasker_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.tasker_id}`,
+            lat: parseFloat(app.latitude || 10.7769),
+            lng: parseFloat(app.longitude || 106.7009),
+            distance: parseFloat(app.distance || 0),
+            rating: parseFloat(app.average_rating || 5.0),
+            completedJobs: parseInt(app.completed_jobs || 0),
+            skills: app.skills || [],
+            appliedAt: new Date(app.created_at).getTime(),
+            note: app.message || '',
+            bidPrice: parseFloat(app.bid_price || 0)
+          }));
+
+          job.applicants = mappedApps;
+          if (job.status === 'matched' && mappedApps.length > 0 && !job.aiMatchId) {
+            job.aiMatchId = mappedApps[0]?.workerId;
+          }
+        }
+      })
+      .catch(() => {});
+  }, [id, job]);
+
   const handleConfirmDelete = async () => {
     if (!job) return;
     setIsDeleting(true);
@@ -537,6 +608,22 @@ function HirerJobDetailView() {
           {job.status === 'active' ? '🟢 Đang tuyển' : job.status === 'matched' ? '✅ Đã khớp' : job.status === 'completed' ? '🏆 Hoàn thành' : '⏸ Hết hạn'}
         </span>
       </div>
+
+      {/* Wallet Error Alert Banner */}
+      {walletError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3 shadow-sm animate-pulse">
+          <div className="flex items-center gap-2.5 text-sm text-red-700 font-semibold">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <span>{walletError}</span>
+          </div>
+          <Link
+            to="/profile"
+            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex-shrink-0 shadow-sm"
+          >
+            💳 Nạp tiền ngay
+          </Link>
+        </div>
+      )}
 
       {/* Countdown */}
       {job.status === 'active' && (

@@ -527,7 +527,12 @@ function WorkerProfile() {
     const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
     return j.aiMatchId === currentUser.id || app?.status === 'ACCEPTED' || j.status === 'completed' || j.status === 'matched';
   });
-  const totalEarned = wonJobs.reduce((s, j) => s + Math.round(j.price * 0.92), 0);
+  const completedJobsList = appliedJobs.filter(j => j.status === 'completed');
+  const totalEarned = completedJobsList.reduce((s, j) => {
+    const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
+    const bid = app?.bidPrice || j.price;
+    return s + Math.round(bid * 0.92);
+  }, 0);
   const avgRating   = workerReviews.reduce((s, r) => s + r.rating, 0) / (workerReviews.length || 1);
 
   const TABS = [
@@ -589,7 +594,7 @@ function WorkerProfile() {
         {/* Stats row */}
         <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
           {[
-            { v: Math.max(wonJobs.length, (currentUser as any).completed_jobs || 0), l: 'Việc done' },
+            { v: Math.max(completedJobsList.length, (currentUser as any).completed_jobs || 0), l: 'Việc done' },
             { v: appliedJobs.length,        l: 'Đã apply' },
             { v: workerReviews.length,       l: 'Đánh giá' },
             { v: fmt(totalEarned) + '₫',    l: 'Tổng thu' },
@@ -786,11 +791,12 @@ function WorkerProfile() {
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-gray-900 text-sm truncate pr-1" style={{ fontWeight: 600 }}>{job.title}</p>
                               <span className={`text-xs px-2.5 py-0.5 rounded-full flex-shrink-0 border ${
-                                isWinner            ? 'bg-green-50 text-green-700 border-green-200' :
-                                job.status === 'active' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                isWinner                   ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                job.status === 'active'    ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                 'bg-gray-50 text-gray-500 border-gray-200'
                               }`} style={{ fontWeight: 600 }}>
-                                {isWinner ? '🏆 Được chọn' : job.status === 'active' ? '⏳ Chờ kết quả' : 'Không được chọn'}
+                                {job.status === 'completed' ? '🏆 Hoàn thành' : isWinner ? '🎖️ Được chọn' : job.status === 'active' ? '⏳ Chờ kết quả' : 'Không được chọn'}
                               </span>
                             </div>
                             <p className="text-gray-400 text-xs mt-0.5 truncate">{job.hirerName}</p>
@@ -799,11 +805,15 @@ function WorkerProfile() {
                                 {applicant?.bidPrice ? applicant.bidPrice.toLocaleString('vi-VN') + '₫' : job.price.toLocaleString('vi-VN') + '₫'}
                                 <span className="text-xs text-gray-400 ml-1" style={{ fontWeight: 400 }}>giá chào</span>
                               </span>
-                              {isWinner && (
+                              {job.status === 'completed' ? (
                                 <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
-                                  💵 Nhận thực tế (92%): {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫
+                                  💵 Đã nhận: {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫
                                 </span>
-                              )}
+                              ) : isWinner ? (
+                                <span className="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 flex items-center gap-1">
+                                  ⏳ Dự kiến nhận: {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫ (chờ xác nhận)
+                                </span>
+                              ) : null}
                               <span className="text-gray-400 text-xs flex items-center gap-1"><Clock className="w-3 h-3" />{job.duration}h</span>
                             </div>
                           </div>
