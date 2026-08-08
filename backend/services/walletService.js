@@ -79,6 +79,25 @@ const walletService = {
     const safeLimit = Math.max(1, Math.min(parseInt(limit) || 20, 100));
     const offset = (currentPage - 1) * safeLimit;
 
+    // Auto-sync status between withdraw_requests and wallet_transactions
+    try {
+      await pool.query(`
+        UPDATE wallet_transactions wt
+        SET status = CASE
+          WHEN wr.status = 'APPROVED' THEN 'SUCCESS'
+          WHEN wr.status = 'REJECTED' THEN 'FAILED'
+          ELSE wt.status
+        END
+        FROM withdraw_requests wr
+        WHERE wt.reference_id = wr.id
+          AND wt.type = 'WITHDRAW'
+          AND wt.status = 'PENDING'
+          AND wr.status IN ('APPROVED', 'REJECTED')
+      `);
+    } catch (e) {
+      console.error('Error auto-syncing withdraw transactions:', e);
+    }
+
     const countRes = await pool.query(
       'SELECT COUNT(*) as total FROM wallet_transactions WHERE wallet_id = $1',
       [wallet.id]
@@ -86,15 +105,26 @@ const walletService = {
     const total = parseInt(countRes.rows[0].total);
 
     const result = await pool.query(
-      `SELECT * FROM wallet_transactions
-       WHERE wallet_id = $1
-       ORDER BY created_at DESC
+      `SELECT wt.*, wr.status as req_status
+       FROM wallet_transactions wt
+       LEFT JOIN withdraw_requests wr ON wt.reference_id = wr.id
+       WHERE wt.wallet_id = $1
+       ORDER BY wt.created_at DESC
        LIMIT $2 OFFSET $3`,
       [wallet.id, safeLimit, offset]
     );
 
+    const rows = result.rows.map(row => {
+      let status = row.status;
+      if (row.type === 'WITHDRAW' && row.req_status) {
+        if (row.req_status === 'REJECTED') status = 'FAILED';
+        if (row.req_status === 'APPROVED') status = 'SUCCESS';
+      }
+      return { ...row, status };
+    });
+
     return {
-      transactions: result.rows,
+      transactions: rows,
       pagination: {
         page: currentPage,
         limit: safeLimit,
@@ -426,6 +456,101 @@ const walletService = {
         tx: updatedTx.rows[0],
         alreadyProcessed: false,
         success: true,
+      };
+    });
+  },
+
+  /**
+   * Submit withdrawal request for Admin approval
+   */
+  async withdraw(userId, amount, bankName, bankAccountNumber) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new CustomError('Số tiền rút không hợp lệ', 400);
+    }
+    if (amt > 2000000) {
+      throw new CustomError('Số tiền rút mỗi lần tối đa là 2.000.000đ.', 400);
+    }
+    if (!bankName || !bankAccountNumber) {
+      throw new CustomError('Vui lòng cung cấp đầy đủ thông tin ngân hàng và số tài khoản.', 400);
+    }
+
+    return withDbTx(async (db) => {
+      const wallet = await walletModel.lockByUserId(userId, db);
+      if (!wallet) {
+        throw new CustomError('Ví người dùng không tồn tại.', 404);
+      }
+
+      const avail = parseFloat(wallet.available_balance);
+      if (avail < amt) {
+        throw new CustomError(`Số dư khả dụng không đủ để rút. Số dư hiện có: ${avail.toLocaleString('vi-VN')}đ`, 400);
+      }
+
+      // 1. Check if user already has an active pending withdrawal request
+      const pendingCheck = await db.query(
+        `SELECT id FROM wallet_transactions
+         WHERE wallet_id = $1 AND type = 'WITHDRAW' AND status = 'PENDING'
+         LIMIT 1`,
+        [wallet.id]
+      );
+      if (pendingCheck.rows.length > 0) {
+        throw new CustomError(
+          'Bạn đang có 1 yêu cầu rút tiền đang chờ Admin xét duyệt. Vui lòng chờ Admin xử lý xong trước khi tạo yêu cầu mới.',
+          400
+        );
+      }
+
+      // 2. Check daily (24h) withdrawal limit (20,000,000 VND max per 24h)
+      const dailyRes = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS daily_sum
+         FROM wallet_transactions
+         WHERE wallet_id = $1
+           AND type = 'WITHDRAW'
+           AND status IN ('PENDING', 'SUCCESS')
+           AND created_at >= NOW() - INTERVAL '24 hours'`,
+        [wallet.id]
+      );
+      const dailySum = parseFloat(dailyRes.rows[0].daily_sum || 0);
+      if (dailySum + amt > 20000000) {
+        const remainingLimit = Math.max(0, 20000000 - dailySum);
+        throw new CustomError(
+          `Hạn mức rút tiền tối đa trong 24 giờ là 20.000.000đ. Trong 24h qua bạn đã yêu cầu rút ${dailySum.toLocaleString('vi-VN')}đ. Hạn mức còn lại: ${remainingLimit.toLocaleString('vi-VN')}đ.`,
+          400
+        );
+      }
+
+      // Do NOT deduct balance or lock money on request creation.
+      // Money will be deducted from balance & available_balance only when Admin approves.
+
+      // Create withdraw_requests record
+      const reqRes = await db.query(
+        `INSERT INTO withdraw_requests (id, user_id, amount, bank_name, bank_account_number, status)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, 'PENDING')
+         RETURNING *`,
+        [userId, amt, bankName.trim(), bankAccountNumber.trim()]
+      );
+      const withdrawReq = reqRes.rows[0];
+
+      // Save pending transaction with valid UUID reference_id pointing to withdraw_requests.id
+      const tx = await walletTransactionModel.create(
+        {
+          walletId: wallet.id,
+          type: 'WITHDRAW',
+          amount: amt,
+          status: 'PENDING',
+          referenceId: withdrawReq.id,
+        },
+        db
+      );
+
+      return {
+        transactionId: tx.id,
+        withdrawRequestId: withdrawReq.id,
+        amount: amt,
+        bankName: bankName.trim(),
+        bankAccountNumber: bankAccountNumber.trim(),
+        status: 'PENDING',
+        message: `Yêu cầu rút ${amt.toLocaleString('vi-VN')}đ đã được gửi thành công! Admin sẽ kiểm tra và xét duyệt.`,
       };
     });
   },

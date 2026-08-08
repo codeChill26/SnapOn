@@ -4,13 +4,15 @@ import {
   ChevronLeft, MapPin, Clock, Users, Star, Sparkles, CheckCircle2, CheckCheck,
   Bot, Award, MessageCircle, PartyPopper, Briefcase, Send, Lock, AlertCircle,
   ChevronDown, ChevronUp, User, ShieldCheck, TrendingDown, TrendingUp, Zap,
-  Target, BarChart3, FlameKindling, ExternalLink, X,
+  Target, BarChart3, FlameKindling, ExternalLink, X, Edit3, Trash2, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, haversineDistance, scoreApplicants } from '../context/AppContext';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { MapPicker } from '../components/MapPicker';
 import { UserProfileModal, type HirerProfileData, type WorkerProfileData } from '../components/UserProfileModal';
+
+import api from '../../services/api';
 
 function fmt(n: number) { return n.toLocaleString('vi-VN') + '₫'; }
 function pct(v: number)  { return Math.round(v * 100) + '%'; }
@@ -60,6 +62,38 @@ function WorkerJobDetailView() {
     if (job) setBidPrice(Math.round((job.priceMin + job.priceMax) / 2 / 10000) * 10000);
   }, [job?.id]);
 
+  useEffect(() => {
+    if (!id || !job) return;
+    const token = localStorage.getItem('firebaseToken');
+    if (!token) return;
+
+    api.get(`/tasks/${id}/my-application`)
+      .then(res => {
+        if (res.data?.success && res.data.data) {
+          const app = res.data.data;
+          setApplied(true);
+          if (job && !job.applicants.some(a => a.workerId === currentUser.id)) {
+            job.applicants.push({
+              id: app.id,
+              workerId: app.tasker_id,
+              name: currentUser.name || 'Tôi',
+              avatar: currentUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
+              lat: 10.7769,
+              lng: 106.7009,
+              distance: 0,
+              rating: 5.0,
+              completedJobs: 0,
+              skills: [],
+              appliedAt: new Date(app.created_at).getTime(),
+              note: app.message || '',
+              bidPrice: parseFloat(app.bid_price || 0)
+            });
+          }
+        }
+      })
+      .catch(() => {});
+  }, [id, job, currentUser.id]);
+
   if (!job) return <NotFound />;
 
   const alreadyApplied = job.applicants.some(a => a.workerId === currentUser.id);
@@ -77,7 +111,7 @@ function WorkerJobDetailView() {
     : bidRatio < 0.6 ? { label: 'Cạnh tranh tốt ✅', color: 'text-blue-600', bg: 'bg-blue-50' }
     : { label: 'Trung bình', color: 'text-amber-600', bg: 'bg-amber-50' };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     const workerWithLoc = {
       id: currentUser.id,
       name: currentUser.name,
@@ -89,9 +123,13 @@ function WorkerJobDetailView() {
       completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
       bio: (currentUser as any).bio || '',
     };
-    applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
-    setApplied(true);
-    setShowApplyForm(false);
+    const res = await applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
+    if (res.success) {
+      setApplied(true);
+      setShowApplyForm(false);
+    } else {
+      alert(res.message || 'Gửi đơn ứng tuyển thất bại.');
+    }
   };
 
   return (
@@ -406,7 +444,7 @@ function WorkerJobDetailView() {
 function HirerJobDetailView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { jobs, matchJob, closeBidding, completeJob, hirerWallet } = useApp();
+  const { jobs, matchJob, closeBidding, completeJob, deleteJob, updateJob, hirerWallet } = useApp();
   const [manualPicked, setManualPicked] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -418,7 +456,81 @@ function HirerJobDetailView() {
   const [profileWorkerId, setProfileWorkerId] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editPriceMin, setEditPriceMin] = useState(0);
+  const [editPriceMax, setEditPriceMax] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   const job = jobs.find(j => j.id === id);
+
+  useEffect(() => {
+    if (job) {
+      setEditTitle(job.title || '');
+      setEditDesc(job.description || '');
+      setEditPriceMin(job.priceMin || 0);
+      setEditPriceMax(job.priceMax || 0);
+    }
+  }, [job]);
+
+  useEffect(() => {
+    if (!id || !job) return;
+    const token = localStorage.getItem('firebaseToken');
+    if (!token) return;
+
+    api.get(`/tasks/${id}/applications`)
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mappedApps = res.data.data.map((app: any) => ({
+            id: app.id,
+            workerId: app.tasker_id,
+            name: app.tasker_name || 'Tasker',
+            avatar: app.tasker_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.tasker_id}`,
+            lat: parseFloat(app.latitude || 10.7769),
+            lng: parseFloat(app.longitude || 106.7009),
+            distance: parseFloat(app.distance || 0),
+            rating: parseFloat(app.average_rating || 5.0),
+            completedJobs: parseInt(app.completed_jobs || 0),
+            skills: app.skills || [],
+            appliedAt: new Date(app.created_at).getTime(),
+            note: app.message || '',
+            bidPrice: parseFloat(app.bid_price || 0)
+          }));
+
+          job.applicants = mappedApps;
+          if (job.status === 'matched' && mappedApps.length > 0 && !job.aiMatchId) {
+            job.aiMatchId = mappedApps[0]?.workerId;
+          }
+        }
+      })
+      .catch(() => {});
+  }, [id, job]);
+
+  const handleConfirmDelete = async () => {
+    if (!job) return;
+    setIsDeleting(true);
+    const success = await deleteJob(job.id);
+    setIsDeleting(false);
+    if (success) {
+      navigate('/profile', { replace: true });
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!job) return;
+    setIsSavingEdit(true);
+    await updateJob(job.id, {
+      title: editTitle,
+      description: editDesc,
+      priceMin: editPriceMin,
+      priceMax: editPriceMax,
+    });
+    setIsSavingEdit(false);
+    setShowEditModal(false);
+  };
 
   useEffect(() => {
     if (!job) return;
@@ -497,6 +609,22 @@ function HirerJobDetailView() {
         </span>
       </div>
 
+      {/* Wallet Error Alert Banner */}
+      {walletError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3 shadow-sm animate-pulse">
+          <div className="flex items-center gap-2.5 text-sm text-red-700 font-semibold">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <span>{walletError}</span>
+          </div>
+          <Link
+            to="/profile"
+            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex-shrink-0 shadow-sm"
+          >
+            💳 Nạp tiền ngay
+          </Link>
+        </div>
+      )}
+
       {/* Countdown */}
       {job.status === 'active' && (
         <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl p-5 mb-4 text-center shadow-lg">
@@ -507,6 +635,41 @@ function HirerJobDetailView() {
               className="w-1.5 h-1.5 bg-green-300 rounded-full" />
             AI đang tìm kiếm người gần nhất
           </div>
+        </div>
+      )}
+
+      {/* Edit & Delete Action Bar for Hirer */}
+      {job.status === 'active' && (
+        <div className="mb-4">
+          {job.applicants.length === 0 ? (
+            <div className="bg-orange-50/60 border border-orange-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-2 text-xs text-orange-800">
+                <span className="text-base flex-shrink-0">💡</span>
+                <span>Chưa có ứng viên. Bạn có thể chỉnh sửa yêu cầu công việc hoặc hủy bài đăng này.</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs bg-white border border-orange-300 text-orange-700 hover:bg-orange-100 transition font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hủy bài
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 leading-relaxed font-semibold">
+                Công việc đã có <strong className="text-amber-900">{job.applicants.length} ứng viên</strong> nộp đơn. Để bảo vệ quyền lợi ứng viên, bạn không thể chỉnh sửa hoặc hủy bài đăng này.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -534,12 +697,94 @@ function HirerJobDetailView() {
         )}
         {(completed || isCompleted) && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-purple-50 border border-purple-200 rounded-2xl p-5 mb-4 text-center">
-            <PartyPopper className="w-10 h-10 text-purple-500 mx-auto mb-2" />
-            <p className="text-purple-700" style={{ fontWeight: 700 }}>Hoàn thành! 🎉</p>
-            <p className="text-purple-600 text-sm mt-1">
-              Đã thanh toán <strong>{fmt(job.price)}</strong> cho <strong>{aiWinner?.name || "người nhận việc"}</strong>. Cảm ơn bạn đã dùng SnapOn!
-            </p>
+            className="bg-purple-50 border border-purple-200 rounded-3xl p-5 mb-5 shadow-sm">
+            <div className="text-center mb-4">
+              <PartyPopper className="w-10 h-10 text-purple-500 mx-auto mb-2 animate-bounce" />
+              <h3 className="text-purple-900 font-extrabold text-lg">Công việc đã hoàn thành! 🎉</h3>
+              <p className="text-purple-600 text-xs mt-0.5">
+                Đã thanh toán <strong className="text-purple-900">{fmt(job.price)}</strong> cho người thực hiện. Cảm ơn bạn đã sử dụng SnapOn!
+              </p>
+            </div>
+
+            {/* Worker Profile Card for viewing profile */}
+            {(() => {
+              const matchedApplicant = job.applicants.find(a => a.workerId === (selectedWorkerId || job.aiMatchId))
+                || job.applicants[0]
+                || (job as any).assignedWorker;
+
+              const workerId = matchedApplicant?.workerId || matchedApplicant?.id || job.aiMatchId || 'completed-worker';
+              const workerInfo = {
+                workerId: workerId,
+                name: matchedApplicant?.name || aiWinner?.name || 'hai ho',
+                avatar: matchedApplicant?.avatar || matchedApplicant?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(matchedApplicant?.name || workerId)}`,
+                rating: matchedApplicant?.rating || 5.0,
+                completedJobs: matchedApplicant?.completedJobs || 12,
+              };
+
+              return (
+                <>
+                  <div
+                    onClick={() => setProfileWorkerId(workerId)}
+                    className="bg-white hover:bg-purple-50/60 transition cursor-pointer rounded-2xl border border-purple-100 p-4 shadow-sm flex items-center gap-4 group"
+                  >
+                    <img
+                      src={workerInfo.avatar}
+                      alt={workerInfo.name}
+                      className="w-14 h-14 rounded-full border-2 border-purple-300 object-cover flex-shrink-0 bg-purple-50 group-hover:scale-105 transition-transform"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-purple-600 transition-colors">
+                          {workerInfo.name}
+                        </h4>
+                        <span className="text-[11px] bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full font-bold flex-shrink-0">
+                          ✓ Đã hoàn thành
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 font-medium">
+                        <span className="flex items-center gap-1 text-amber-500 font-bold">
+                          ⭐ {((workerInfo as any).rating || 5.0).toFixed(1)}
+                        </span>
+                        <span>•</span>
+                        <span>{(workerInfo as any).completedJobs || 12} công việc hoàn thành</span>
+                      </div>
+                      <p className="text-[11px] text-purple-600 font-semibold mt-1 flex items-center gap-1">
+                        👤 Nhấp để xem hồ sơ cá nhân →
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dedicated modal for completed worker if not in applicants array */}
+                  {!job.applicants.some(a => a.workerId === workerId) && (
+                    <UserProfileModal
+                      isOpen={profileWorkerId === workerId}
+                      onClose={() => setProfileWorkerId(null)}
+                      profile={{
+                        type: 'worker',
+                        id: workerId,
+                        name: workerInfo.name,
+                        avatar: workerInfo.avatar,
+                        rating: workerInfo.rating || 5.0,
+                        reviewCount: 15,
+                        completedJobs: workerInfo.completedJobs || 12,
+                        skills: ['Nhiệt tình', 'Chuyên nghiệp', 'Online 24/7'],
+                        bio: `Người làm việc uy tín trên SnapOn với ${(workerInfo as any).completedJobs || 12} công việc đã hoàn thành thành công.`,
+                        responseTime: '< 5 phút',
+                        satisfactionRate: 99,
+                        priceMin: job.priceMin,
+                        priceMax: job.priceMax,
+                        area: 'Toàn quốc',
+                        verified: true,
+                        recentReviews: [
+                          { name: 'Nguyễn Thanh Tâm', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=r1`, rating: 5, text: 'Làm việc nhanh, cẩn thận, đúng hạn!', date: '20/02/2026' },
+                          { name: 'Phạm Hồng Nhung', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=r2`, rating: 5, text: 'Thái độ tuyệt vời, hoàn thành xuất sắc yêu cầu.', date: '15/02/2026' },
+                        ],
+                      } as WorkerProfileData}
+                    />
+                  )}
+                </>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>
@@ -591,28 +836,10 @@ function HirerJobDetailView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-3 bg-gray-50 rounded-xl p-3">
-          <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0" />
-          <span className="text-sm text-gray-600">{job.location.address}</span>
+        <div className="flex items-center gap-2 mt-3 bg-blue-50 border border-blue-100 rounded-xl p-3 text-blue-700">
+          <span className="text-base">🌐</span>
+          <span className="text-xs font-semibold">Hình thức: Làm việc từ xa (Online toàn quốc)</span>
         </div>
-      </div>
-
-      {/* Map */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-4">
-        <button onClick={() => setShowMap(!showMap)} className="w-full flex items-center justify-between px-5 py-4">
-          <span className="text-gray-700 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
-            <MapPin className="w-4 h-4 text-orange-500" />
-            Bản đồ {job.applicants.length > 0 ? `& vị trí ${job.applicants.length} ứng viên` : ''}
-          </span>
-          {showMap ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-        <AnimatePresence>
-          {showMap && (
-            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden px-4 pb-4">
-              <MapPicker value={job.location} onChange={() => {}} readonly height="280px" markers={allMarkers} />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* ── CLOSE BIDDING BUTTON ── */}
@@ -931,6 +1158,131 @@ function HirerJobDetailView() {
           </p>
         </div>
       )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 text-center relative overflow-hidden"
+            >
+              <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <Trash2 className="w-7 h-7 text-red-500" />
+              </div>
+              <h3 className="text-gray-900 font-bold text-base mb-1">Xác nhận hủy bài đăng?</h3>
+              <p className="text-gray-500 text-xs leading-relaxed mb-5">
+                Bài đăng "{job.title}" sẽ bị xóa khỏi hệ thống. Thao tác này không thể hoàn tác.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Quay lại
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isDeleting ? 'Đang xóa...' : 'Hủy bài đăng'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Edit Task Modal ── */}
+      <AnimatePresence>
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 relative overflow-hidden text-gray-800"
+            >
+              <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-orange-500" />
+                  <h3 className="font-bold text-base text-gray-900">Chỉnh sửa bài đăng</h3>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-1 text-gray-400 hover:bg-gray-100 rounded-full transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-left">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Tên công việc</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mô tả công việc</label>
+                  <textarea
+                    rows={3}
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Giá tối thiểu (VNĐ)</label>
+                    <input
+                      type="number"
+                      value={editPriceMin}
+                      onChange={(e) => setEditPriceMin(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Giá tối đa (VNĐ)</label>
+                    <input
+                      type="number"
+                      value={editPriceMax}
+                      onChange={(e) => setEditPriceMax(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={isSavingEdit || !editTitle.trim() || !editDesc.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSavingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

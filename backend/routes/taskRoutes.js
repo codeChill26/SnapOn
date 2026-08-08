@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/auth');
+const { authenticateOptional } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const taskValidator = require('../validators/taskValidator');
 const rateLimiter = require('../middleware/rateLimiter');
@@ -18,7 +19,7 @@ const TaskActionController = require('../controllers/task/TaskActionController')
 // GET /api/tasks — List all tasks (with filters & pagination)
 router.get(
   '/',
-  authenticate,
+  authenticateOptional,
   taskValidator.listTasks,
   validate,
   TaskQueryController.getTasks
@@ -71,7 +72,7 @@ router.delete(
 // GET /api/tasks/:id — Get task details
 router.get(
   '/:id',
-  authenticate,
+  authenticateOptional,
   taskValidator.taskIdParam,
   validate,
   TaskQueryController.getTaskById

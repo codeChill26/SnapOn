@@ -23,9 +23,10 @@ const taskValidator = {
       .custom(value => {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
         const isSlug = [
-          'content', 'design', 'video-media', 'marketing', 'tech', 'admin', 
-          'research', 'ecommerce', 'translation', 'study', 'customer-service', 
-          'ai-automation', 'others'
+          'errands', 'content', 'design', 'tech', 'carrying', 'photography', 
+          'research', 'manager', 'entertainment', 'study', 'others',
+          'video-media', 'marketing', 'admin', 'ecommerce', 'translation', 
+          'customer-service', 'ai-automation'
         ].includes(value);
         if (!isUUID && !isSlug) {
           throw new Error('Category must be a valid UUID or category slug.');
@@ -70,10 +71,11 @@ const taskValidator = {
       .isBoolean().withMessage('Allow insurance must be true or false.'),
 
     body('skill_ids')
-      .notEmpty().withMessage('Subcategories (skill_ids) are required.')
+      .optional()
       .isArray().withMessage('Skill IDs must be an array.'),
 
     body('skill_ids.*')
+      .optional()
       .isUUID().withMessage('Each skill ID must be a valid UUID.'),
 
     body('location')

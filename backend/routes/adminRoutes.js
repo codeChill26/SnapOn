@@ -186,4 +186,126 @@ router.get('/stats', verifyFirebaseToken, authorize('ADMIN'), async (req, res, n
   }
 });
 
+// GET /api/admin/withdrawals — List withdrawal requests for admin review
+router.get('/withdrawals', verifyFirebaseToken, authorize('ADMIN'), async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    let query = `
+      SELECT wt.*, w.user_id, u.full_name, u.email, u.phone, u.avatar_url
+      FROM wallet_transactions wt
+      JOIN wallets w ON wt.wallet_id = w.id
+      JOIN users u ON w.user_id = u.id
+      WHERE wt.type = 'WITHDRAW'
+    `;
+    const params = [];
+    if (status) {
+      params.push(status);
+      query += ` AND wt.status = $${params.length}`;
+    }
+    query += ` ORDER BY wt.created_at DESC`;
+
+    const result = await pool.query(query, params);
+    return success(res, result.rows, 'Withdrawal requests fetched successfully');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/admin/withdrawals/:id/approve — Admin approves withdrawal
+router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN'), async (req, res, next) => {
+  const { id } = req.params;
+  const withDbTx = require('../utils/withDbTx');
+  try {
+    const result = await withDbTx(async (db) => {
+      const txRes = await db.query(
+        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
+        [id]
+      );
+      if (txRes.rows.length === 0) {
+        const err = new Error('Withdrawal request not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      const tx = txRes.rows[0];
+      if (tx.status !== 'PENDING') {
+        const err = new Error(`Withdrawal is already in ${tx.status} status.`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const amt = parseFloat(tx.amount);
+      // Deduct available_balance and total balance upon approval
+      await db.query(
+        `UPDATE wallets
+         SET available_balance = available_balance - $2,
+             balance = balance - $2
+         WHERE id = $1`,
+        [tx.wallet_id, amt]
+      );
+
+      const updatedTx = await db.query(
+        `UPDATE wallet_transactions SET status = 'SUCCESS' WHERE id = $1 RETURNING *`,
+        [tx.id]
+      );
+
+      if (tx.reference_id) {
+        await db.query(
+          `UPDATE withdraw_requests SET status = 'APPROVED' WHERE id = $1`,
+          [tx.reference_id]
+        );
+      }
+
+      return updatedTx.rows[0];
+    });
+
+    return success(res, result, 'Withdrawal request approved successfully.');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/admin/withdrawals/:id/reject — Admin rejects withdrawal
+router.patch('/withdrawals/:id/reject', verifyFirebaseToken, authorize('ADMIN'), async (req, res, next) => {
+  const { id } = req.params;
+  const withDbTx = require('../utils/withDbTx');
+  try {
+    const result = await withDbTx(async (db) => {
+      const txRes = await db.query(
+        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
+        [id]
+      );
+      if (txRes.rows.length === 0) {
+        const err = new Error('Withdrawal request not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      const tx = txRes.rows[0];
+      if (tx.status !== 'PENDING') {
+        const err = new Error(`Withdrawal is already in ${tx.status} status.`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Balance was not deducted during request creation, so rejection simply sets status to FAILED
+      const updatedTx = await db.query(
+        `UPDATE wallet_transactions SET status = 'FAILED' WHERE id = $1 RETURNING *`,
+        [tx.id]
+      );
+
+      if (tx.reference_id) {
+        await db.query(
+          `UPDATE withdraw_requests SET status = 'REJECTED' WHERE id = $1`,
+          [tx.reference_id]
+        );
+      }
+
+      return updatedTx.rows[0];
+    });
+
+    return success(res, result, 'Withdrawal request rejected successfully.');
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
