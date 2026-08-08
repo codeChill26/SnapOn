@@ -99,7 +99,9 @@ const assignmentExpiryService = require('./services/assignmentExpiryService');
 assignmentExpiryService.startSweeper(io);
 
 // Security & CORS
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(cors(corsOptions));
 
 // Response compression
@@ -129,7 +131,11 @@ var uploadDir = path.join(__dirname, 'public/uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadDir));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(uploadDir));
 
 // ==========================================
 // SWAGGER UI

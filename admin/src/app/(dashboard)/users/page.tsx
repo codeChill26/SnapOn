@@ -238,12 +238,12 @@ export default function UsersPage() {
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full overflow-hidden border border-[#E4E4E7] bg-[#F4F4F5] shrink-0">
                           <img
-                            src={formatImageUrl(user.avatarUrl) || '/default-avatar.png'}
+                            src={formatImageUrl(user.avatarUrl) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.fullName || 'User')}`}
                             alt={`${user.fullName}'s Avatar`}
                             className="object-cover w-full h-full"
                             onError={(e) => {
                               e.currentTarget.onerror = null;
-                              e.currentTarget.src = '/default-avatar.png';
+                              e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.fullName || 'User')}`;
                             }}
                           />
                         </div>

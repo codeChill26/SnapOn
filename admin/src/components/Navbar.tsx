@@ -67,7 +67,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
                 className="object-cover w-full h-full"
                 onError={(e) => {
                   e.currentTarget.onerror = null;
-                  e.currentTarget.src = '/default-avatar.png';
+                  e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(adminUser?.fullName || 'Admin')}`;
                 }}
               />
             </div>

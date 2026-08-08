@@ -14,7 +14,7 @@
  *    - Hardcoded defaults represent secure production fallbacks.
  */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon.onrender.com/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon-debug.onrender.com/api';
 
 const Config = {
   API_BASE_URL,

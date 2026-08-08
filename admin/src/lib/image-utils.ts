@@ -6,10 +6,21 @@
 export function formatImageUrl(url: string | null | undefined): string {
   if (!url) return '';
 
-  // Handle Cloudinary hosted files
-  if (url.includes('cloudinary.com')) {
-    let formatted = url;
+  let formatted = url;
 
+  // Replace outdated snapon.onrender.com with snapon-debug.onrender.com
+  if (formatted.includes('snapon.onrender.com')) {
+    formatted = formatted.replace('snapon.onrender.com', 'snapon-debug.onrender.com');
+  }
+
+  // Handle relative upload paths
+  if (formatted.startsWith('/uploads/') || formatted.startsWith('uploads/')) {
+    const cleanPath = formatted.startsWith('/') ? formatted : '/' + formatted;
+    formatted = `https://snapon-debug.onrender.com${cleanPath}`;
+  }
+
+  // Handle Cloudinary hosted files
+  if (formatted.includes('cloudinary.com')) {
     // Replace Apple HEIC image extension (case insensitive) with JPG so Cloudinary converts it on-the-fly
     if (/\.heic$/i.test(formatted)) {
       formatted = formatted.replace(/\.heic$/i, '.jpg');
@@ -19,9 +30,7 @@ export function formatImageUrl(url: string | null | undefined): string {
     if (formatted.includes('/image/upload/') && !formatted.includes('/f_auto')) {
       formatted = formatted.replace('/image/upload/', '/image/upload/f_auto/');
     }
-
-    return formatted;
   }
 
-  return url;
+  return formatted;
 }

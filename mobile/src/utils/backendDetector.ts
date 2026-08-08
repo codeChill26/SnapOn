@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Config from '../constants/config';
 
-const DEPLOYED_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon.onrender.com/api';
+const DEPLOYED_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon-debug.onrender.com/api';
 const LOCAL_API_URL = `http://${process.env.EXPO_PUBLIC_LOCAL_IP || 'localhost'}:3000/api`;
 
 let detectedUrl: string | null = null;
