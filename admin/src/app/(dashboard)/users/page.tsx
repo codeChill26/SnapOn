@@ -153,19 +153,17 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">Manage Users</h2>
-          <p className="text-zinc-400 mt-1">Review accounts, roles, statuses, and verification requests.</p>
-        </div>
+      {/* Title Header */}
+      <div>
+        <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Manage Users</h2>
+        <p className="text-[#71717A] text-sm mt-1 font-medium">Audit user accounts, platform status, bans, roles, and user statistics.</p>
       </div>
 
       {/* Filters Card */}
-      <Card className="flex flex-col sm:flex-row gap-4 items-center">
+      <Card className="flex flex-col sm:flex-row gap-4 items-center bg-white border-[#E4E4E7] shadow-sm">
         {/* Search */}
         <div className="relative w-full sm:w-80">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">
+          <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#71717A]">
             <Search className="h-4 w-4" />
           </span>
           <input
@@ -173,7 +171,7 @@ export default function UsersPage() {
             placeholder="Search by name, email, or phone..."
             value={search}
             onChange={handleSearchChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 pl-9 pr-4 text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 pl-9 pr-4 text-[#18181B] text-sm placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all font-medium"
           />
         </div>
 
@@ -182,7 +180,7 @@ export default function UsersPage() {
           <select
             value={statusFilter}
             onChange={handleStatusFilterChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 px-3 text-[#18181B] text-sm focus:outline-none focus:border-[#312F2C] transition-all font-semibold"
           >
             <option value="">All Statuses</option>
             <option value="ACTIVE">Active</option>
@@ -192,24 +190,24 @@ export default function UsersPage() {
         </div>
       </Card>
 
-      {/* Data Table */}
-      <Card className="overflow-hidden">
+      {/* Data Table Card */}
+      <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+          <table className="w-full text-left text-sm text-[#71717A]">
+            <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
               <tr>
-                <th className="px-6 py-3.5 font-semibold">User Details</th>
-                <th className="px-6 py-3.5 font-semibold">Role</th>
-                <th className="px-6 py-3.5 font-semibold">Status</th>
-                <th className="px-6 py-3.5 font-semibold text-center">Tasks</th>
-                <th className="px-6 py-3.5 font-semibold">Joined At</th>
-                <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
+                <th className="px-6 py-3.5">User Details</th>
+                <th className="px-6 py-3.5">Role</th>
+                <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5 text-center">Tasks</th>
+                <th className="px-6 py-3.5">Joined At</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900 text-zinc-300">
+            <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                  <td colSpan={6} className="px-6 py-10 text-center text-[#71717A] font-medium">
                     Loading users list...
                   </td>
                 </tr>
@@ -217,10 +215,10 @@ export default function UsersPage() {
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <p className="text-red-400">{error}</p>
+                      <p className="text-rose-600 font-bold">{error}</p>
                       <button
                         onClick={fetchUsers}
-                        className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 text-zinc-200 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
+                        className="px-4 py-2 bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer text-xs font-bold"
                       >
                         Retry Load
                       </button>
@@ -229,16 +227,16 @@ export default function UsersPage() {
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                  <td colSpan={6} className="px-6 py-10 text-center text-[#71717A] font-medium">
                     No users found matching parameters.
                   </td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.id} className="hover:bg-zinc-900/20 transition-colors">
+                  <tr key={user.id} className="hover:bg-[#FAFAFA] transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full overflow-hidden border border-zinc-800 bg-zinc-900 shrink-0">
+                        <div className="h-9 w-9 rounded-full overflow-hidden border border-[#E4E4E7] bg-[#F4F4F5] shrink-0">
                           <img
                             src={formatImageUrl(user.avatarUrl) || '/default-avatar.png'}
                             alt={`${user.fullName}'s Avatar`}
@@ -250,40 +248,40 @@ export default function UsersPage() {
                           />
                         </div>
                         <div>
-                          <div className="font-semibold text-white">{user.fullName}</div>
-                          <div className="text-xs text-zinc-500 mt-0.5">{user.email}</div>
-                          {user.phone && <div className="text-xs text-zinc-500">{user.phone}</div>}
+                          <div className="font-bold text-[#18181B]">{user.fullName}</div>
+                          <div className="text-xs text-[#71717A] font-mono mt-0.5">{user.email}</div>
+                          {user.phone && <div className="text-xs text-[#71717A] font-mono">{user.phone}</div>}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 rounded bg-zinc-900 px-2 py-1 text-xs font-semibold text-zinc-400 border border-zinc-800 uppercase">
+                      <span className="inline-flex items-center rounded-md bg-[#312F2C] text-white px-2.5 py-0.5 text-xs font-bold uppercase shadow-2xs">
                         {user.role || 'USER'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                        user.status === 'ACTIVE' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                        user.status === 'BANNED' ? 'bg-red-950/40 text-red-300 border-red-800/40' :
-                        'bg-amber-950/40 text-amber-300 border-amber-800/40'
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold border ${
+                        user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                        user.status === 'BANNED' ? 'bg-rose-50 text-rose-800 border-rose-200' :
+                        'bg-amber-50 text-amber-800 border-amber-200'
                       }`}>
                         {user.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <div className="text-xs">
-                        <span className="text-indigo-400 font-medium">{user._count.postedTasks}</span> Posted /{' '}
-                        <span className="text-emerald-400 font-medium">{user._count.assignedTasks}</span> Taken
+                      <div className="text-xs font-bold">
+                        <span className="text-indigo-600">{user._count.postedTasks}</span> Posted /{' '}
+                        <span className="text-emerald-600">{user._count.assignedTasks}</span> Taken
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs text-zinc-500">
+                    <td className="px-6 py-4 text-xs text-[#71717A] font-mono font-medium">
                       {new Date(user.createdAt).toLocaleDateString('vi-VN')}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleViewDetails(user.id)}
-                          className="rounded-lg p-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                          className="rounded-xl p-2 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer shadow-2xs"
                           title="View Profile Details"
                         >
                           <Eye className="h-4 w-4" />
@@ -294,7 +292,7 @@ export default function UsersPage() {
                               setConfirmTarget({ id: user.id, name: user.fullName, status: 'BANNED' });
                               setConfirmOpen(true);
                             }}
-                            className="rounded-lg p-1.5 bg-red-950/20 border border-red-900/30 text-red-450 hover:bg-red-900/20 hover:text-red-200 transition-colors cursor-pointer"
+                            className="rounded-xl p-2 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer shadow-2xs"
                             title="Ban Account"
                           >
                             <UserX className="h-4 w-4" />
@@ -305,7 +303,7 @@ export default function UsersPage() {
                               setConfirmTarget({ id: user.id, name: user.fullName, status: 'ACTIVE' });
                               setConfirmOpen(true);
                             }}
-                            className="rounded-lg p-1.5 bg-emerald-950/20 border border-emerald-900/30 text-emerald-450 hover:bg-emerald-900/20 hover:text-emerald-200 transition-colors cursor-pointer"
+                            className="rounded-xl p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer shadow-2xs"
                             title="Activate Account"
                           >
                             <UserCheck className="h-4 w-4" />
@@ -322,23 +320,23 @@ export default function UsersPage() {
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-zinc-900 px-6 py-4">
-            <div className="text-xs text-zinc-500">
-              Showing page <span className="font-semibold text-white">{page}</span> of{' '}
-              <span className="font-semibold text-white">{totalPages}</span> ({total} entries)
+          <div className="flex items-center justify-between border-t border-[#E4E4E7] px-6 py-4 bg-[#F4F4F5]">
+            <div className="text-xs text-[#71717A] font-medium">
+              Showing page <span className="font-bold text-[#18181B]">{page}</span> of{' '}
+              <span className="font-bold text-[#18181B]">{totalPages}</span> ({total} entries)
             </div>
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="rounded-xl border border-[#E4E4E7] bg-white p-2 text-[#18181B] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="rounded-xl border border-[#E4E4E7] bg-white p-2 text-[#18181B] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

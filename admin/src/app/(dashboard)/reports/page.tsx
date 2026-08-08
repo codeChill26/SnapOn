@@ -134,20 +134,20 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title */}
+      {/* Title Header */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-white">Manage Reports</h2>
-        <p className="text-zinc-400 mt-1">Audit abuse and policy violation reports filed by users.</p>
+        <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Manage Reports</h2>
+        <p className="text-[#71717A] text-sm mt-1 font-medium">Audit abuse and policy violation reports filed by users.</p>
       </div>
 
       {/* Filters Card */}
-      <Card className="flex flex-col sm:flex-row gap-4 items-center">
+      <Card className="flex flex-col sm:flex-row gap-4 items-center bg-white border-[#E4E4E7] shadow-sm">
         {/* Status Filter */}
         <div className="w-full sm:w-48">
           <select
             value={statusFilter}
             onChange={handleStatusFilterChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 px-3 text-[#18181B] text-sm focus:outline-none focus:border-[#312F2C] transition-all font-semibold"
           >
             <option value="">All Statuses</option>
             <option value="PENDING">Pending</option>
@@ -158,32 +158,32 @@ export default function ReportsPage() {
         </div>
       </Card>
 
-      {/* Data Table */}
-      <Card className="overflow-hidden">
+      {/* Data Table Card */}
+      <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-zinc-400">
-            <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+          <table className="w-full text-left text-sm text-[#71717A]">
+            <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
               <tr>
-                <th className="px-6 py-3.5 font-semibold">Report Description</th>
-                <th className="px-6 py-3.5 font-semibold">Reporter</th>
-                <th className="px-6 py-3.5 font-semibold">Reported Target</th>
-                <th className="px-6 py-3.5 font-semibold text-center">Status</th>
-                <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
+                <th className="px-6 py-3.5">Report Description</th>
+                <th className="px-6 py-3.5">Reporter</th>
+                <th className="px-6 py-3.5">Reported Target</th>
+                <th className="px-6 py-3.5 text-center">Status</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900 text-zinc-300">
+            <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">Loading reports...</td>
+                  <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">Loading reports...</td>
                 </tr>
               ) : error ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-10 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <p className="text-red-400">{error}</p>
+                      <p className="text-rose-600 font-bold">{error}</p>
                       <button
                         onClick={fetchReports}
-                        className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 text-zinc-200 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
+                        className="px-4 py-2 bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer text-xs font-bold"
                       >
                         Retry Load
                       </button>
@@ -192,44 +192,44 @@ export default function ReportsPage() {
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">No reports found matching query.</td>
+                  <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">No reports found matching query.</td>
                 </tr>
               ) : (
                 reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-zinc-900/20 transition-colors">
+                  <tr key={report.id} className="hover:bg-[#FAFAFA] transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-white truncate max-w-[200px]" title={report.reason}>
+                      <div className="font-bold text-[#18181B] truncate max-w-[200px]" title={report.reason}>
                         {report.reason}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-white">{report.reporter.fullName}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">{report.reporter.email}</div>
+                      <div className="font-bold text-[#18181B]">{report.reporter.fullName}</div>
+                      <div className="text-xs text-[#71717A] font-mono mt-0.5">{report.reporter.email}</div>
                     </td>
                     <td className="px-6 py-4">
                       {report.targetUser ? (
                         <div>
-                          <div className="font-medium text-zinc-300 flex items-center gap-1.5">
-                            <User className="h-3.5 w-3.5 text-zinc-500" />
+                          <div className="font-semibold text-[#18181B] flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5 text-[#71717A]" />
                             <span>{report.targetUser.fullName}</span>
                           </div>
-                          <div className="text-xs text-zinc-500 pl-5 mt-0.5">{report.targetUser.email}</div>
+                          <div className="text-xs text-[#71717A] font-mono pl-5 mt-0.5">{report.targetUser.email}</div>
                         </div>
                       ) : report.task ? (
-                        <div className="text-xs text-zinc-300 flex items-center gap-1.5">
-                          <Briefcase className="h-3.5 w-3.5 text-zinc-500" />
-                          <span>Task: <strong className="text-white truncate max-w-[120px] inline-block align-bottom">{report.task.title}</strong></span>
+                        <div className="text-xs text-[#18181B] flex items-center gap-1.5 font-medium">
+                          <Briefcase className="h-3.5 w-3.5 text-[#71717A]" />
+                          <span>Task: <strong className="text-[#18181B] truncate max-w-[120px] inline-block align-bottom">{report.task.title}</strong></span>
                         </div>
                       ) : (
-                        <span className="text-zinc-500 text-xs italic">Platform abuse</span>
+                        <span className="text-[#71717A] text-xs italic">Platform abuse</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                        report.status === 'PENDING' ? 'bg-amber-950/40 text-amber-300 border-amber-800/40 animate-pulse' :
-                        report.status === 'REVIEWED' ? 'bg-blue-950/40 text-blue-300 border-blue-800/40' :
-                        report.status === 'RESOLVED' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                        'bg-red-950/40 text-red-300 border-red-800/40'
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold border ${
+                        report.status === 'PENDING' ? 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse' :
+                        report.status === 'REVIEWED' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                        report.status === 'RESOLVED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                        'bg-rose-50 text-rose-800 border-rose-200'
                       }`}>
                         {report.status}
                       </span>
@@ -237,7 +237,7 @@ export default function ReportsPage() {
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => handleViewDetails(report.id)}
-                        className="rounded-lg p-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                        className="rounded-xl p-2 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer shadow-2xs"
                         title="View Report details"
                       >
                         <Eye className="h-4 w-4" />
@@ -252,23 +252,23 @@ export default function ReportsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-zinc-900 px-6 py-4">
-            <div className="text-xs text-zinc-555">
-              Showing page <span className="font-semibold text-white">{page}</span> of{' '}
-              <span className="font-semibold text-white">{totalPages}</span> ({total} reports)
+          <div className="flex items-center justify-between border-t border-[#E4E4E7] px-6 py-4 bg-[#F4F4F5]">
+            <div className="text-xs text-[#71717A] font-medium">
+              Showing page <span className="font-bold text-[#18181B]">{page}</span> of{' '}
+              <span className="font-bold text-[#18181B]">{totalPages}</span> ({total} reports)
             </div>
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="rounded-xl border border-[#E4E4E7] bg-white p-2 text-[#18181B] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="rounded-xl border border-[#E4E4E7] bg-white p-2 text-[#18181B] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

@@ -294,15 +294,15 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title */}
+      {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">Categories & Skills</h2>
-          <p className="text-zinc-400 mt-1">Configure categories and job capabilities for users and tasks.</p>
+          <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Categories & Skills</h2>
+          <p className="text-[#71717A] text-sm mt-1 font-medium">Configure categories and job capabilities for users and tasks.</p>
         </div>
         <button
           onClick={activeTab === 'categories' ? handleOpenCreateCat : handleOpenCreateSkill}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/10 self-start animate-fade-in"
+          className="bg-[#312F2C] hover:bg-[#18181B] text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-md self-start"
         >
           <Plus className="h-4 w-4" />
           <span>Create {activeTab === 'categories' ? 'Category' : 'Skill'}</span>
@@ -310,13 +310,13 @@ export default function CategoriesPage() {
       </div>
 
       {/* Tabs Menu */}
-      <div className="flex border-b border-zinc-900 gap-6">
+      <div className="flex border-b border-[#E4E4E7] gap-6">
         <button
           onClick={() => setActiveTab('categories')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 font-extrabold text-sm transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
             activeTab === 'categories'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-zinc-400 hover:text-white'
+              ? 'border-[#312F2C] text-[#312F2C]'
+              : 'border-transparent text-[#71717A] hover:text-[#18181B]'
           }`}
         >
           <Tag className="h-4 w-4" />
@@ -324,10 +324,10 @@ export default function CategoriesPage() {
         </button>
         <button
           onClick={() => setActiveTab('skills')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 font-extrabold text-sm transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
             activeTab === 'skills'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-zinc-400 hover:text-white'
+              ? 'border-[#312F2C] text-[#312F2C]'
+              : 'border-transparent text-[#71717A] hover:text-[#18181B]'
           }`}
         >
           <Bookmark className="h-4 w-4" />
@@ -339,9 +339,9 @@ export default function CategoriesPage() {
       {activeTab === 'categories' && (
         <div className="space-y-6">
           {/* Filters Card */}
-          <Card className="flex flex-col sm:flex-row gap-4 items-center">
+          <Card className="flex flex-col sm:flex-row gap-4 items-center bg-white border-[#E4E4E7] shadow-sm">
             <div className="relative w-full sm:w-80">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#71717A]">
                 <Search className="h-4 w-4" />
               </span>
               <input
@@ -349,28 +349,28 @@ export default function CategoriesPage() {
                 placeholder="Search category name..."
                 value={catSearch}
                 onChange={(e) => { setCatSearch(e.target.value); setCatPage(1); }}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 pl-9 pr-4 text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 pl-9 pr-4 text-[#18181B] text-sm placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all font-medium"
               />
             </div>
           </Card>
 
-          {/* Categories Grid Table */}
-          <Card className="overflow-hidden">
+          {/* Categories Grid Table Card */}
+          <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+              <table className="w-full text-left text-sm text-[#71717A]">
+                <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
                   <tr>
-                    <th className="px-6 py-3.5 font-semibold">Category Name</th>
-                    <th className="px-6 py-3.5 font-semibold">Slug Identifier</th>
-                    <th className="px-6 py-3.5 font-semibold">Sub-skills</th>
-                    <th className="px-6 py-3.5 font-semibold text-center">Tasks Count</th>
-                    <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
+                    <th className="px-6 py-3.5">Category Name</th>
+                    <th className="px-6 py-3.5">Slug Identifier</th>
+                    <th className="px-6 py-3.5">Sub-skills</th>
+                    <th className="px-6 py-3.5 text-center">Tasks Count</th>
+                    <th className="px-6 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-900 text-zinc-300">
+                <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
                   {catLoading ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">Loading categories...</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">Loading categories...</td>
                     </tr>
                   ) : catError ? (
                     <tr>

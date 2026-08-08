@@ -42,16 +42,16 @@ export default function Navbar({ adminUser }: NavbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zinc-900 bg-zinc-950/85 px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-[#E4E4E7] bg-white/90 px-6 backdrop-blur-md shadow-xs">
       {/* Page Title or Mobile Menu trigger */}
       <div className="flex items-center gap-4">
         <button
           onClick={() => setMobileMenuOpen(true)}
-          className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-900 hover:text-white md:hidden"
+          className="rounded-lg p-1 text-[#71717A] hover:bg-[#F4F4F5] hover:text-[#18181B] md:hidden"
         >
           <Menu className="h-6 w-6" />
         </button>
-        <h1 className="text-lg font-semibold text-white capitalize md:block hidden">
+        <h1 className="text-lg font-bold text-[#18181B] capitalize md:block hidden">
           {pathname === '/' ? 'Overview' : pathname.split('/')[1] || ''}
         </h1>
       </div>
@@ -60,7 +60,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           {adminUser?.avatarUrl ? (
-            <div className="h-8 w-8 rounded-full overflow-hidden border border-zinc-800 bg-zinc-900 shrink-0">
+            <div className="h-8 w-8 rounded-full overflow-hidden border border-[#E4E4E7] bg-[#F4F4F5] shrink-0">
               <img
                 src={formatImageUrl(adminUser.avatarUrl)}
                 alt="Admin Avatar"
@@ -72,19 +72,19 @@ export default function Navbar({ adminUser }: NavbarProps) {
               />
             </div>
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white font-bold shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#312F2C] text-[#FAFAFA] font-bold shrink-0 shadow-sm">
               {adminUser?.fullName?.[0]?.toUpperCase() || <UserIcon className="h-4 w-4" />}
             </div>
           )}
           <div className="hidden sm:block text-left">
-            <p className="text-sm font-medium text-white leading-none">{adminUser?.fullName || 'Administrator'}</p>
-            <p className="text-xs text-zinc-400 mt-1 leading-none">{adminUser?.email}</p>
+            <p className="text-sm font-semibold text-[#18181B] leading-none">{adminUser?.fullName || 'Administrator'}</p>
+            <p className="text-xs text-[#71717A] mt-1 leading-none">{adminUser?.email}</p>
           </div>
         </div>
 
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 hover:border-zinc-700/60 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-white transition-all cursor-pointer"
+          className="flex items-center gap-2 rounded-xl border border-[#E4E4E7] bg-[#F4F4F5] hover:bg-[#E4E4E7] px-3 py-1.5 text-xs font-semibold text-[#312F2C] transition-all cursor-pointer shadow-xs"
         >
           <LogOut className="h-3.5 w-3.5" />
           <span>Sign Out</span>

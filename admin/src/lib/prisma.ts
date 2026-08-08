@@ -9,14 +9,16 @@ const globalForPrisma = globalThis as unknown as {
 
 // Retrieve connection URL from environment
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL environment variable is missing');
+if (!databaseUrl && typeof window === 'undefined') {
+  console.warn('DATABASE_URL environment variable is missing in process.env');
 }
 
 const pool = globalForPrisma.pool ?? new Pool({
-  connectionString: databaseUrl,
+  connectionString: databaseUrl || 'postgresql://localhost:5432/dummy',
   // SSL required for Supabase; disabled for local Docker postgres
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 5, // Limit max pool size per serverless container
+  idleTimeoutMillis: 30000,
 });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.pool = pool;

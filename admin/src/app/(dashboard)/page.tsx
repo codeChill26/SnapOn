@@ -1,218 +1,319 @@
 import React from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
 import { prisma } from '@/lib/prisma';
-import { Card } from '@/components/ui/Card';
-import { 
-  Users, 
-  Briefcase, 
-  Tag, 
-  Flag, 
-  Wallet,
-  ArrowUpRight,
-  Clock
-} from 'lucide-react';
-import { formatImageUrl } from '@/lib/image-utils';
+import KpiOverviewGrid, { KpiData } from '@/components/dashboard/KpiOverviewGrid';
+import GrowthAnalyticsCharts, { RawRecord } from '@/components/dashboard/GrowthAnalyticsCharts';
+import PlatformHealthPanel from '@/components/dashboard/PlatformHealthPanel';
+import RecentActivityTables from '@/components/dashboard/RecentActivityTables';
+import TopStatisticsPanel from '@/components/dashboard/TopStatisticsPanel';
+import QuickActionsGrid from '@/components/dashboard/QuickActionsGrid';
+import SystemAlertsPanel from '@/components/dashboard/SystemAlertsPanel';
+import { ShieldCheck } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  // Query counts in parallel
-  const [
-    userCount,
-    taskCount,
-    pendingPayoutCount,
-    openReportCount,
-    categoryCount,
-    recentTasks,
-    recentPayouts
-  ] = await Promise.all([
-    prisma.user.count(),
-    prisma.task.count(),
-    prisma.withdrawRequest.count({ where: { status: 'PENDING' } }),
-    prisma.report.count({ where: { status: 'PENDING' } }),
-    prisma.category.count(),
-    prisma.task.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { 
-        poster: { select: { fullName: true } }, 
-        category: { select: { name: true } } 
-      }
-    }),
-    prisma.withdrawRequest.findMany({
-      take: 5,
-      orderBy: { status: 'asc' }, // Order by pending first
-      include: { 
-        user: { select: { fullName: true } } 
-      }
-    })
-  ]);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const stats = [
-    { label: 'Total Registered Users', value: userCount, icon: Users, href: '/users', color: 'text-blue-500' },
-    { label: 'Total Posted Tasks', value: taskCount, icon: Briefcase, href: '/tasks', color: 'text-indigo-500' },
-    { label: 'Total Categories', value: categoryCount, icon: Tag, href: '/categories', color: 'text-amber-500' },
-    { label: 'Pending Withdrawals', value: pendingPayoutCount, icon: Wallet, href: '/withdraws', color: 'text-emerald-500', alert: pendingPayoutCount > 0 },
-    { label: 'Pending Reports', value: openReportCount, icon: Flag, href: '/reports', color: 'text-rose-500', alert: openReportCount > 0 },
-  ];
+  // Fallback defaults
+  let kpiData: KpiData = {
+    userCount: 0,
+    activeUserCount: 0,
+    bannedUserCount: 0,
+    newUsersTodayCount: 0,
+    taskCount: 0,
+    openTaskCount: 0,
+    inProgressTaskCount: 0,
+    completedTaskCount: 0,
+    categoryCount: 0,
+    pendingPayoutCount: 0,
+    approvedPayoutCount: 0,
+    openReportCount: 0,
+    pendingDeletionCount: 0,
+    totalEscrowAmount: 0,
+    totalPaidOutAmount: 0,
+  };
+
+  let recentTasks: any[] = [];
+  let recentPayouts: any[] = [];
+  let recentUsers: any[] = [];
+  let topPosters: any[] = [];
+  let topCategories: any[] = [];
+  let newestMembers: any[] = [];
+  let rawUserRecords: RawRecord[] = [];
+  let rawTaskRecords: RawRecord[] = [];
+  let rawWithdrawRecords: RawRecord[] = [];
+
+  let dbStatus: 'connected' | 'error' = 'connected';
+  let dbErrorMessage: string | null = null;
+
+  try {
+    const [
+      userCount,
+      activeUserCount,
+      bannedUserCount,
+      newUsersTodayCount,
+      taskCount,
+      openTaskCount,
+      inProgressTaskCount,
+      completedTaskCount,
+      categoryCount,
+      pendingPayoutCount,
+      approvedPayoutCount,
+      openReportCount,
+      pendingDeletionCount,
+      escrowSum,
+      withdrawSum,
+      fetchedRecentTasks,
+      fetchedRecentPayouts,
+      fetchedRecentUsers,
+      fetchedTopPosters,
+      fetchedTopCategories,
+      fetchedNewestMembers,
+      fetchedRawUsers,
+      fetchedRawTasks,
+      fetchedRawWithdraws,
+    ] = await Promise.all([
+      // 1. KPI Counts
+      prisma.user.count(),
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.count({ where: { status: 'BANNED' } }),
+      prisma.user.count({ where: { createdAt: { gte: todayStart } } }),
+
+      prisma.task.count(),
+      prisma.task.count({ where: { status: 'OPEN' } }),
+      prisma.task.count({ where: { status: 'IN_PROGRESS' } }),
+      prisma.task.count({ where: { status: 'COMPLETED' } }),
+
+      prisma.category.count(),
+      prisma.withdrawRequest.count({ where: { status: 'PENDING' } }),
+      prisma.withdrawRequest.count({ where: { status: { in: ['APPROVED', 'PAID'] } } }),
+      prisma.report.count({ where: { status: 'PENDING' } }),
+      prisma.accountDeletionRequest.count({ where: { status: 'PENDING' } }),
+
+      // 2. Financial Volume Aggregations
+      prisma.escrow.aggregate({ _sum: { amount: true } }),
+      prisma.withdrawRequest.aggregate({
+        where: { status: { in: ['APPROVED', 'PAID'] } },
+        _sum: { amount: true },
+      }),
+
+      // 3. Recent Activity Feeds
+      prisma.task.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          poster: { select: { fullName: true } },
+          category: { select: { name: true } },
+        },
+      }),
+      prisma.withdrawRequest.findMany({
+        take: 5,
+        orderBy: { status: 'asc' },
+        include: {
+          user: { select: { fullName: true } },
+        },
+      }),
+      prisma.user.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          status: true,
+          role: true,
+          createdAt: true,
+        },
+      }),
+
+      // 4. Top Statistics
+      prisma.user.findMany({
+        take: 5,
+        orderBy: {
+          postedTasks: { _count: 'desc' },
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          _count: { select: { postedTasks: true } },
+        },
+      }),
+      prisma.category.findMany({
+        take: 5,
+        orderBy: {
+          tasks: { _count: 'desc' },
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          _count: { select: { tasks: true } },
+        },
+      }),
+      prisma.user.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          createdAt: true,
+        },
+      }),
+
+      // 5. Raw Timestamp Records for Time-Series Analytics & Comparisons
+      prisma.user.findMany({
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+      }),
+      prisma.task.findMany({
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+      }),
+      prisma.withdrawRequest.findMany({
+        select: { id: true, user: { select: { createdAt: true } } },
+        take: 2000,
+      }),
+    ]);
+
+    // Populate KPI Data
+    kpiData = {
+      userCount,
+      activeUserCount,
+      bannedUserCount,
+      newUsersTodayCount,
+      taskCount,
+      openTaskCount,
+      inProgressTaskCount,
+      completedTaskCount,
+      categoryCount,
+      pendingPayoutCount,
+      approvedPayoutCount,
+      openReportCount,
+      pendingDeletionCount,
+      totalEscrowAmount: Number(escrowSum._sum.amount || 0),
+      totalPaidOutAmount: Number(withdrawSum._sum.amount || 0),
+    };
+
+    recentTasks = fetchedRecentTasks;
+    recentPayouts = fetchedRecentPayouts;
+    recentUsers = fetchedRecentUsers;
+
+    topPosters = fetchedTopPosters.map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      email: p.email,
+      taskCount: p._count.postedTasks,
+    }));
+
+    topCategories = fetchedTopCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      taskCount: c._count.tasks,
+    }));
+
+    newestMembers = fetchedNewestMembers;
+
+    rawUserRecords = fetchedRawUsers;
+    rawTaskRecords = fetchedRawTasks;
+    rawWithdrawRecords = fetchedRawWithdraws.map((w) => ({
+      createdAt: w.user?.createdAt || now,
+    }));
+
+  } catch (error: any) {
+    console.error('Failed to load dashboard data:', error);
+    dbStatus = 'error';
+    dbErrorMessage = error?.message || 'Database connection error';
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Title */}
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight text-white">Console Overview</h2>
-        <p className="text-zinc-400 mt-1">Platform overview metrics and pending actions.</p>
+    <div className="space-y-8 bg-[#FAFAFA] text-[#18181B] min-h-screen">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E4E4E7] pb-6">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Management Console</h2>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#312F2C] text-white shadow-xs">
+              <ShieldCheck className="h-3.5 w-3.5" /> Live Production
+            </span>
+          </div>
+          <p className="text-[#71717A] text-sm mt-1 font-medium">
+            Real-time platform statistics, nested growth analytics, and system health status.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 text-xs text-[#71717A]">
+          <span className="bg-white border border-[#E4E4E7] px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-2xs font-semibold">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            Last synced: {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat, i) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={i} className="relative overflow-hidden group">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-zinc-400">{stat.label}</p>
-                  <h3 className="text-3xl font-bold mt-2 text-white">{stat.value}</h3>
-                </div>
-                <div className={`rounded-xl bg-zinc-900/80 p-3 ${stat.color} transition-all group-hover:scale-110`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-              </div>
-              
-              {stat.alert && (
-                <div className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-bl" />
-              )}
+      {/* Database Error Banner */}
+      {dbStatus === 'error' && (
+        <div className="rounded-2xl border border-rose-800/60 bg-rose-950/40 p-5 text-rose-300 text-sm space-y-2 shadow-xl">
+          <p className="font-bold flex items-center gap-2 text-base text-rose-200">
+            ⚠️ Database Connection Warning
+          </p>
+          <p className="text-xs text-rose-300/90 leading-relaxed">
+            Could not fetch dynamic metrics from PostgreSQL database. Details: <code className="bg-rose-900/60 px-1.5 py-0.5 rounded text-rose-100 font-mono text-[11px]">{dbErrorMessage}</code>.
+            Please ensure <code className="bg-rose-900/60 px-1 py-0.5 rounded text-rose-200">DATABASE_URL</code> is properly configured in Vercel Environment Variables.
+          </p>
+        </div>
+      )}
 
-              <div className="mt-4 flex items-center justify-between border-t border-zinc-900 pt-4 text-xs">
-                <span className="text-zinc-500">System generated</span>
-                <Link href={stat.href} className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors">
-                  Manage <ArrowUpRight className="h-3 w-3" />
-                </Link>
-              </div>
-            </Card>
-          );
-        })}
+      {/* Action Alerts */}
+      <SystemAlertsPanel
+        pendingPayouts={kpiData.pendingPayoutCount}
+        pendingReports={kpiData.openReportCount}
+        pendingDeletions={kpiData.pendingDeletionCount}
+      />
+
+      {/* SECTION 1: KPI Overview Grid */}
+      <KpiOverviewGrid data={kpiData} />
+
+      {/* SECTION 2: Full-Width Nested Growth Analytics Chart */}
+      <GrowthAnalyticsCharts
+        userRecords={rawUserRecords}
+        taskRecords={rawTaskRecords}
+        withdrawRecords={rawWithdrawRecords}
+      />
+
+      {/* SECTION 3: Health Status & Top Statistics */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <PlatformHealthPanel
+            pendingPayouts={kpiData.pendingPayoutCount}
+            pendingReports={kpiData.openReportCount}
+            pendingDeletions={kpiData.pendingDeletionCount}
+            dbStatus={dbStatus}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <TopStatisticsPanel
+            topPosters={topPosters}
+            topCategories={topCategories}
+            newestMembers={newestMembers}
+          />
+        </div>
       </div>
 
-      {/* Activity Tables */}
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Recent Tasks */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Clock className="h-5 w-5 text-indigo-500" />
-              <span>Recent Tasks</span>
-            </h3>
-            <Link href="/tasks" className="text-xs text-indigo-400 hover:underline">
-              View all
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-400">
-              <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
-                <tr>
-                  <th className="px-4 py-3 font-semibold w-[60px]">Image</th>
-                  <th className="px-4 py-3 font-semibold">Title</th>
-                  <th className="px-4 py-3 font-semibold">Category</th>
-                  <th className="px-4 py-3 font-semibold">Poster</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-900">
-                {recentTasks.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-4 text-center text-zinc-500">No tasks created recently</td>
-                  </tr>
-                ) : (
-                  recentTasks.map((task: any) => (
-                    <tr key={task.id} className="hover:bg-zinc-900/30 transition-colors">
-                      <td className="px-4 py-3">
-                        {task.images && task.images.length > 0 ? (
-                          <Image
-                            src={formatImageUrl(task.images[0])}
-                            width={36}
-                            height={36}
-                            alt={task.title}
-                            className="rounded-md object-cover w-[36px] h-[36px] border border-zinc-850 bg-zinc-900"
-                          />
-                        ) : (
-                          <div className="w-[36px] h-[36px] rounded-md bg-zinc-900 border border-zinc-850 flex items-center justify-center text-[8px] text-zinc-500 font-medium">
-                            No Img
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-white font-medium truncate max-w-[150px]">{task.title}</td>
-                      <td className="px-4 py-3">{task.category?.name || 'N/A'}</td>
-                      <td className="px-4 py-3 truncate max-w-[100px]">{task.poster.fullName}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${
-                          task.status === 'OPEN' ? 'bg-blue-950/40 text-blue-300 border-blue-800/40' :
-                          task.status === 'IN_PROGRESS' ? 'bg-amber-950/40 text-amber-300 border-amber-800/40' :
-                          task.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                          'bg-zinc-900 text-zinc-450 border-zinc-800'
-                        }`}>
-                          {task.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+      {/* SECTION 4: Recent Activity Tables */}
+      <RecentActivityTables
+        recentTasks={recentTasks}
+        recentPayouts={recentPayouts}
+        recentUsers={recentUsers}
+      />
 
-        {/* Recent Withdrawal Requests */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-emerald-500" />
-              <span>Pending & Recent Payouts</span>
-            </h3>
-            <Link href="/withdraws" className="text-xs text-indigo-400 hover:underline">
-              View all
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-400">
-              <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">User</th>
-                  <th className="px-4 py-3 font-semibold">Amount</th>
-                  <th className="px-4 py-3 font-semibold">Bank</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-900">
-                {recentPayouts.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-4 text-center text-zinc-500">No payout requests</td>
-                  </tr>
-                ) : (
-                  recentPayouts.map((req: any) => (
-                    <tr key={req.id} className="hover:bg-zinc-900/30 transition-colors">
-                      <td className="px-4 py-3 text-white font-medium truncate max-w-[120px]">{req.user.fullName}</td>
-                      <td className="px-4 py-3 text-emerald-450 font-semibold">{Number(req.amount).toLocaleString('vi-VN')} VND</td>
-                      <td className="px-4 py-3 truncate max-w-[100px]">{req.bankName}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${
-                          req.status === 'PENDING' ? 'bg-amber-950/40 text-amber-300 border-amber-800/40' :
-                          req.status === 'APPROVED' || req.status === 'PAID' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                          'bg-red-950/40 text-red-300 border-red-850/40'
-                        }`}>
-                          {req.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
+      {/* SECTION 5: Quick Management Console Cards */}
+      <QuickActionsGrid />
     </div>
   );
 }

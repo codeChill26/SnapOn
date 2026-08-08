@@ -217,15 +217,15 @@ export default function BannersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title */}
+      {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">Manage Banners</h2>
-          <p className="text-zinc-400 mt-1">Configure layout carousel banners and active promotions.</p>
+          <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Manage Banners</h2>
+          <p className="text-[#71717A] text-sm mt-1 font-medium">Configure layout carousel banners and active promotions.</p>
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/10 self-start"
+          className="bg-[#312F2C] hover:bg-[#18181B] text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-md self-start"
         >
           <Plus className="h-4 w-4" />
           <span>Create Banner</span>
@@ -233,10 +233,10 @@ export default function BannersPage() {
       </div>
 
       {/* Filters Card */}
-      <Card className="flex flex-col sm:flex-row gap-4 items-center">
+      <Card className="flex flex-col sm:flex-row gap-4 items-center bg-white border-[#E4E4E7] shadow-sm">
         {/* Search */}
         <div className="relative w-full sm:w-80">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">
+          <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#71717A]">
             <Search className="h-4 w-4" />
           </span>
           <input
@@ -244,59 +244,59 @@ export default function BannersPage() {
             placeholder="Search banner title or code..."
             value={search}
             onChange={handleSearchChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 pl-9 pr-4 text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 pl-9 pr-4 text-[#18181B] text-sm placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all font-medium"
           />
         </div>
       </Card>
 
-      {/* Data Table */}
-      <Card className="overflow-hidden">
+      {/* Data Table Card */}
+      <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-zinc-450">
-            <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+          <table className="w-full text-left text-sm text-[#71717A]">
+            <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
               <tr>
-                <th className="px-6 py-3.5 font-semibold">Banner Info</th>
-                <th className="px-6 py-3.5 font-semibold">Placement</th>
-                <th className="px-6 py-3.5 font-semibold text-center">Display Order</th>
-                <th className="px-6 py-3.5 font-semibold">Linked Category</th>
-                <th className="px-6 py-3.5 font-semibold text-center">Status</th>
-                <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
+                <th className="px-6 py-3.5">Banner Info</th>
+                <th className="px-6 py-3.5">Placement</th>
+                <th className="px-6 py-3.5 text-center">Display Order</th>
+                <th className="px-6 py-3.5">Linked Category</th>
+                <th className="px-6 py-3.5 text-center">Status</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900 text-zinc-300">
+            <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-zinc-500">Loading banners...</td>
+                  <td colSpan={6} className="px-6 py-10 text-center text-[#71717A] font-medium">Loading banners...</td>
                 </tr>
               ) : banners.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-zinc-500">No banners found matching search parameter.</td>
+                  <td colSpan={6} className="px-6 py-10 text-center text-[#71717A] font-medium">No banners found matching search parameter.</td>
                 </tr>
               ) : (
                 banners.map((b) => (
-                  <tr key={b.id} className="hover:bg-zinc-900/20 transition-colors">
+                  <tr key={b.id} className="hover:bg-[#FAFAFA] transition-colors">
                     <td className="px-6 py-4 flex items-center gap-3">
                       {/* Image Preview */}
-                      <div className="h-10 w-16 bg-zinc-900 border border-zinc-800 rounded overflow-hidden relative shrink-0">
+                      <div className="h-10 w-16 bg-[#F4F4F5] border border-[#E4E4E7] rounded overflow-hidden relative shrink-0">
                         {b.image_url ? (
                           <img src={b.image_url} alt={b.title} className="object-cover w-full h-full" />
                         ) : (
-                          <div className="flex items-center justify-center w-full h-full text-zinc-500"><ImageIcon className="h-4 w-4" /></div>
+                          <div className="flex items-center justify-center w-full h-full text-[#71717A]"><ImageIcon className="h-4 w-4" /></div>
                         )}
                       </div>
                       <div>
-                        <div className="font-semibold text-white truncate max-w-[150px]">{b.title}</div>
-                        <div className="text-[10px] text-zinc-500 font-mono truncate max-w-[120px] mt-0.5" title={b.code}>
+                        <div className="font-bold text-[#18181B] truncate max-w-[150px]">{b.title}</div>
+                        <div className="text-[10px] text-[#71717A] font-mono truncate max-w-[120px] mt-0.5" title={b.code}>
                           Code: {b.code}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-xs bg-zinc-900 px-2.5 py-1 rounded text-zinc-400 border border-zinc-800 uppercase">
+                      <span className="text-xs bg-[#312F2C] text-white font-bold px-2.5 py-1 rounded uppercase shadow-2xs">
                         {b.placement}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center font-bold text-white">{b.display_order}</td>
+                    <td className="px-6 py-4 text-center font-extrabold text-[#18181B]">{b.display_order}</td>
                     <td className="px-6 py-4">
                       <span className="text-xs text-indigo-400 font-semibold">{b.categories?.name || 'N/A'}</span>
                     </td>
