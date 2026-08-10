@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 /** Look up a user by their database UUID */
 async function findUserById(userId) {
   const result = await pool.query(
-    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at FROM users WHERE id = $1',
+    'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, bank_name, bank_account_number, created_at FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] || null;
@@ -41,6 +41,8 @@ function attachUser(req, user, res, next) {
     bio: user.bio || '',
     headline: user.headline || '',
     skills: skillsArr,
+    bankName: user.bank_name || user.bankName || '',
+    bankAccountNumber: user.bank_account_number || user.bankAccountNumber || '',
     createdAt: user.created_at || user.createdAt,
   };
 
@@ -133,7 +135,11 @@ const authenticate = async (req, res, next) => {
     try {
       // 1. Verify custom app JWT
       const decoded = jwt.verify(token, getJwtAccessSecret());
-      return attachUser(req, decoded, res, next);
+      const dbUser = await findUserById(decoded.id);
+      if (!dbUser) {
+        return error(res, 'User not found.', 404);
+      }
+      return attachUser(req, dbUser, res, next);
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
         return error(res, 'Token expired. Please refresh token.', 401);
@@ -251,7 +257,10 @@ const authenticateOptional = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, getJwtAccessSecret());
-    attachUser(req, decoded, res, () => {});
+    const dbUser = await findUserById(decoded.id);
+    if (dbUser) {
+      attachUser(req, dbUser, res, () => {});
+    }
     return next();
   } catch (err) {
     try {

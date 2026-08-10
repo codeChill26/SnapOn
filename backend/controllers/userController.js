@@ -59,7 +59,9 @@ exports.searchUser = async (req, res, next) => {
 
 // PUT /api/users/profile
 exports.updateProfile = async (req, res, next) => {
-  const { fullName, phone, avatarUrl, bio, headline, skills, coverUrl } = req.body;
+  const { fullName, phone, avatarUrl, bio, headline, skills, coverUrl, bankName, bank_name, bankAccountNumber, bank_account_number } = req.body;
+  const targetBankName = bankName !== undefined ? bankName : bank_name;
+  const targetBankAccountNumber = bankAccountNumber !== undefined ? bankAccountNumber : bank_account_number;
   console.log('Profile update request:', { body: req.body, userId: req.user.id });
   try {
     const skillsJson = skills !== undefined ? (Array.isArray(skills) ? JSON.stringify(skills) : skills) : null;
@@ -71,6 +73,8 @@ exports.updateProfile = async (req, res, next) => {
       headline !== undefined ? headline : null,
       skillsJson,
       coverUrl !== undefined ? coverUrl : null,
+      targetBankName !== undefined ? targetBankName : null,
+      targetBankAccountNumber !== undefined ? targetBankAccountNumber : null,
       req.user.id
     ];
     console.log('Profile update SQL params:', params);
@@ -82,9 +86,11 @@ exports.updateProfile = async (req, res, next) => {
            bio = COALESCE($4, bio),
            headline = COALESCE($5, headline),
            skills = COALESCE($6::jsonb, skills),
-           cover_url = COALESCE($7, cover_url)
-       WHERE id = $8
-       RETURNING id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at`,
+           cover_url = COALESCE($7, cover_url),
+           bank_name = COALESCE($8, bank_name),
+           bank_account_number = COALESCE($9, bank_account_number)
+       WHERE id = $10
+       RETURNING id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, bank_name, bank_account_number, created_at`,
       params
     );
     console.log('Profile update SQL result:', result.rows[0]);
@@ -121,6 +127,8 @@ exports.updateProfile = async (req, res, next) => {
       bio: updatedUser.bio || '',
       headline: updatedUser.headline || '',
       skills: skillsArray,
+      bankName: updatedUser.bank_name || '',
+      bankAccountNumber: updatedUser.bank_account_number || '',
       createdAt: updatedUser.created_at,
     };
 

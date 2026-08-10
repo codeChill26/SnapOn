@@ -19,6 +19,8 @@ interface HomeMarketplaceHeaderProps {
   selectedCategoryName: string | undefined;
   onCategoryPress: () => void;
   onSavedPress?: () => void;
+  onNotificationPress?: () => void;
+  unreadCount?: number;
 }
 
 export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React.memo(({
@@ -26,6 +28,8 @@ export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React
   selectedCategoryName,
   onCategoryPress,
   onSavedPress,
+  onNotificationPress,
+  unreadCount = 0,
 }) => {
   const { mascotSm, isTablet } = useScreenSize();
 
@@ -65,15 +69,37 @@ export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React
                 </View>
                 <Text style={styles.greetingText}>{greetingText}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.savedButton}
-                activeOpacity={0.82}
-                onPress={onSavedPress}
-                accessibilityRole="button"
-                accessibilityLabel="Xem công việc đã lưu"
-              >
-                <Ionicons name="bookmark" size={20} color="#FF6B35" />
-              </TouchableOpacity>
+
+              <View style={styles.headerButtonsRow}>
+                {/* Notification Bell Button */}
+                <TouchableOpacity
+                  style={styles.savedButton}
+                  activeOpacity={0.82}
+                  onPress={onNotificationPress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Xem thông báo"
+                >
+                  <Ionicons name="notifications" size={20} color="#FF6B35" />
+                  {unreadCount > 0 && (
+                    <View style={styles.badgeContainer}>
+                      <Text style={styles.badgeText}>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Bookmark Button */}
+                <TouchableOpacity
+                  style={styles.savedButton}
+                  activeOpacity={0.82}
+                  onPress={onSavedPress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Xem công việc đã lưu"
+                >
+                  <Ionicons name="bookmark" size={20} color="#FF6B35" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Tagline + Mascot row */}
@@ -186,6 +212,11 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
   },
+  headerButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   savedButton: {
     width: 42,
     height: 42,
@@ -198,6 +229,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 3,
+    position: 'relative',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   greetingText: {
     fontSize: 13,

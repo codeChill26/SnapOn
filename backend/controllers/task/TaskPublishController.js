@@ -346,22 +346,41 @@ const TaskPublishController = {
         return error(res, 'Field (category_id) is required.', 400);
       }
 
-      // Support slug-to-UUID lookup if category_id is a slug
+      // Support slug/ID-to-UUID lookup if category_id is not a valid UUID
+      const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
       let finalCategoryId = category_id;
-      if (category_id && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(category_id)) {
-        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1', [category_id]);
+      if (category_id && !uuidRegex.test(category_id)) {
+        const catRes = await pool.query('SELECT id FROM categories WHERE slug = $1 OR id::text = $2 LIMIT 1', [category_id, String(category_id)]);
         if (catRes.rows[0]) {
           finalCategoryId = catRes.rows[0].id;
         } else {
-          // If category slug does not exist in DB yet, create it on the fly
-          const newCat = await pool.query('INSERT INTO categories (id, name, slug) VALUES (gen_random_uuid(), $1, $2) RETURNING id', [category_id, category_id]);
-          finalCategoryId = newCat.rows[0].id;
+          const firstCat = await pool.query('SELECT id FROM categories LIMIT 1');
+          if (firstCat.rows[0]) {
+            finalCategoryId = firstCat.rows[0].id;
+          } else {
+            const newCat = await pool.query('INSERT INTO categories (id, name, slug) VALUES (gen_random_uuid(), $1, $2) RETURNING id', ['Chung', 'general-' + Date.now()]);
+            finalCategoryId = newCat.rows[0].id;
+          }
+        }
+      }
+
+      // Safe skill_ids resolution
+      let finalSkillIds = [];
+      if (Array.isArray(skill_ids) && skill_ids.length > 0) {
+        for (const item of skill_ids) {
+          if (!item) continue;
+          if (uuidRegex.test(item)) {
+            const sRes = await pool.query('SELECT id FROM skills WHERE id = $1', [item]);
+            if (sRes.rows[0]) finalSkillIds.push(sRes.rows[0].id);
+          } else {
+            const sRes = await pool.query('SELECT id FROM skills WHERE slug = $1 OR id::text = $2 OR name ILIKE $3 LIMIT 1', [item, String(item), `%${item}%`]);
+            if (sRes.rows[0]) finalSkillIds.push(sRes.rows[0].id);
+          }
         }
       }
 
       // Auto-assign skill_ids if missing
-      let finalSkillIds = skill_ids;
-      if (!finalSkillIds || !Array.isArray(finalSkillIds) || finalSkillIds.length === 0) {
+      if (finalSkillIds.length === 0) {
         const skillRes = await pool.query('SELECT id FROM skills WHERE category_id = $1 LIMIT 1', [finalCategoryId]);
         if (skillRes.rows[0]) {
           finalSkillIds = [skillRes.rows[0].id];
@@ -378,19 +397,6 @@ const TaskPublishController = {
 
       const finalPhone = contact_phone && contact_phone.trim().length > 0 ? contact_phone : (req.user?.phone || '0900000000');
       const finalStartDate = start_date ? start_date : new Date().toISOString();
-
-      // Validate that skill_ids belong to the finalCategoryId
-      if (skill_ids && skill_ids.length > 0) {
-        const skillsQuery = await pool.query(
-          'SELECT category_id FROM skills WHERE id = ANY($1::uuid[])',
-          [skill_ids]
-        );
-        for (const skill of skillsQuery.rows) {
-          if (skill.category_id !== finalCategoryId) {
-            return error(res, 'One or more subcategories do not belong to the selected field.', 400);
-          }
-        }
-      }
 
       // Clean hashtags
       const cleanHashtags = (hashtags || []).map(h => h.replace(/^#+/, '').trim()).filter(h => h.length > 0);
@@ -449,7 +455,7 @@ const TaskPublishController = {
       return success(res, fullTask, 'Task created successfully.', 201);
     } catch (err) {
       console.error('Create task error:', err);
-      return error(res, 'Failed to create task.', 500);
+      return error(res, err.message || 'Failed to create task.', 500);
     }
   },
 
@@ -468,7 +474,21 @@ const TaskPublishController = {
         return error(res, permCheck.message, permCheck.status);
       }
 
-      // 2. Validate input
+      if (task.status === 'COMPLETED') {
+        return error(res, 'Không thể chỉnh sửa bài đăng đã hoàn thành.', 400);
+      }
+
+      // 2. Check if task has any applicants
+      const appCheck = await pool.query(
+        'SELECT COUNT(*) as count FROM task_applications WHERE task_id = $1',
+        [id]
+      );
+      const applicantCount = parseInt(appCheck.rows[0].count, 10);
+      if (applicantCount > 0) {
+        return error(res, 'Không thể chỉnh sửa bài đăng đã có người ứng tuyển.', 400);
+      }
+
+      // 3. Validate input
       const validation = await validateUpdateInput(req.body, task);
       if (!validation.isValid) {
         return error(res, validation.message, validation.status);
@@ -476,18 +496,18 @@ const TaskPublishController = {
 
       const { finalCategoryId } = validation;
 
-      // 3. Apply updates and write to Database
+      // 4. Apply updates and write to Database
       const updatePayload = applyTaskUpdates(req.body, task, finalCategoryId);
       await updateDatabase(id, updatePayload);
 
-      // 4. Invalidate Cache
+      // 5. Invalidate Cache
       await invalidateTaskCache(id, finalCategoryId);
 
-      // 5. Handle Notifications
+      // 6. Handle Notifications
       const fullUpdatedTask = await taskModel.findById(id);
       sendTaskUpdateNotification(fullUpdatedTask);
 
-      // 6. Build and send response
+      // 7. Build and send response
       return success(res, fullUpdatedTask, 'Task updated successfully.');
     } catch (err) {
       console.error('Update task error:', err);
@@ -515,9 +535,23 @@ const TaskPublishController = {
         return error(res, 'You can only delete your own tasks.', 403);
       }
 
+      if (task.status === 'COMPLETED') {
+        return error(res, 'Không thể xóa bài đăng đã hoàn thành.', 400);
+      }
+
+      // 3. Check if task has any applicants
+      const appCheck = await pool.query(
+        'SELECT COUNT(*) as count FROM task_applications WHERE task_id = $1',
+        [id]
+      );
+      const applicantCount = parseInt(appCheck.rows[0].count, 10);
+      if (applicantCount > 0) {
+        return error(res, 'Không thể xóa bài đăng đã có người ứng tuyển.', 400);
+      }
+
       const categoryId = task.category_id;
 
-      // 3. Perform delete
+      // 4. Perform delete
       await taskModel.delete(id);
 
       // Clear task cache

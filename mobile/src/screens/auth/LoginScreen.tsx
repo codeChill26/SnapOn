@@ -84,6 +84,7 @@ export const LoginScreen: React.FC = () => {
         await SecureStore.deleteItemAsync('snapon_remembered_password');
       }
     } catch (error: any) {
+      console.error('Login error detail:', error);
       if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
         setErrors({ email: ' ', password: 'Email hoặc mật khẩu không chính xác' });
       } else if (error.code === 'auth/invalid-email') {
@@ -91,7 +92,8 @@ export const LoginScreen: React.FC = () => {
       } else if (error.code === 'auth/too-many-requests') {
         Alert.alert('Đăng nhập thất bại', 'Quá nhiều lần thử. Vui lòng thử lại sau ít phút.');
       } else {
-        Alert.alert('Đăng nhập thất bại', error.message);
+        const message = error.response?.data?.message || error.message || 'Đăng nhập không thành công. Vui lòng thử lại.';
+        Alert.alert('Đăng nhập thất bại', message);
       }
     } finally {
       setLoading(false);

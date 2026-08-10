@@ -23,6 +23,7 @@ var chatRoutes = require('./routes/chatRoutes');
 var bannerRoutes = require('./routes/bannerRoutes');
 var categoryRoutes = require('./routes/categoryRoutes');
 var assignmentRoutes = require('./routes/assignmentRoutes');
+var notificationRoutes = require('./routes/notificationRoutes');
 var adminRoutes = require('./routes/adminRoutes');
 
 
@@ -207,6 +208,7 @@ app.use('/api', categoryRoutes);
 app.use("/api/users", usersRouter);
 app.use("/api/auth", authRouter);
 app.use('/api/assignments', assignmentRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
 

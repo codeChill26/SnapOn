@@ -3,6 +3,7 @@ const taskModel = require('../models/taskModel');
 const walletService = require('../services/walletService');
 const taskerProfileModel = require('../models/taskerProfileModel');
 const assignedTaskModel = require('../models/assignedTaskModel');
+const notificationModel = require('../models/notificationModel');
 const escrowService = require('../services/escrowService');
 const pool = require('../config/db');
 const { success, error, paginated } = require('../utils/responseHandler');
@@ -111,15 +112,31 @@ const applicationController = {
         return { application: applicationVal, task: taskVal };
       });
 
-      // Broadcast new application via Socket.io to the task poster (outside transaction)
-      const io = req.app.get('io');
-      if (io && task) {
-        io.to(task.poster_id).emit('application_joined', {
-          taskId,
-          taskTitle: task.title,
-          taskerId,
-          taskerName: req.user.fullName,
-        });
+      // Create notification in DB for the task poster
+      if (task && task.poster_id) {
+        try {
+          const notif = await notificationModel.create({
+            userId: task.poster_id,
+            title: 'Ứng viên mới ứng tuyển',
+            content: `${req.user.fullName || 'Một ứng viên'} vừa ứng tuyển vào bài đăng "${task.title}". Hãy vào kiểm tra ngay!`,
+            type: 'NEW_APPLICATION',
+            taskId: taskId,
+          });
+
+          // Broadcast notification via Socket.io to the task poster
+          const io = req.app.get('io');
+          if (io) {
+            io.to(task.poster_id).emit('new_notification', notif);
+            io.to(task.poster_id).emit('application_joined', {
+              taskId,
+              taskTitle: task.title,
+              taskerId,
+              taskerName: req.user.fullName,
+            });
+          }
+        } catch (notifErr) {
+          console.error('Failed to create notification for application:', notifErr);
+        }
       }
 
       return success(res, application, 'Application submitted successfully.', 201);

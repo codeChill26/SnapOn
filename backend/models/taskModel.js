@@ -155,7 +155,31 @@ const taskModel = {
         message: assignmentResult.rows[0].final_message,
       };
     } else {
-      task.assigned_worker = null;
+      const appFallback = await pool.query(
+        `SELECT ta.id AS application_id, ta.status AS app_status,
+                u.id AS worker_id, u.full_name AS worker_name, u.avatar_url AS worker_avatar, u.phone AS worker_phone,
+                ta.bid_price AS final_bid_price, ta.estimated_time AS final_estimated_time, ta.message AS final_message
+         FROM task_applications ta
+         JOIN users u ON ta.tasker_id = u.id
+         WHERE ta.task_id = $1 AND ta.status::text IN ('ACCEPTED', 'COMPLETED')
+         LIMIT 1`,
+        [id]
+      );
+      if (appFallback.rows.length > 0) {
+        task.assigned_worker = {
+          id: appFallback.rows[0].worker_id,
+          name: appFallback.rows[0].worker_name,
+          avatar_url: appFallback.rows[0].worker_avatar,
+          phone: appFallback.rows[0].worker_phone,
+          assignment_id: appFallback.rows[0].application_id,
+          status: 'COMPLETED',
+          bid_price: appFallback.rows[0].final_bid_price ? parseFloat(appFallback.rows[0].final_bid_price) : null,
+          estimated_time: appFallback.rows[0].final_estimated_time,
+          message: appFallback.rows[0].final_message,
+        };
+      } else {
+        task.assigned_worker = null;
+      }
     }
 
     return task;

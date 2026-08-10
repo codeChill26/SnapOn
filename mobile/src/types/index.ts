@@ -22,6 +22,8 @@ export interface User {
   bio?: string;
   headline?: string;
   skills?: string[];
+  bankName?: string;
+  bankAccountNumber?: string;
 }
 
 export interface PublicProfile {

@@ -403,6 +403,19 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
         const taskData = await taskService.getTaskById(editingTaskId);
         if (!active) return;
 
+        if (taskData.status === 'COMPLETED') {
+          showToast.error('Không thể chỉnh sửa', 'Bài đăng đã hoàn thành nên không thể chỉnh sửa.');
+          navigation.goBack();
+          return;
+        }
+
+        const applicantCount = (taskData as any).applicantCount || ((taskData as any).applications ? (taskData as any).applications.length : 0);
+        if (applicantCount > 0) {
+          showToast.error('Không thể chỉnh sửa', 'Bài đăng đã có người ứng tuyển nên không thể chỉnh sửa.');
+          navigation.goBack();
+          return;
+        }
+
         setEditingTask(taskData);
         dispatch({
           type: 'SET_FIELDS',
@@ -614,9 +627,10 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
           ? await taskService.updateTask(editingTaskId, payload)
           : await taskService.createTask(payload);
 
-      // Clear draft on successful submit
+      // Clear draft & reset form state on successful submit
       const key = formState.postType === 'RECRUITMENT' ? '@snapon/draft_recruitment' : '@snapon/draft_service_offer';
       await AsyncStorage.removeItem(key);
+      dispatch({ type: 'RESET_FORM', initialPhone: user?.phone });
 
       if (isEditMode) {
         DeviceEventEmitter.emit('task_updated', savedTask);

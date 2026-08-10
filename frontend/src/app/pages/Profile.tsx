@@ -449,14 +449,16 @@ function WorkerProfile() {
   const [bankModalOpen, setBankModalOpen] = useState(false);
   const [bio,     setBio]     = useState((currentUser as any).bio || '');
 
-  const handleSaveBankName = (val: string) => {
+  const handleSaveBankName = async (val: string) => {
     setBankName(val);
     localStorage.setItem('userBankName', val.trim());
+    await updateProfile({ bankName: val.trim() } as any).catch(() => {});
   };
 
-  const handleSaveBankAccountNumber = (val: string) => {
+  const handleSaveBankAccountNumber = async (val: string) => {
     setBankAccountNumber(val);
     localStorage.setItem('userBankAccountNumber', val.trim());
+    await updateProfile({ bankAccountNumber: val.trim() } as any).catch(() => {});
   };
   const [editBio, setEditBio] = useState(false);
   const [draftBio, setDraftBio] = useState(bio);
@@ -470,6 +472,14 @@ function WorkerProfile() {
     setEmail(currentUser.email || '');
     setBio(currentUser.bio || '');
     setSkills(currentUser.skills || []);
+    if ((currentUser as any).bankName) {
+      setBankName((currentUser as any).bankName);
+      localStorage.setItem('userBankName', (currentUser as any).bankName);
+    }
+    if ((currentUser as any).bankAccountNumber) {
+      setBankAccountNumber((currentUser as any).bankAccountNumber);
+      localStorage.setItem('userBankAccountNumber', (currentUser as any).bankAccountNumber);
+    }
   }, [currentUser]);
 
   const handleSaveBio = async () => {

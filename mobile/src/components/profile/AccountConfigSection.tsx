@@ -11,9 +11,10 @@ interface AccountConfigSectionProps {
   walletBalance: number;
   onEditProfile: () => void;
   onVerifyAccount: () => void;
-  onWalletPress: () => void;
-  onTransactionHistory: () => void;
+  onWalletPress?: () => void;
   onTopUp: () => void;
+  onWithdraw: () => void;
+  onTransactionHistory: () => void;
   onPostedTasks: () => void;
   onMyApplications: () => void;
   onNotificationPress: () => void;
@@ -29,8 +30,9 @@ export const AccountConfigSection: React.FC<AccountConfigSectionProps> = ({
   onEditProfile,
   onVerifyAccount,
   onWalletPress,
-  onTransactionHistory,
   onTopUp,
+  onWithdraw,
+  onTransactionHistory,
   onPostedTasks,
   onMyApplications,
   onNotificationPress,
@@ -105,11 +107,11 @@ export const AccountConfigSection: React.FC<AccountConfigSectionProps> = ({
       <View style={styles.settingsGroup}>
         <Text style={styles.groupHeader}>Ví & Thanh toán</Text>
         <Card style={styles.groupCard} padded={false}>
-          <SettingsRow icon="wallet-outline" label="Chi tiết ví & Số dư" value={formatCurrency(walletBalance)} onPress={onWalletPress} />
+          <SettingsRow icon="add-circle-outline" label="Nạp tiền vào ví" value={formatCurrency(walletBalance)} onPress={onTopUp} />
+          <View style={styles.rowDivider} />
+          <SettingsRow icon="cash-outline" label="Rút tiền từ ví" onPress={onWithdraw} />
           <View style={styles.rowDivider} />
           <SettingsRow icon="list-outline" label="Lịch sử giao dịch ví" onPress={onTransactionHistory} />
-          <View style={styles.rowDivider} />
-          <SettingsRow icon="add-circle-outline" label="Nạp tiền vào ví" onPress={onTopUp} />
         </Card>
       </View>
 
