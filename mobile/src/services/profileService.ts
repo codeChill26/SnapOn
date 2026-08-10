@@ -29,10 +29,24 @@ export interface ProfileReviewsResponse {
   };
 }
 
+const profileCache = new Map<string, { data: ApiResponse<PublicProfile>; timestamp: number }>();
+
 export const profileService = {
   async getPublicProfile(userId: string): Promise<ApiResponse<PublicProfile>> {
+    const cached = profileCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < 10000) {
+      return cached.data;
+    }
     const response = await api.get<ApiResponse<PublicProfile>>(`/users/${userId}/profile`);
+    profileCache.set(userId, { data: response.data, timestamp: Date.now() });
     return response.data;
+  },
+
+  prefetchPublicProfile(userId: string): void {
+    if (profileCache.size > 50) {
+      profileCache.clear();
+    }
+    void this.getPublicProfile(userId).catch(() => {});
   },
 
   async getPublicPosts(

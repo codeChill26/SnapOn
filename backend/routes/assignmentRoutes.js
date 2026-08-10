@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/auth');
 const assignmentController = require('../controllers/assignmentController');
+const generalValidator = require('../validators/generalValidator');
+const validate = require('../middleware/validate');
 
 /**
  * Assignment Management Routes
@@ -12,6 +14,8 @@ const assignmentController = require('../controllers/assignmentController');
 router.patch(
   '/:id/accept',
   authenticate,
+  generalValidator.idParam,
+  validate,
   assignmentController.acceptAssignment
 );
 
@@ -19,6 +23,8 @@ router.patch(
 router.patch(
   '/:id/decline',
   authenticate,
+  generalValidator.idParam,
+  validate,
   assignmentController.declineAssignment
 );
 
@@ -33,6 +39,8 @@ router.patch(
 router.patch(
   '/:id/complete',
   authenticate,
+  generalValidator.idParam,
+  validate,
   assignmentController.completeAssignment
 );
 
@@ -40,6 +48,8 @@ router.patch(
 router.patch(
   '/:id/cancel',
   authenticate,
+  generalValidator.idParam,
+  validate,
   assignmentController.cancelAssignment
 );
 

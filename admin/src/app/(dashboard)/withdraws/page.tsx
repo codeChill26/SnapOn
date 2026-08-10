@@ -49,11 +49,9 @@ export default function WithdrawsPage() {
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; status: 'APPROVED' | 'REJECTED'; amount: string; name: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchWithdraws = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
+  const fetchWithdraws = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const params: Record<string, string> = {
         page: page.toString(),
@@ -69,20 +67,14 @@ export default function WithdrawsPage() {
       }
     } catch (err: any) {
       console.error(err);
-      if (!silent) setError(err.message || 'Failed to fetch withdrawal requests.');
+      setError(err.message || 'Failed to fetch withdrawal requests.');
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   }, [page, limit, statusFilter]);
 
   useEffect(() => {
     fetchWithdraws();
-  }, [fetchWithdraws]);
-
-  // Near real-time: silently refresh the visible list every 15s.
-  useEffect(() => {
-    const id = setInterval(() => fetchWithdraws(true), 15000);
-    return () => clearInterval(id);
   }, [fetchWithdraws]);
 
   const handleStatusFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -136,20 +128,20 @@ export default function WithdrawsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title */}
+      {/* Title Header */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-white">Withdrawal Payouts</h2>
-        <p className="text-zinc-400 mt-1">Audit, approve, and resolve user payout balance withdrawals.</p>
+        <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Withdrawal Payouts</h2>
+        <p className="text-[#71717A] text-sm mt-1 font-medium">Audit, approve, and resolve user payout balance withdrawals.</p>
       </div>
 
       {/* Filters Card */}
-      <Card className="flex flex-col sm:flex-row gap-4 items-center">
+      <Card className="flex flex-col sm:flex-row gap-4 items-center bg-white border-[#E4E4E7] shadow-sm">
         {/* Status Filter */}
         <div className="w-full sm:w-48">
           <select
             value={statusFilter}
             onChange={handleStatusFilterChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 px-3 text-[#18181B] text-sm focus:outline-none focus:border-[#312F2C] transition-all font-semibold"
           >
             <option value="">All Statuses</option>
             <option value="PENDING">Pending</option>
@@ -160,32 +152,32 @@ export default function WithdrawsPage() {
         </div>
       </Card>
 
-      {/* Data Table */}
-      <Card className="overflow-hidden">
+      {/* Data Table Card */}
+      <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-zinc-400">
-            <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+          <table className="w-full text-left text-sm text-[#71717A]">
+            <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
               <tr>
-                <th className="px-6 py-3.5 font-semibold">User details</th>
-                <th className="px-6 py-3.5 font-semibold">Withdrawal Amount</th>
-                <th className="px-6 py-3.5 font-semibold">Bank Destination</th>
-                <th className="px-6 py-3.5 font-semibold text-center">Status</th>
-                <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
+                <th className="px-6 py-3.5">User details</th>
+                <th className="px-6 py-3.5">Withdrawal Amount</th>
+                <th className="px-6 py-3.5">Bank Destination</th>
+                <th className="px-6 py-3.5 text-center">Status</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900 text-zinc-300">
+            <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">Loading withdrawals...</td>
+                  <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">Loading withdrawals...</td>
                 </tr>
               ) : error ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-10 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <p className="text-red-400">{error}</p>
+                      <p className="text-rose-600 font-bold">{error}</p>
                       <button
-                        onClick={() => fetchWithdraws()}
-                        className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 text-zinc-200 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
+                        onClick={fetchWithdraws}
+                        className="px-4 py-2 bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer text-xs font-bold"
                       >
                         Retry Load
                       </button>
@@ -194,30 +186,30 @@ export default function WithdrawsPage() {
                 </tr>
               ) : withdraws.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">No payout requests found.</td>
+                  <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">No payout requests found.</td>
                 </tr>
               ) : (
                 withdraws.map((req) => (
-                  <tr key={req.id} className="hover:bg-zinc-900/20 transition-colors">
+                  <tr key={req.id} className="hover:bg-[#FAFAFA] transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-white">{req.user.fullName}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">{req.user.email}</div>
+                      <div className="font-bold text-[#18181B]">{req.user.fullName}</div>
+                      <div className="text-xs text-[#71717A] font-mono mt-0.5">{req.user.email}</div>
                     </td>
-                    <td className="px-6 py-4 text-emerald-400 font-semibold text-base">
+                    <td className="px-6 py-4 text-emerald-700 font-extrabold text-base">
                       {Number(req.amount).toLocaleString('vi-VN')} VND
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-zinc-300 flex items-center gap-1.5">
-                        <Building className="h-4 w-4 text-zinc-500" />
+                      <div className="font-semibold text-[#18181B] flex items-center gap-1.5">
+                        <Building className="h-4 w-4 text-[#71717A]" />
                         <span>{req.bankName}</span>
                       </div>
-                      <div className="text-xs text-zinc-500 font-mono pl-5 mt-0.5">Acc: {req.bankAccountNumber}</div>
+                      <div className="text-xs text-[#71717A] font-mono pl-5 mt-0.5">Acc: {req.bankAccountNumber}</div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                        req.status === 'PENDING' ? 'bg-amber-950/40 text-amber-300 border-amber-800/40' :
-                        req.status === 'APPROVED' || req.status === 'PAID' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                        'bg-red-950/40 text-red-300 border-red-850/40'
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold border ${
+                        req.status === 'PENDING' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                        req.status === 'APPROVED' || req.status === 'PAID' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                        'bg-rose-50 text-rose-800 border-rose-200'
                       }`}>
                         {req.status}
                       </span>
@@ -225,7 +217,7 @@ export default function WithdrawsPage() {
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => handleViewDetails(req.id)}
-                        className="rounded-lg p-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                        className="rounded-xl p-2 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer shadow-2xs"
                         title="View details & Resolve"
                       >
                         <Eye className="h-4 w-4" />
@@ -240,23 +232,23 @@ export default function WithdrawsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-zinc-900 px-6 py-4">
-            <div className="text-xs text-zinc-550">
-              Showing page <span className="font-semibold text-white">{page}</span> of{' '}
-              <span className="font-semibold text-white">{totalPages}</span> ({total} requests)
+          <div className="flex items-center justify-between border-t border-[#E4E4E7] px-6 py-4 bg-[#F4F4F5]">
+            <div className="text-xs text-[#71717A] font-medium">
+              Showing page <span className="font-bold text-[#18181B]">{page}</span> of{' '}
+              <span className="font-bold text-[#18181B]">{totalPages}</span> ({total} requests)
             </div>
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="rounded-xl border border-[#E4E4E7] bg-white p-2 text-[#18181B] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="rounded-xl border border-[#E4E4E7] bg-white p-2 text-[#18181B] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

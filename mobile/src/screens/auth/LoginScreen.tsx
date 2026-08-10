@@ -64,48 +64,8 @@ export const LoginScreen: React.FC = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleForgotPassword = async () => {
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setErrors(prev => ({ ...prev, email: 'Vui lòng nhập địa chỉ email để khôi phục mật khẩu' }));
-      Alert.alert('Nhập email', 'Vui lòng nhập địa chỉ email của bạn vào ô Email để hệ thống gửi liên kết đặt lại mật khẩu.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setErrors(prev => ({ ...prev, email: 'Địa chỉ email không hợp lệ' }));
-      Alert.alert('Email không hợp lệ', 'Vui lòng nhập địa chỉ email hợp lệ (VD: example@gmail.com).');
-      return;
-    }
-
-    Alert.alert(
-      'Khôi phục mật khẩu',
-      `SnapOn sẽ gửi liên kết đặt lại mật khẩu tới hòm thư:\n${cleanEmail}\n\nBạn có muốn tiếp tục không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Gửi yêu cầu',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await sendPasswordResetEmail(auth, cleanEmail);
-              Alert.alert(
-                'Đã gửi email khôi phục',
-                'Liên kết đặt lại mật khẩu đã được gửi thành công. Vui lòng kiểm tra hộp thư đến (và cả mục Thư rác/Spam) của bạn để đặt lại mật khẩu mới.'
-              );
-            } catch (error: any) {
-              console.error('Send password reset email error:', error);
-              if (error.code === 'auth/user-not-found') {
-                Alert.alert('Thất bại', 'Email này chưa được đăng ký tài khoản trên hệ thống SnapOn.');
-              } else {
-                Alert.alert('Thất bại', 'Không thể gửi email khôi phục. Vui lòng thử lại sau.');
-              }
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
+  const handleForgotPassword = () => {
+    navigation.navigate('ForgotPassword');
   };
 
   const handleLogin = async () => {
@@ -124,6 +84,7 @@ export const LoginScreen: React.FC = () => {
         await SecureStore.deleteItemAsync('snapon_remembered_password');
       }
     } catch (error: any) {
+      console.error('Login error detail:', error);
       if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
         setErrors({ email: ' ', password: 'Email hoặc mật khẩu không chính xác' });
       } else if (error.code === 'auth/invalid-email') {
@@ -131,7 +92,8 @@ export const LoginScreen: React.FC = () => {
       } else if (error.code === 'auth/too-many-requests') {
         Alert.alert('Đăng nhập thất bại', 'Quá nhiều lần thử. Vui lòng thử lại sau ít phút.');
       } else {
-        Alert.alert('Đăng nhập thất bại', error.message);
+        const message = error.response?.data?.message || error.message || 'Đăng nhập không thành công. Vui lòng thử lại.';
+        Alert.alert('Đăng nhập thất bại', message);
       }
     } finally {
       setLoading(false);
@@ -152,23 +114,11 @@ export const LoginScreen: React.FC = () => {
       const uc          = await signInWithCredential(auth, credential);
       await login(await uc.user.getIdToken());
     } catch (error: any) {
-      if (error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry')) {
+      const isDebugAlert = error.message?.includes('RNGoogleSignin') || error.message?.includes('TurboModuleRegistry');
+      if (isDebugAlert && (__DEV__ || Config.DEBUG_LOGIN)) {
         Alert.alert(
           'Chế độ Phát triển (Expo Go)',
-          'Không tìm thấy module Google Native. Dùng tài khoản giả lập để test API?',
-          [
-            { text: 'Hủy', style: 'cancel' },
-            {
-              text: 'Đồng ý (Test)',
-              onPress: async () => {
-                try {
-                  await login('mock-firebase-token:developer-google@example.com');
-                } catch (e: any) {
-                  Alert.alert('Lỗi', e.message);
-                }
-              },
-            },
-          ]
+          'Đăng nhập Google Native yêu cầu chạy bằng Development Build thay vì Expo Go.'
         );
         return;
       }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { Colors } from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import Config from '../../constants/config';
@@ -62,6 +63,10 @@ export const UserAvatar: React.FC<UserAvatarProps> = React.memo(({
           <Image
             source={{ uri: resolvedUrl }}
             style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+            recyclingKey={resolvedUrl}
             onError={() => setImageError(true)}
           />
         ) : (

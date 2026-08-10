@@ -85,7 +85,7 @@ export const PostJobBasicInfo: React.FC<PostJobBasicInfoProps> = ({
             accessibilityLabel="Ô nhập địa điểm làm việc"
           />
           {validationErrors.address ? (
-            <Text style={styles.inlineErrorText}>{validationErrors.address}</Text>
+            <Text style={[styles.inlineErrorText, { color: theme.colors.status.error }]}>{validationErrors.address}</Text>
           ) : null}
         </View>
       </View>
@@ -114,7 +114,7 @@ export const PostJobBasicInfo: React.FC<PostJobBasicInfoProps> = ({
           accessibilityLabel="Ô nhập tiêu đề bài viết"
         />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-          <Text style={styles.inlineErrorText}>{validationErrors.title || ''}</Text>
+          <Text style={[styles.inlineErrorText, { color: theme.colors.status.error }]}>{validationErrors.title || ''}</Text>
           <Text style={[styles.counterText, { color: theme.colors.text.secondary }]}>{title.length}/100</Text>
         </View>
       </View>
@@ -147,7 +147,7 @@ export const PostJobBasicInfo: React.FC<PostJobBasicInfoProps> = ({
           accessibilityLabel="Mô tả công việc"
         />
         {validationErrors.description ? (
-          <Text style={styles.inlineErrorText}>{validationErrors.description}</Text>
+          <Text style={[styles.inlineErrorText, { color: theme.colors.status.error }]}>{validationErrors.description}</Text>
         ) : null}
       </View>
     </View>
@@ -206,7 +206,6 @@ const styles = StyleSheet.create({
   },
   inlineErrorText: {
     fontSize: 11,
-    color: '#EF4444',
   },
   textArea: {
     height: 120,

@@ -17,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
 import { applicationService } from '../../services/applicationService';
+import { taskService } from '../../services/taskService';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { PublicProfile, Task, TaskApplication } from '../../types';
 import { Ionicons } from '@expo/vector-icons';
@@ -213,6 +214,7 @@ export const ProfileScreen: React.FC = () => {
   }, [navigation, profileData]);
 
   const handlePostPress = useCallback((task: Task) => {
+    taskService.prefetchTaskDetail(task.id);
     navigation.navigate('JobDetail', { taskId: task.id });
   }, [navigation]);
 

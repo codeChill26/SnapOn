@@ -1,40 +1,32 @@
 const express = require('express');
 const router = express.Router();
-
-const verifyFirebaseToken = require('../middleware/auth');
 const rateLimiter = require('../middleware/rateLimiter');
-const authController = require('../controllers/authController');
-const { verifyEmail, resendVerification } = require('../controllers/auth');
+const verifyFirebaseToken = require('../middleware/auth');
+const authController = require('../controllers/auth');
+const authValidator = require('../validators/authValidator');
+const validate = require('../middleware/validate');
 
-// Dev endpoints guard — disabled in production
-function guardDevRoute(req, res, next) {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. Dev APIs are disabled in production environment.',
-    });
-  }
-  next();
-}
-
-// POST /api/auth/sync-user — Firebase login sync (upsert user + wallet)
+// Login/Sync Routes
 router.post('/sync-user', verifyFirebaseToken, authController.syncUser);
-
-// DEV MODE — bypasses Firebase entirely (blocked in production)
-router.post('/dev/login', rateLimiter('dev-login', 5, 60), guardDevRoute, authController.devLogin);
-router.post('/dev/register', rateLimiter('dev-register', 5, 60), guardDevRoute, authController.devRegister);
-
-// Phone OTP flow
-router.post('/send-otp', rateLimiter('send-otp', 3, 60), authController.sendOtp);
-router.post('/verify-otp', rateLimiter('verify-otp', 5, 60), authController.verifyOtp);
-
-// Session lifecycle
 router.post('/token-login', verifyFirebaseToken, authController.tokenLogin);
-router.post('/refresh', authController.refreshToken);
 router.post('/logout', authController.logout);
 
-// Email verification
-router.post('/verify-email', verifyEmail);
-router.post('/resend-verification', resendVerification);
+// OTP & Verification Routes
+router.post('/send-otp', rateLimiter('send-otp', 3, 60), authValidator.sendOtp, validate, authController.sendOtp);
+router.post('/verify-otp', rateLimiter('verify-otp', 5, 60), authValidator.verifyOtp, validate, authController.verifyOtp);
+router.post('/verify-email', authValidator.verifyEmail, validate, authController.verifyEmail);
+router.post('/resend-verification', authValidator.resendVerification, validate, authController.resendVerification);
+
+// Forgot Password Routes
+router.post('/forgot-password', authValidator.forgotPassword, validate, authController.forgotPassword);
+router.post('/verify-forgot-password-otp', authValidator.verifyForgotPasswordOtp, validate, authController.verifyForgotPasswordOtp);
+router.post('/reset-password', authValidator.resetPassword, validate, authController.resetPassword);
+
+// Token Refresh Routes
+router.post('/refresh', authValidator.refreshToken, validate, authController.refreshToken);
+
+// Profile / Account Deletion Routes
+router.post('/deletion-request/send-otp', rateLimiter('send-deletion-otp', 3, 60), authValidator.sendDeletionOtp, validate, authController.sendDeletionOtp);
+router.post('/deletion-request', authValidator.submitDeletionRequest, validate, authController.submitDeletionRequest);
 
 module.exports = router;

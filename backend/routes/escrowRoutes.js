@@ -4,6 +4,12 @@ const authenticate = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { param, query, body } = require('express-validator');
 const escrowController = require('../controllers/escrowController');
+const { ESCROW_STATUS } = require('../utils/constants');
+
+const validStatuses = [
+  ...Object.values(ESCROW_STATUS),
+  ...Object.values(ESCROW_STATUS).map((s) => s.toLowerCase()),
+];
 
 /**
  * Escrow Routes
@@ -35,10 +41,7 @@ router.get(
   authenticate,
   [
     query('role').optional().isIn(['all', 'poster', 'tasker']),
-    query('status').optional().isIn([
-      'holding', 'released', 'refunded', 'disputed',
-      'HOLDING', 'RELEASED', 'REFUNDED', 'DISPUTED', 'PENDING_PAYMENT', 'EXPIRED',
-    ]),
+    query('status').optional().isIn(validStatuses),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('cursor').optional().isUUID(),
   ],

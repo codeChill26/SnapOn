@@ -37,8 +37,8 @@ const pool =
 		host: url.hostname,
 		port: url.port ? Number(url.port) : 5432,
 		database: url.pathname.replace(/^\//, ''),
-		user: url.username,
-		password: url.password,
+		user: url.username ? decodeURIComponent(url.username) : undefined,
+		password: url.password ? decodeURIComponent(url.password.replace(/\+/g, '%2B')) : undefined,
 		ssl,
 		max: process.env.PG_POOL_MAX ? Number(process.env.PG_POOL_MAX) : undefined,
 	});

@@ -37,7 +37,11 @@ const escrowController = {
   async getMyEscrows(req, res) {
     try {
       const userId = req.user.id;
-      const { role, status, limit, cursor } = req.query;
+      let { role, status, limit, cursor } = req.query;
+
+      if (status) {
+        status = status.toUpperCase();
+      }
 
       const escrows = await escrowModel.listByUserId(userId, { role, status, limit, cursor });
 

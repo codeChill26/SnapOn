@@ -2,6 +2,7 @@
 
 const prisma = require('../db/prisma');
 const redis = require('../config/redis');
+const { success } = require('../utils/responseHandler');
 
 exports.getCategories = async (req, res, next) => {
   try {
@@ -12,10 +13,7 @@ exports.getCategories = async (req, res, next) => {
     if (cachedData) {
       try {
         const categories = JSON.parse(cachedData);
-        return res.json({
-          success: true,
-          data: categories,
-        });
+        return success(res, categories);
       } catch (parseErr) {
         // Fall back to database if JSON parsing fails
       }
@@ -56,10 +54,7 @@ exports.getCategories = async (req, res, next) => {
     // 3. Cache in Redis with 24 hours TTL (86400 seconds)
     await redis.set(cacheKey, JSON.stringify(structuredCategories), 86400).catch(() => {});
 
-    return res.json({
-      success: true,
-      data: structuredCategories,
-    });
+    return success(res, structuredCategories);
   } catch (err) {
     next(err);
   }

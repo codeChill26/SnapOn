@@ -14,6 +14,7 @@ import { formatCurrency } from '../../utils/format';
 import { getCategoryById, CATEGORIES } from '../../constants/categories';
 import { UserAvatar } from '../common/UserAvatar';
 import { HomeTheme } from './HomeTheme';
+import { profileService } from '../../services/profileService';
 
 interface HomeCompactJobCardProps {
   task: Task;
@@ -127,6 +128,9 @@ export const HomeCompactJobCard: React.FC<HomeCompactJobCardProps> = React.memo(
             style={styles.image}
             contentFit="cover"
             transition={200}
+            cachePolicy="memory-disk"
+            placeholder="#F1F5F9"
+            recyclingKey={firstImage}
             onError={() => setImageError(true)}
           />
         ) : (
@@ -204,6 +208,7 @@ export const HomeCompactJobCard: React.FC<HomeCompactJobCardProps> = React.memo(
             e.stopPropagation();
             const userId = task.posterId || task.poster?.id;
             if (userId) {
+              profileService.prefetchPublicProfile(userId);
               navigation.navigate('PublicProfile', { userId });
             }
           }}

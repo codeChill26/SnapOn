@@ -17,6 +17,8 @@ interface EditProfileModalProps {
   initialBio: string;
   initialHeadline: string;
   initialSkills: string[];
+  initialBankName?: string;
+  initialBankAccountNumber?: string;
   isSaving: boolean;
   isUploading: boolean;
   isUploadingCover?: boolean;
@@ -30,6 +32,8 @@ interface EditProfileModalProps {
     bio: string;
     headline: string;
     skills: string[];
+    bankName?: string;
+    bankAccountNumber?: string;
   }) => void;
 }
 
@@ -56,6 +60,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   initialBio,
   initialHeadline,
   initialSkills = [],
+  initialBankName = 'MB Bank',
+  initialBankAccountNumber = '',
   isSaving,
   isUploading,
   isUploadingCover = false,
@@ -69,6 +75,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [coverUrl, setCoverUrl] = useState(initialCoverUrl);
   const [bio, setBio] = useState(initialBio);
   const [headline, setHeadline] = useState(initialHeadline);
+  const [bankName, setBankName] = useState(initialBankName || 'MB Bank');
+  const [bankAccountNumber, setBankAccountNumber] = useState(initialBankAccountNumber || '');
   const [skillsText, setSkillsText] = useState('');
   const [skills, setSkills] = useState<string[]>(initialSkills);
   const [errors, setErrors] = useState<ProfileErrors>({});
@@ -82,11 +90,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setCoverUrl(initialCoverUrl);
       setBio(initialBio);
       setHeadline(initialHeadline);
+      setBankName(initialBankName || 'MB Bank');
+      setBankAccountNumber(initialBankAccountNumber || '');
       setSkills(initialSkills);
       setSkillsText('');
       setErrors({});
     }
-  }, [visible, initialName, initialPhone, initialAvatarUrl, initialCoverUrl, initialBio, initialHeadline, initialSkills]);
+  }, [visible, initialName, initialPhone, initialAvatarUrl, initialCoverUrl, initialBio, initialHeadline, initialSkills, initialBankName, initialBankAccountNumber]);
 
   // Sync avatarUrl/coverUrl when upload completes
   useEffect(() => {
@@ -133,7 +143,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
     setErrors({});
     const cleanPhone = phone.replace(/\s+/g, '');
-    onSave({ fullName, phone: cleanPhone, avatarUrl, coverUrl, bio, headline, skills });
+    onSave({ fullName, phone: cleanPhone, avatarUrl, coverUrl, bio, headline, skills, bankName, bankAccountNumber: bankAccountNumber.trim() });
   };
 
   return (
@@ -215,6 +225,31 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           numberOfLines={4}
           maxLength={500}
           error={errors.bio}
+        />
+
+        {/* Bank Details */}
+        <Text style={styles.label}>Tên ngân hàng</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.banksScroll}>
+          {['MB Bank', 'Vietcombank', 'Techcombank', 'VietinBank', 'BIDV', 'VPBank', 'Agribank', 'ACB', 'TPBank', 'Sacombank'].map((b) => {
+            const isActive = b === bankName || (!!bankName && (b.toLowerCase().replace(/[^a-z0-9]/g, '').includes(bankName.toLowerCase().replace(/[^a-z0-9]/g, '')) || bankName.toLowerCase().replace(/[^a-z0-9]/g, '').includes(b.toLowerCase().replace(/[^a-z0-9]/g, ''))));
+            return (
+              <TouchableOpacity
+                key={b}
+                style={[styles.bankChip, isActive && styles.bankChipActive]}
+                onPress={() => setBankName(b)}
+              >
+                <Text style={[styles.bankText, isActive && styles.bankTextActive]}>{b}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <Input
+          label="Số tài khoản ngân hàng"
+          placeholder="Nhập số tài khoản ngân hàng để nhận tiền"
+          value={bankAccountNumber}
+          onChangeText={(t) => setBankAccountNumber(t.replace(/[^0-9]/g, ''))}
+          keyboardType="numeric"
         />
 
         {/* Skills Chips Config */}
@@ -384,5 +419,32 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+  },
+  banksScroll: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  bankChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginRight: 8,
+    backgroundColor: Colors.surface,
+  },
+  bankChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primarySoft,
+  },
+  bankText: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  bankTextActive: {
+    color: Colors.primary,
+    fontWeight: '700',
   },
 });

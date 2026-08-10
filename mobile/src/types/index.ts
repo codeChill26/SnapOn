@@ -1,4 +1,4 @@
-export type UserRole = 'USER' | 'ADMIN' | 'hirer' | 'worker' | 'admin';
+export type UserRole = 'USER' | 'ADMIN';
 
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'CLOSED' | 'EXPIRED';
 
@@ -22,6 +22,8 @@ export interface User {
   bio?: string;
   headline?: string;
   skills?: string[];
+  bankName?: string;
+  bankAccountNumber?: string;
 }
 
 export interface PublicProfile {

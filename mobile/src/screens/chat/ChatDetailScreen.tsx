@@ -26,6 +26,7 @@ import { socketService } from '../../services/socketService';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import { profileService } from '../../services/profileService';
 import { storage } from '../../utils/storage';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList & {
@@ -182,6 +183,15 @@ export const ChatDetailScreen: React.FC = () => {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
+  const scrollToBottomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (scrollToBottomTimeoutRef.current) {
+        clearTimeout(scrollToBottomTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const [conversationId, setConversationId] = useState<string | undefined>(route.params.conversationId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -206,11 +216,15 @@ export const ChatDetailScreen: React.FC = () => {
   const canBrowseMediaImages = mediaListOpen && selectedMediaIndex >= 0;
 
   const handleOtherUserPress = useCallback(() => {
+    profileService.prefetchPublicProfile(otherUserId);
     navigation.navigate('PublicProfile', { userId: otherUserId });
   }, [navigation, otherUserId]);
 
   const scrollToBottom = useCallback((animated = true) => {
-    setTimeout(() => {
+    if (scrollToBottomTimeoutRef.current) {
+      clearTimeout(scrollToBottomTimeoutRef.current);
+    }
+    scrollToBottomTimeoutRef.current = setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated });
     }, 80);
   }, []);

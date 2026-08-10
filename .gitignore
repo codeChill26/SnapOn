@@ -1,6 +1,9 @@
 # EXE202 (monorepo)
 # Common ignore rules for the whole project (backend_SO + frontend_SO)
 
+# Scratch folders
+backend/scratch/
+
 # ==========================================
 # Node / JS
 # ==========================================
@@ -453,3 +456,29 @@ FodyWeavers.xsd
 
 # Prisma generated output (if used)
 /generated/prisma
+
+# ==========================================
+# Mobile / Android Build
+# ==========================================
+# Keystore files (SENSITIVE - never commit!)
+*.jks
+*.keystore
+mobile/keystores/
+
+# EAS local credentials (contains keystore passwords)
+mobile/credentials.json
+
+# Expo Native prebuild directories (generated dynamically)
+mobile/android/
+mobile/ios/
+mobile/.expo/
+mobile/web-build/
+
+# Docker build output
+build-output/
+
+# Android/iOS app bundles, APKs and IPAs
+*.aab
+*.apk
+*.ipa
+

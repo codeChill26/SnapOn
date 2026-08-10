@@ -50,12 +50,12 @@ export const AppNavigator: React.FC = () => {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, freezeOnBlur: true }}>
         {!isAuthenticated ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
         ) : !user?.isVerified ? (
           <Stack.Screen name="Verification" component={VerificationScreen} />
-        ) : user?.role === 'admin' ? (
+        ) : user?.role === 'ADMIN' ? (
           <>
             <Stack.Screen name="AdminTabs" component={AdminStackNavigator} options={{ headerShown: false }} />
             <Stack.Screen

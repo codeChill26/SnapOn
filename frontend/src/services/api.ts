@@ -16,15 +16,6 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token && !isSyncUser) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  const appUserStr = localStorage.getItem('appUser');
-  if (appUserStr) {
-    try {
-      const appUser = JSON.parse(appUserStr);
-      if (appUser.id) {
-        config.headers['x-user-id'] = appUser.id;
-      }
-    } catch {}
-  }
   return config;
 });
 
@@ -33,7 +24,6 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('firebaseToken');
-      localStorage.removeItem('appUser');
     }
     return Promise.reject(error);
   }

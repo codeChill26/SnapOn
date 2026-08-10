@@ -6,10 +6,22 @@
 export function formatImageUrl(url: string | null | undefined): string {
   if (!url) return '';
 
-  // Handle Cloudinary hosted files
-  if (url.includes('cloudinary.com')) {
-    let formatted = url;
+  let formatted = url;
 
+  // Backend moved to Railway — rewrite legacy Render hosts so old image URLs still resolve
+  const BACKEND_HOST = 'https://graceful-playfulness-production.up.railway.app';
+  formatted = formatted
+    .replace('https://snapon.onrender.com', BACKEND_HOST)
+    .replace('https://snapon-debug.onrender.com', BACKEND_HOST);
+
+  // Handle relative upload paths
+  if (formatted.startsWith('/uploads/') || formatted.startsWith('uploads/')) {
+    const cleanPath = formatted.startsWith('/') ? formatted : '/' + formatted;
+    formatted = `${BACKEND_HOST}${cleanPath}`;
+  }
+
+  // Handle Cloudinary hosted files
+  if (formatted.includes('cloudinary.com')) {
     // Replace Apple HEIC image extension (case insensitive) with JPG so Cloudinary converts it on-the-fly
     if (/\.heic$/i.test(formatted)) {
       formatted = formatted.replace(/\.heic$/i, '.jpg');
@@ -19,9 +31,7 @@ export function formatImageUrl(url: string | null | undefined): string {
     if (formatted.includes('/image/upload/') && !formatted.includes('/f_auto')) {
       formatted = formatted.replace('/image/upload/', '/image/upload/f_auto/');
     }
-
-    return formatted;
   }
 
-  return url;
+  return formatted;
 }

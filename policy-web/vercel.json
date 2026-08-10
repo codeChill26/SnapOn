@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "name": "snapon-policy-web",
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self' https://cdn.tailwindcss.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com; img-src 'self' data: https://unpkg.com; font-src 'self' https://fonts.gstatic.com https://unpkg.com; connect-src 'self' https://unpkg.com https://snapon-debug.onrender.com https://snapon.onrender.com;"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/privacy",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/policy",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/delete-account",
+      "dest": "/index.html#deletion-form"
+    }
+  ]
+}

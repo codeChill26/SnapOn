@@ -1,60 +1,42 @@
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
-import Config from '../constants/config';
-import { chatService } from './chatService';
+import api from './api';
 
-const getNotifications = () => {
-  const Notifications = require('expo-notifications');
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  type: string;
+  task_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
 
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: false,
-      shouldShowBanner: false,
-      shouldShowList: false,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-    }),
-  });
-
-  return Notifications;
-};
+export interface GetNotificationsResponse {
+  notifications: AppNotification[];
+  unreadCount: number;
+}
 
 export const notificationService = {
-  async registerDeviceForChatNotifications(): Promise<string | null> {
-    if (Constants.appOwnership === 'expo') {
-      return null;
-    }
-
-    const Notifications = getNotifications();
-
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-      });
-    }
-
-    const existingPermission = await Notifications.getPermissionsAsync();
-    let finalStatus = existingPermission.status;
-
-    if (existingPermission.status !== 'granted') {
-      const requestedPermission = await Notifications.requestPermissionsAsync();
-      finalStatus = requestedPermission.status;
-    }
-
-    if (finalStatus !== 'granted') {
-      return null;
-    }
-
-    const expoToken = await Notifications.getExpoPushTokenAsync({
-      projectId: Config.EXPO_PROJECT_ID,
-    });
-
-    await chatService.registerPushToken(expoToken.data, Platform.OS);
-    return expoToken.data;
+  async getNotifications(): Promise<GetNotificationsResponse> {
+    const res = await api.get('/notifications');
+    const data = res.data.data;
+    return {
+      notifications: data.notifications || [],
+      unreadCount: data.unreadCount || 0,
+    };
   },
 
-  async removeDeviceToken(token: string): Promise<void> {
-    await chatService.removePushToken(token);
+  async markAsRead(id: string): Promise<AppNotification> {
+    const res = await api.put(`/notifications/${id}/read`);
+    return res.data.data;
+  },
+
+  async markAllAsRead(): Promise<boolean> {
+    await api.put('/notifications/read-all');
+    return true;
+  },
+
+  async registerDeviceForChatNotifications(): Promise<void> {
+    // Push token registration placeholder
   },
 };

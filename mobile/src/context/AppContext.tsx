@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { Task, TaskApplication, Wallet, UserRole } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -23,6 +23,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [applications, setApplications] = useState<TaskApplication[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
 
+  useEffect(() => {
+    if (!user) {
+      setWallet(null);
+      setApplications([]);
+      setTasks([]);
+    }
+  }, [user]);
+
   const userRole: UserRole = user?.role || 'USER';
 
   const addTask = useCallback((task: Task) => {
@@ -37,21 +45,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setApplications(prev => [app, ...prev]);
   }, []);
 
+  const value = useMemo(() => ({
+    tasks,
+    applications,
+    wallet,
+    userRole,
+    setTasks,
+    addTask,
+    updateTask,
+    setApplications,
+    addApplication,
+    setWallet,
+  }), [tasks, applications, wallet, userRole, addTask, updateTask, addApplication]);
+
   return (
-    <AppContext.Provider
-      value={{
-        tasks,
-        applications,
-        wallet,
-        userRole,
-        setTasks,
-        addTask,
-        updateTask,
-        setApplications,
-        addApplication,
-        setWallet,
-      }}
-    >
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
@@ -63,4 +71,16 @@ export const useApp = (): AppContextType => {
     throw new Error('useApp must be used within an AppProvider');
   }
   return context;
+};
+
+// Compatibility hook for Wallet
+export const useWallet = () => {
+  const { wallet, setWallet } = useApp();
+  return { wallet, setWallet };
+};
+
+// Compatibility hook for Task Applications
+export const useTaskContext = () => {
+  const { applications, setApplications, addApplication } = useApp();
+  return { applications, setApplications, addApplication };
 };

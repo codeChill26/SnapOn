@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SnapOn** — A Vietnamese freelance marketplace connecting hirers and workers. Monorepo with four applications sharing a common PostgreSQL backend.
 
-Deployed backend: `https://snapon.onrender.com`
+Deployed backend: `https://graceful-playfulness-production.up.railway.app`
 
 ---
 

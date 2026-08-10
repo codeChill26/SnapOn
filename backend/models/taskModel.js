@@ -155,7 +155,31 @@ const taskModel = {
         message: assignmentResult.rows[0].final_message,
       };
     } else {
-      task.assigned_worker = null;
+      const appFallback = await pool.query(
+        `SELECT ta.id AS application_id, ta.status AS app_status,
+                u.id AS worker_id, u.full_name AS worker_name, u.avatar_url AS worker_avatar, u.phone AS worker_phone,
+                ta.bid_price AS final_bid_price, ta.estimated_time AS final_estimated_time, ta.message AS final_message
+         FROM task_applications ta
+         JOIN users u ON ta.tasker_id = u.id
+         WHERE ta.task_id = $1 AND ta.status::text IN ('ACCEPTED', 'COMPLETED')
+         LIMIT 1`,
+        [id]
+      );
+      if (appFallback.rows.length > 0) {
+        task.assigned_worker = {
+          id: appFallback.rows[0].worker_id,
+          name: appFallback.rows[0].worker_name,
+          avatar_url: appFallback.rows[0].worker_avatar,
+          phone: appFallback.rows[0].worker_phone,
+          assignment_id: appFallback.rows[0].application_id,
+          status: 'COMPLETED',
+          bid_price: appFallback.rows[0].final_bid_price ? parseFloat(appFallback.rows[0].final_bid_price) : null,
+          estimated_time: appFallback.rows[0].final_estimated_time,
+          message: appFallback.rows[0].final_message,
+        };
+      } else {
+        task.assigned_worker = null;
+      }
     }
 
     return task;
@@ -515,74 +539,111 @@ const taskModel = {
   /**
    * Update task details
    */
-  async update(id, {
-    categoryId,
-    title,
-    description,
-    taskType,
-    budgetMin,
-    budgetMax,
-    deadlineStart,
-    deadlineEnd,
-    allowInsurance,
-    images,
-    postType,
-    workMode,
-    salaryUnit,
-    employmentType,
-    peopleNeeded,
-    contactPhone,
-    startDate,
-    experienceLevel,
-    educationLevel,
-    genderRequirement,
-    minAge,
-    maxAge,
-    minHeightCm,
-    maxHeightCm,
-    hashtags,
-    applicationDeadline,
-  }, db = pool) {
-    const dbTaskType = taskType ? toDbTaskType(taskType) : undefined;
+  async update(id, fields, db = pool) {
+    const ALLOWED_COLUMNS = [
+      'category_id',
+      'title',
+      'description',
+      'task_type',
+      'budget_min',
+      'budget_max',
+      'deadline_start',
+      'deadline_end',
+      'allow_insurance',
+      'images',
+      'post_type',
+      'work_mode',
+      'salary_unit',
+      'employment_type',
+      'people_needed',
+      'contact_phone',
+      'start_date',
+      'experience_level',
+      'education_level',
+      'gender_requirement',
+      'min_age',
+      'max_age',
+      'min_height_cm',
+      'max_height_cm',
+      'hashtags',
+      'application_deadline',
+    ];
+
+    const CAMEL_TO_SNAKE = {
+      categoryId: 'category_id',
+      title: 'title',
+      description: 'description',
+      taskType: 'task_type',
+      budgetMin: 'budget_min',
+      budgetMax: 'budget_max',
+      deadlineStart: 'deadline_start',
+      deadlineEnd: 'deadline_end',
+      allowInsurance: 'allow_insurance',
+      images: 'images',
+      postType: 'post_type',
+      workMode: 'work_mode',
+      salaryUnit: 'salary_unit',
+      employmentType: 'employment_type',
+      peopleNeeded: 'people_needed',
+      contactPhone: 'contact_phone',
+      startDate: 'start_date',
+      experienceLevel: 'experience_level',
+      educationLevel: 'education_level',
+      genderRequirement: 'gender_requirement',
+      minAge: 'min_age',
+      maxAge: 'max_age',
+      minHeightCm: 'min_height_cm',
+      maxHeightCm: 'max_height_cm',
+      hashtags: 'hashtags',
+      applicationDeadline: 'application_deadline',
+    };
+
+    const dbFields = {};
+    const keys = Object.keys(fields || {});
+
+    for (const key of keys) {
+      if (fields[key] !== undefined) {
+        const dbKey = CAMEL_TO_SNAKE[key];
+        if (!dbKey) {
+          throw new Error(`Field '${key}' is not allowed for update`);
+        }
+        if (!ALLOWED_COLUMNS.includes(dbKey)) {
+          throw new Error(`Field '${dbKey}' is not allowed for update`);
+        }
+
+        if (key === 'taskType') {
+          dbFields[dbKey] = fields[key] ? toDbTaskType(fields[key]) : null;
+        } else {
+          dbFields[dbKey] = fields[key];
+        }
+      }
+    }
+
+    const updateKeys = Object.keys(dbFields);
+    if (updateKeys.length === 0) {
+      const result = await db.query('SELECT * FROM tasks WHERE id = $1', [id]);
+      const task = result.rows[0] || null;
+      if (task) {
+        task.status = fromDbTaskStatus(task.status);
+        task.task_type = fromDbTaskType(task.task_type);
+      }
+      return task;
+    }
+
+    const values = updateKeys.map(key => dbFields[key]);
+    const setClause = updateKeys
+      .map((key, i) => `"${key}" = $${i + 2}`)
+      .join(', ');
+
     const result = await db.query(
       `UPDATE tasks
-       SET category_id = $2,
-           title = $3,
-           description = $4,
-           task_type = $5,
-           budget_min = $6,
-           budget_max = $7,
-           deadline_start = $8,
-           deadline_end = $9,
-           allow_insurance = $10,
-           images = $11,
-           post_type = $12,
-           work_mode = $13,
-           salary_unit = $14,
-           employment_type = $15,
-           people_needed = $16,
-           contact_phone = $17,
-           start_date = $18,
-           experience_level = $19,
-           education_level = $20,
-           gender_requirement = $21,
-           min_age = $22,
-           max_age = $23,
-           min_height_cm = $24,
-           max_height_cm = $25,
-           hashtags = $26,
-           application_deadline = $27,
+       SET ${setClause},
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
        RETURNING *`,
-      [
-        id, categoryId, title, description, dbTaskType,
-        budgetMin, budgetMax, deadlineStart, deadlineEnd, allowInsurance, images,
-        postType, workMode, salaryUnit, employmentType, peopleNeeded, contactPhone,
-        startDate, experienceLevel, educationLevel, genderRequirement, minAge, maxAge,
-        minHeightCm, maxHeightCm, hashtags, applicationDeadline,
-      ]
+      [id, ...values]
     );
+
     const task = result.rows[0] || null;
     if (task) {
       task.status = fromDbTaskStatus(task.status);

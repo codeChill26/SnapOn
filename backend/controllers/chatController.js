@@ -1,5 +1,5 @@
 const prisma = require('../db/prisma');
-const { success, error } = require('../utils/responseHandler');
+const { success, error, paginated } = require('../utils/responseHandler');
 const cloudinary = require('../utils/cloudinary');
 const { sendExpoPushNotification } = require('../utils/pushNotification');
 
@@ -225,16 +225,16 @@ const chatController = {
         }
       });
 
-      // Broadcast new message via Socket.io
+      // Define isUser1 and receiverId to prevent crash and duplicate notifications
+      const isUser1 = conversation.user1Id === userId;
+      const receiverId = isUser1 ? conversation.user2Id : conversation.user1Id;
+      const senderName = isUser1 ? conversation.user1.fullName : conversation.user2.fullName;
+
+      // Broadcast new message via Socket.io to the receiver only
       const io = req.app.get('io');
       if (io) {
-        io.to(conversation.user1Id).emit('message_received', message);
-        io.to(conversation.user2Id).emit('message_received', message);
+        io.to(receiverId).emit('message_received', message);
       }
-
-      // Send push notification to receiver in background
-      const senderName = isUser1 ? conversation.user1.fullName : conversation.user2.fullName;
-      const receiverId = isUser1 ? conversation.user2Id : conversation.user1Id;
 
       void prisma.pushToken.findMany({
         where: { userId: receiverId }

@@ -46,67 +46,44 @@ SnapOn dùng **Firebase Authentication** để quản lý đăng nhập/đăng k
 
 ---
 
-## Chế độ Dev Mode (khi không có Firebase)
+## Chế độ Phone OTP Authentication (Xác thực qua điện thoại)
 
-### Khi nào dùng?
+Hệ thống cung cấp cơ chế đăng nhập và đăng ký trực tiếp thông qua số điện thoại và mã OTP (được lưu tạm thời trong Redis). Cơ chế này rất hữu ích cho môi trường chạy thử nghiệm hoặc khi người dùng không sử dụng email/social login qua Firebase.
 
-- **Local development**: Không cần Firebase credentials, chạy backend ở chế độ dev
-- **Deploy lên Render mà chưa có Firebase Admin**: Tự động fallback
-
-### Cơ chế auto-fallback
-
-Trong file `backend/middleware/auth.js`:
-
-```
-1. Kiểm tra biến môi trường: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
-2. Nếu AUTH_MODE=firebase (default) mà thiếu credentials → tự động chuyển AUTH_MODE=dev
-3. Nếu AUTH_MODE=firebase mà init Firebase Admin thất bại → tự động chuyển AUTH_MODE=dev
-```
-
-### Luồng hoạt động Dev Mode
+### Luồng hoạt động Phone OTP
 
 ```
 ┌─────────────────────────┐       ┌────────────────────┐       ┌──────────────┐
-│   Frontend              │       │  Backend (Dev Mode) │       │  Database    │
-│   VITE_AUTH_MODE=dev    │       │  AUTH_MODE=dev      │       │  (PostgreSQL)│
+│   Client (Web/Mobile)   │       │  Backend           │       │  Database    │
+│                         │       │  (Redis Cache)     │       │  (PostgreSQL)│
 └───────────┬─────────────┘       └──────────┬─────────┘       └──────┬───────┘
             │                               │                         │
-            │  Option A: Login bằng email    │                         │
-            │  POST /auth/dev/login          │                         │
-            │  { email }                    ├────► SELECT * FROM users │
-            │                               │       WHERE email = ?   │
-            │◄──── { user, token: user.id } ─┤                         │
+            │  1. Gửi OTP đến số điện thoại  │                         │
+            │  POST /auth/send-otp          │                         │
+            │  { phone }                    ├────► Sinh OTP và lưu    │
+            │                               │      vào Redis Cache    │
+            │◄──── OTP (cho dev/debug) ─────┤                         │
             │                               │                         │
-            │  Option B: Sync-user (Firebase │                         │
-            │  frontend vẫn dùng)            │                         │
-            │  POST /auth/sync-user          │                         │
-            │  { firebaseToken: JWT }       ├────► Decode JWT payload │
-            │       (JWT decode base64,      │       (không verify)   │
-            │        không verify)           │                         │
-            │◄──── { user, wallet } ────────┤                         │
+            │  2. Xác minh OTP               │                         │
+            │  POST /auth/verify-otp        │                         │
+            │  { phone, otp }               ├────► So khớp OTP        │
+            │                               │      trong Redis        │
             │                               │                         │
-            │  Các request sau:              │                         │
-            │  x-user-id: <user-uuid>       ├────► SELECT * FROM users │
-            │       hoặc Bearer <user-uuid>  │       WHERE id = ?     │
-            │◄──── 200 OK ──────────────────┤                         │
+            │                               │  3. UPSERT user + wallet│
+            │                               ├────────────────────────►│
+            │                               │◄────────────────────────┤
+            │◄──── { user, accessToken } ───┤                         │
+            │                               │                         │
+            │  4. Lưu token và sử dụng      │                         │
+            │  Authorization: Bearer <JWT>  ├────────────────────────►│
+            │                               │      verify JWT         │
 ```
 
-### Cách dùng Dev Mode
-
-**Frontend** (.env):
-```
-VITE_AUTH_MODE=dev
-```
-
-**Backend** (.env): Không set biến Firebase là tự động dev mode, hoặc set:
-```
-AUTH_MODE=dev
-```
-
-**Truy cập API trong dev mode**:
-- Header `x-user-id: <user-uuid>` (ưu tiên)
-- Hoặc `Authorization: Bearer <user-uuid>` (fallback)
-- Khi login lần đầu: `POST /api/auth/dev/login` với body `{ email }`
+### Cách dùng Phone OTP:
+1. Gửi request tạo mã OTP qua endpoint: `POST /api/auth/send-otp` với body `{ "phone": "0987654321" }`.
+2. Trình debug/console log sẽ hiển thị mã OTP đã sinh.
+3. Gửi mã OTP xác nhận lên endpoint: `POST /api/auth/verify-otp` với body `{ "phone": "0987654321", "otp": "xxxxxx" }`.
+4. Nhận về backend JWT (bao gồm `accessToken` và `refreshToken`). Đưa JWT vào header `Authorization: Bearer <accessToken>` cho tất cả các API requests sau đó.
 
 ---
 
@@ -119,7 +96,6 @@ AUTH_MODE=dev
 | Variable | Required | Mô tả |
 |----------|----------|-------|
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `AUTH_MODE` | ❌ | `firebase` (default) hoặc `dev` |
 | `FIREBASE_PROJECT_ID` | ⚠️ Nếu dùng Firebase | Firebase project ID |
 | `FIREBASE_CLIENT_EMAIL` | ⚠️ Nếu dùng Firebase | Firebase service account email |
 | `FIREBASE_PRIVATE_KEY` | ⚠️ Nếu dùng Firebase | Firebase private key (thay `\n` bằng xuống dòng) |
@@ -131,7 +107,7 @@ AUTH_MODE=dev
 
 **Lưu ý quan trọng khi deploy backend lên Render**:
 
-1. **Không có Firebase Admin?** Không sao — hệ thống tự động fallback sang dev mode. User vẫn login được qua frontend Firebase Client SDK (browser gọi trực tiếp Firebase servers), backend decode JWT payload (không verify) để tạo user trong DB.
+1. **Không có Firebase Admin?** Nếu không có Firebase Admin hoặc cấu hình Firebase lỗi, các tính năng email/social login qua Firebase sẽ không khả dụng. Bạn cần sử dụng luồng Phone OTP để đăng nhập/đăng ký.
 
 2. **Không có PayOS?** Hệ thống tự động dùng mock PayOS — trả về checkout URL giả, không gọi PayOS thật. Khi thanh toán, mock PayOS luôn trả về status `PAID`.
 
@@ -149,7 +125,6 @@ AUTH_MODE=dev
 | Variable | Required | Mô tả |
 |----------|----------|-------|
 | `VITE_API_BASE_URL` | ✅ | Backend URL (vd: `https://snapon.onrender.com/api`) |
-| `VITE_AUTH_MODE` | ❌ | `firebase` (default) hoặc `dev` |
 | `VITE_FIREBASE_API_KEY` | ⚠️ Nếu dùng Firebase | Firebase API key |
 | `VITE_FIREBASE_AUTH_DOMAIN` | ⚠️ Nếu dùng Firebase | Firebase auth domain |
 | `VITE_FIREBASE_PROJECT_ID` | ⚠️ Nếu dùng Firebase | Firebase project ID |
@@ -167,8 +142,6 @@ AUTH_MODE=dev
      "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
    }
    ```
-4. **VITE_AUTH_MODE**: Nếu để `dev`, frontend sẽ gọi `/auth/dev/login` thay vì Firebase cho login. Nếu frontend vẫn có Firebase Client SDK credentials (`VITE_FIREBASE_*`), user vẫn có thể login bằng Firebase (Google popup) song song.
-5. **Firebase bị chặn ở một số quốc gia**: Nếu Firebase không truy cập được từ trình duyệt user, hãy set `VITE_AUTH_MODE=dev` để frontend dùng API backend cho login.
 
 ---
 
@@ -176,21 +149,22 @@ AUTH_MODE=dev
 
 | Method | Path | Auth | Mô tả |
 |--------|------|------|-------|
-| POST | `/api/auth/sync-user` | ✅ Firebase token | Đồng bộ user từ Firebase |
-| POST | `/api/auth/dev/login` | ❌ Public | Login dev mode bằng email |
-| POST | `/api/auth/dev/register` | ❌ Public | Register dev mode |
-| GET | `/api/users/profile` | ✅ | Lấy profile |
-| PUT | `/api/users/profile` | ✅ | Cập nhật profile |
-| PUT | `/api/users/role` | ✅ | Đổi role (hirer/tasker) |
-| DELETE | `/api/users/profile` | ✅ | Xoá tài khoản (soft-delete) |
-| GET/POST | `/api/tasks/**` | ✅ | CRUD tasks |
-| DELETE | `/api/tasks/:id` | ✅ | Xoá task |
-| POST/PATCH | `/api/**/applications/**` | ✅ | CRUD applications |
-| DELETE | `/api/applications/:id` | ✅ | Xoá application |
-| GET | `/api/escrows/me` | ✅ | Danh sách escrow |
-| GET | `/api/escrows/:taskId` | ✅ | Chi tiết escrow |
-| DELETE | `/api/escrows/:taskId` | ✅ | Xoá escrow |
-| GET/POST | `/api/wallet/**` | ✅ | Wallet operations |
+| POST | `/api/auth/sync-user` | ✅ Firebase token | Đồng bộ user từ Firebase và nhận backend JWT |
+| POST | `/api/auth/token-login` | ✅ Firebase token | Đăng nhập bằng Firebase token và nhận backend JWT |
+| POST | `/api/auth/send-otp` | ❌ Public | Gửi mã OTP về số điện thoại |
+| POST | `/api/auth/verify-otp` | ❌ Public | Xác minh OTP và nhận backend JWT |
+| GET | `/api/users/profile` | ✅ JWT | Lấy profile |
+| PUT | `/api/users/profile` | ✅ JWT | Cập nhật profile |
+| PUT | `/api/users/role` | ✅ JWT | Đổi role (hirer/tasker) |
+| DELETE | `/api/users/profile` | ✅ JWT | Xoá tài khoản (soft-delete) |
+| GET/POST | `/api/tasks/**` | ✅ JWT | CRUD tasks |
+| DELETE | `/api/tasks/:id` | ✅ JWT | Xoá task |
+| POST/PATCH | `/api/**/applications/**` | ✅ JWT | CRUD applications |
+| DELETE | `/api/applications/:id` | ✅ JWT | Xoá application |
+| GET | `/api/escrows/me` | ✅ JWT | Danh sách escrow |
+| GET | `/api/escrows/:taskId` | ✅ JWT | Chi tiết escrow |
+| DELETE | `/api/escrows/:taskId` | ✅ JWT | Xoá escrow |
+| GET/POST | `/api/wallet/**` | ✅ JWT | Wallet operations |
 | POST | `/api/wallet/topup/payos/webhook` | ❌ Public | PayOS webhook callback |
 | `GET /api/health`, `GET /` | ❌ Public | Health check, API info |
 
@@ -200,11 +174,11 @@ AUTH_MODE=dev
 
 ### 1. 401 khi gọi API
 
-**Nguyên nhân**: Token hết hạn hoặc không hợp lệ.
+**Nguyên nhân**: Backend JWT Token hết hạn hoặc không hợp lệ.
 
 **Cách fix**:
-- Dev mode: Kiểm tra `x-user-id` header hoặc Bearer token có đúng UUID không
-- Firebase mode: User logout/login lại để có token mới
+- Người dùng thực hiện đăng nhập lại bằng Firebase hoặc Phone OTP để nhận `accessToken` mới.
+- Hệ thống Client tự động thực hiện luồng refresh token qua `POST /api/auth/refresh` bằng `refreshToken`.
 
 ### 2. 500 PayOS "create payment"
 

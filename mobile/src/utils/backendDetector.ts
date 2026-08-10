@@ -1,44 +1,47 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 import Config from '../constants/config';
+
+const DEPLOYED_API_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'https://graceful-playfulness-production.up.railway.app/api';
+
+// Extract Metro bundler host IP dynamically (e.g., "192.168.100.206:8081" -> "192.168.100.206")
+const metroHost = Constants.expoConfig?.hostUri?.split(':')[0];
+const LOCAL_IP = metroHost || process.env.EXPO_PUBLIC_LOCAL_IP || 'localhost';
+const LOCAL_API_URL = `http://${LOCAL_IP}:3000/api`;
 
 let detectedUrl: string | null = null;
 let detectionPromise: Promise<string> | null = null;
 
 /**
- * Tự động chọn backend: thử local trước (2.5s timeout), fallback sang deployed.
- * Kết quả được cache lại — chỉ detect 1 lần duy nhất.
+ * Tự động chọn backend:
+ * Trong môi trường __DEV__, thử kết nối tới Local Backend (port 3000) trước.
+ * Nếu Local Backend đang chạy -> tự động sử dụng Local Backend (IP: 192.168.x.x).
+ * Nếu Local không phản hồi -> tự động sử dụng Deployed Backend trên Railway.
  */
 export function detectBackend(): Promise<string> {
-  if (detectedUrl !== null) return Promise.resolve(detectedUrl);
+  if (detectedUrl !== null) return Promise.resolve(detectedUrl as string);
   if (detectionPromise) return detectionPromise;
 
-  const configuredUrl = Config.API_BASE_URL || Config.DEPLOYED_API_URL;
-
   if (!__DEV__) {
-    detectedUrl = configuredUrl;
+    detectedUrl = Config.API_BASE_URL || DEPLOYED_API_URL;
     Config.API_BASE_URL = detectedUrl;
-    return Promise.resolve(detectedUrl);
-  }
-
-  if (configuredUrl !== Config.LOCAL_API_URL) {
-    detectedUrl = configuredUrl;
-    Config.API_BASE_URL = detectedUrl;
-    console.log('[Backend] Configured:', detectedUrl);
-    return Promise.resolve(detectedUrl);
+    return Promise.resolve(detectedUrl as string);
   }
 
   detectionPromise = (async () => {
+    // 1. Thử ping local backend
     try {
-      await axios.get(`${Config.LOCAL_API_URL}/health`, {
-        timeout: 2500,
-        // Bỏ qua lỗi HTTP (401, 404...) — chỉ cần server phản hồi là được
+      await axios.get(`${LOCAL_API_URL}/health`, {
+        timeout: 2000,
         validateStatus: () => true,
       });
-      detectedUrl = Config.LOCAL_API_URL;
-      console.log('[Backend] ✅ Local:', detectedUrl);
+      detectedUrl = LOCAL_API_URL;
+      console.log('[Backend] ✅ Local Backend connected:', detectedUrl);
     } catch {
-      detectedUrl = Config.DEPLOYED_API_URL;
-      console.log('[Backend] ☁️ Deployed:', detectedUrl);
+      // 2. Nếu local không khả dụng, sử dụng Deployed API
+      detectedUrl = Config.API_BASE_URL || DEPLOYED_API_URL;
+      console.log('[Backend] ☁️ Local unavailable, using Deployed Backend:', detectedUrl);
     }
     Config.API_BASE_URL = detectedUrl!;
     return detectedUrl!;
@@ -48,9 +51,7 @@ export function detectBackend(): Promise<string> {
 }
 
 /**
- * Gửi ping đến deployed backend ngay khi app khởi động để wake up Render.com cold start.
- * Fire-and-forget — không block gì cả.
- * Gọi hàm này càng sớm càng tốt (App.tsx useEffect).
+ * Gửi ping đến backend ngay khi ứng dụng mở để kích hoạt Render.com cold start.
  */
 export function warmUpBackend(): void {
   detectBackend()
@@ -58,12 +59,12 @@ export function warmUpBackend(): void {
       timeout: 60000,
       validateStatus: () => true,
     }))
-    .then(() => console.log('[Backend] ☀️ Warm-up done'))
+    .then(() => console.log('[Backend] ☀️ Warm-up request completed'))
     .catch(() => {});
 }
 
-/** Reset để detect lại (dùng khi debug) */
 export function resetBackendDetection() {
   detectedUrl = null;
   detectionPromise = null;
 }
+

@@ -30,7 +30,7 @@ export const useJobDetail = () => {
   const [submittingClose, setSubmittingClose] = useState(false);
 
   const isPoster = user?.id === task?.posterId;
-  const isWorker = user?.role === 'USER' || user?.role === 'worker';
+  const isWorker = user?.role === 'USER';
 
   const activeWorkers = useMemo(() => {
     return applications.filter(
@@ -80,7 +80,7 @@ export const useJobDetail = () => {
         }
       }
 
-      if ((user?.role === 'USER' || user?.role === 'worker') && user?.id) {
+      if (user?.role === 'USER' && user?.id) {
         void checkWorkerAvailability();
       }
     } catch (error) {

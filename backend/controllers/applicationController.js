@@ -3,6 +3,7 @@ const taskModel = require('../models/taskModel');
 const assignedTaskModel = require('../models/assignedTaskModel');
 const applicationService = require('../services/applicationService');
 const escrowService = require('../services/escrowService');
+const notificationModel = require('../models/notificationModel');
 const { success, error, paginated } = require('../utils/responseHandler');
 const { TASK_STATUS, APPLICATION_STATUS, ASSIGNED_BY } = require('../utils/constants');
 
@@ -29,15 +30,30 @@ const applicationController = {
         message,
       });
 
-      // Broadcast new application via Socket.io to the task poster (outside transaction)
-      const io = req.app.get('io');
-      if (io) {
-        io.to(task.poster_id).emit('application_joined', {
-          taskId,
-          taskTitle: task.title,
-          taskerId,
-          taskerName: req.user.fullName,
-        });
+      // Persist + broadcast the notification to the task poster (outside transaction)
+      if (task && task.poster_id) {
+        try {
+          const notif = await notificationModel.create({
+            userId: task.poster_id,
+            title: 'Ứng viên mới ứng tuyển',
+            content: `${req.user.fullName || 'Một ứng viên'} vừa ứng tuyển vào bài đăng "${task.title}". Hãy vào kiểm tra ngay!`,
+            type: 'NEW_APPLICATION',
+            taskId,
+          });
+
+          const io = req.app.get('io');
+          if (io) {
+            io.to(task.poster_id).emit('new_notification', notif);
+            io.to(task.poster_id).emit('application_joined', {
+              taskId,
+              taskTitle: task.title,
+              taskerId,
+              taskerName: req.user.fullName,
+            });
+          }
+        } catch (notifErr) {
+          console.error('Failed to create notification for application:', notifErr);
+        }
       }
 
       return success(res, application, 'Application submitted successfully.', 201);

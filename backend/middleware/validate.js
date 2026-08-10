@@ -13,7 +13,6 @@ const validate = (req, res, next) => {
     const formattedErrors = errors.array().map((err) => ({
       field: err.path,
       message: err.msg,
-      value: err.value,
     }));
 
     console.error('❌ Validation failed:', JSON.stringify(formattedErrors, null, 2));

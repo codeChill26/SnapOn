@@ -1,4 +1,4 @@
-﻿# Bối Cảnh Dự Án SnapOn
+# Bối Cảnh Dự Án SnapOn
 
 Tài liệu này là nguồn bối cảnh kỹ thuật và nghiệp vụ cho dự án SnapOn. Nội dung được cập nhật dựa trên code hiện có trong repository, không chỉ dựa trên ý tưởng sản phẩm hay roadmap. Mục tiêu là giúp thành viên mới và AI coding assistant hiểu nhanh kiến trúc, luồng dữ liệu, API, client web/mobile và các cảnh báo quan trọng trước khi sửa code.
 
@@ -53,7 +53,7 @@ Thư mục cần đọc trước khi sửa:
 - PostgreSQL, kết nối bằng `pg` Pool trong `backend/config/db.js`.
 - Prisma Client v7 + `@prisma/adapter-pg`, chủ yếu đang dùng cho chat và push token.
 - Socket.IO cho realtime events.
-- Firebase Admin SDK cho auth production, có dev fallback.
+- Firebase Admin SDK cho email/social auth, và OTP service cho phone auth.
 - PayOS cho topup, có mock mode khi thiếu credentials.
 - Cloudinary upload ảnh task/chat nếu có env Cloudinary.
 - Swagger UI tại `/api-docs`.
@@ -164,28 +164,16 @@ Không phải tất cả code đều theo cùng một pattern: `routes/users.js`
 
 Middleware chính: `backend/middleware/auth.js`.
 
-### Firebase mode
+### Firebase Authentication (Email/Social Auth)
 
-- Mặc định `AUTH_MODE=firebase`.
 - Backend verify `Authorization: Bearer <Firebase ID token>` bằng Firebase Admin.
-- `/api/auth/sync-user` nhận Firebase token, upsert user theo email/firebase_uid và tạo wallet nếu chưa có.
-- Request thường tìm user bằng `firebase_uid`.
+- `/api/auth/sync-user` nhận Firebase token qua header Authorization, xác thực với Firebase và upsert user theo email/firebase_uid, tạo wallet nếu chưa có. Sau đó sinh và trả về backend JWT (accessToken, refreshToken).
+- `/api/auth/token-login` verify Firebase token và trả về backend JWT (accessToken, refreshToken).
 
-### Dev mode
+### Phone OTP Authentication (Phone Auth)
 
-Backend tự fallback sang dev mode nếu thiếu Firebase config, hoặc set `AUTH_MODE=dev`.
-
-Trong dev mode:
-
-- Request thường dùng `x-user-id: <user_uuid>` hoặc `Authorization: Bearer <user_uuid>`.
-- `/api/auth/dev/login` login bằng email, trả về `token = user.id`.
-- `/api/auth/dev/register` tạo user + wallet, trả về `token = user.id`.
-- `/api/auth/sync-user` có thể decode Firebase JWT payload không verify hoặc dùng `x-user-id`.
-
-### OTP flow
-
-- `POST /api/auth/send-otp`: mô phỏng gửi OTP, OTP cố định `123456`.
-- `POST /api/auth/verify-otp`: tạo/tìm user bằng phone, tạo wallet và tasker profile nếu user mới, trả về token là user id.
+- `POST /api/auth/send-otp`: Gửi OTP 6 chữ số qua email (OTP được lưu và quản lý trong Redis).
+- `POST /api/auth/verify-otp`: Xác thực OTP. Nếu xác thực thành công, tự động đăng ký hoặc đăng nhập user bằng phone, tự động khởi tạo wallet và tasker profile nếu là user mới, sau đó sinh và trả về backend JWT (accessToken, refreshToken).
 
 ### Role
 
@@ -410,8 +398,6 @@ Public:
 - `GET /api/health`
 - `GET /api/categories`
 - `GET /api/banners/home`
-- `POST /api/auth/dev/login`
-- `POST /api/auth/dev/register`
 - `POST /api/auth/send-otp`
 - `POST /api/auth/verify-otp`
 - `POST /api/wallet/topup/payos/webhook`
@@ -626,10 +612,10 @@ Nếu cần debug một task marketplace:
 
 Nếu cần debug auth:
 
-1. Kiểm tra `AUTH_MODE`.
-2. Dev mode cần `x-user-id` hoặc Bearer user id.
-3. Firebase mode cần token hợp lệ và user đã sync trong DB.
-4. 401 trên client sẽ clear token/local storage.
+1. Firebase mode cần token hợp lệ (Firebase ID Token) và user đã sync trong DB qua `/api/auth/sync-user`.
+2. Phone OTP mode cần thực hiện gửi OTP và verify OTP để nhận JWT Access Token.
+3. Mọi request có auth đều yêu cầu gửi kèm `Authorization: Bearer <JWT_ACCESS_TOKEN>` của backend.
+4. Lỗi 401 trên client sẽ clear token/local storage và yêu cầu người dùng đăng nhập lại.
 
 Nếu cần debug chat:
 

@@ -48,7 +48,6 @@
  *       Task sẽ có status = OPEN sau khi tạo.
  *       Có thể đính kèm skills và location.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     requestBody:
  *       required: true
@@ -92,7 +91,6 @@
  *       Lấy danh sách tất cả tasks với filter và phân trang.
  *       Hỗ trợ tìm kiếm theo title/description.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
@@ -173,7 +171,6 @@
  *     summary: Tasks của tôi (Poster)
  *     description: Lấy danh sách tasks do chính user hiện tại tạo
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
@@ -214,7 +211,6 @@
  *     summary: Chi tiết task
  *     description: Lấy thông tin chi tiết 1 task (bao gồm skills, locations, số lượng applications)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -261,7 +257,6 @@
  *       - IN_PROGRESS → COMPLETED: release escrow (chuyển tiền cho tasker)
  *       - IN_PROGRESS → CANCELLED: refund escrow (trả lại tiền cho poster)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -307,7 +302,6 @@
  *       - bid_price phải nằm trong khoảng budget_min ~ budget_max
  *       - Tasker phải có tasker_profile
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -355,7 +349,6 @@
  *     summary: Danh sách bids cho task (Poster)
  *     description: Poster xem tất cả applications/bids cho task của mình
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -394,7 +387,6 @@
  *       Tasker rút lại bid đã gửi.
  *       Chỉ rút được khi status = PENDING.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -437,7 +429,6 @@
  *       - Application được chọn → ACCEPTED
  *       - Các application còn lại → REJECTED
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -493,7 +484,6 @@
  *       - Application được chọn → ACCEPTED
  *       - Các application còn lại → REJECTED
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -545,7 +535,6 @@
  *       Poster xem danh sách applications được xếp hạng theo thuật toán matching.
  *       Hiển thị điểm chi tiết từng tiêu chí.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -586,7 +575,6 @@
  *     summary: Ví của tôi
  *     description: Lấy số dư ví của user hiện tại.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     responses:
  *       200:
@@ -622,7 +610,6 @@
  *       Lấy danh sách escrows mà user hiện tại là poster hoặc tasker.
  *       Hỗ trợ filter theo role/status và phân trang đơn giản.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
@@ -686,7 +673,6 @@
  *
  *       Lưu ý: `taskId` là id của task (không phải escrow id).
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -731,7 +717,6 @@
  *     summary: Profile user hiện tại
  *     description: Trả về thông tin user sau khi authenticate.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     responses:
  *       200:
@@ -767,7 +752,6 @@
  *       Dùng Firebase ID token để đồng bộ user vào database (upsert theo firebase_uid)
  *       và tự tạo wallet (nếu chưa có).
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     requestBody:
  *       required: false
@@ -790,63 +774,7 @@
  *         description: Sync user failed
  */
 
-/**
- * @swagger
- * /api/auth/dev/login:
- *   post:
- *     tags: [Auth]
- *     summary: DEV login bang email
- *     description: |
- *       Dang nhap nhanh trong DEV mode bang email da ton tai trong DB.
- *       Tra ve accessToken va refreshToken de dung cho cac endpoint yeu cau auth.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/DevLoginInput'
- *     responses:
- *       200:
- *         description: Login thanh cong
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthSessionResponse'
- *       400:
- *         description: Thieu email
- *       404:
- *         description: User khong ton tai
- *       403:
- *         description: Account bi khoa
- */
 
-/**
- * @swagger
- * /api/auth/dev/register:
- *   post:
- *     tags: [Auth]
- *     summary: DEV register bang email
- *     description: |
- *       Tao user DEV, tao wallet mac dinh va gui ma xac thuc email 6 so.
- *       Dung endpoint nay khi can test flow /api/auth/verify-email tren Swagger.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/DevRegisterInput'
- *     responses:
- *       201:
- *         description: Dang ky thanh cong
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthSessionResponse'
- *       400:
- *         description: Thieu email
- *       409:
- *         description: Email da duoc dang ky va da verify
- */
 
 /**
  * @swagger
@@ -916,7 +844,6 @@
  *     summary: Restore session tu access token
  *     description: Lay lai profile va wallet bang access token hien tai.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     responses:
  *       200:
@@ -1062,7 +989,6 @@
  *       Backend luu anh vao /uploads, tao user_verifications + verification_documents,
  *       sau do auto-approve va set is_verified = true de tien cho viec test.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     requestBody:
  *       required: true
@@ -1095,7 +1021,6 @@
  *       Danh sách giao dịch của ví hiện tại (order theo created_at DESC).
  *       Cursor là `id` của transaction để phân trang.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
@@ -1144,7 +1069,6 @@
  *       DEV-only endpoint để cộng tiền vào ví (available_balance).
  *       Không dùng cho production.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     requestBody:
  *       required: true
@@ -1222,7 +1146,6 @@
  *     summary: Danh sách tất cả banner (Admin)
  *     description: Lấy danh sách banner phục vụ cho trang quản trị. Yêu cầu quyền Admin.
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
@@ -1263,7 +1186,6 @@
  *     tags: [Admin Banners]
  *     summary: Chi tiết banner (Admin)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -1299,7 +1221,6 @@
  *     tags: [Admin Banners]
  *     summary: Tạo banner mới (Admin)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     requestBody:
  *       required: true
@@ -1336,7 +1257,6 @@
  *     tags: [Admin Banners]
  *     summary: Cập nhật thông tin banner (Admin)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -1380,7 +1300,6 @@
  *     tags: [Admin Banners]
  *     summary: Cập nhật trạng thái bật/tắt banner (Admin)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
@@ -1417,7 +1336,6 @@
  *     tags: [Admin Banners]
  *     summary: Xóa banner (Admin)
  *     security:
- *       - DevAuth: []
  *       - BearerAuth: []
  *     parameters:
  *       - in: path

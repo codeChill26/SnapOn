@@ -23,17 +23,11 @@ const options = {
     ],
     components: {
       securitySchemes: {
-        DevAuth: {
-          type: 'apiKey',
-          in: 'header',
-          name: 'x-user-id',
-          description: 'DEV MODE: Truyền UUID của user để xác thực (không cần Firebase token)',
-        },
         BearerAuth: {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'PRODUCTION: Firebase ID Token',
+          description: 'Firebase ID Token or Custom JWT',
         },
       },
       schemas: {
@@ -349,26 +343,9 @@ const options = {
           properties: {
             firebaseToken: {
               type: 'string',
-              description: 'Firebase ID token. Trong DEV mode co the dung mock-firebase-token:<email>.',
-              example: 'mock-firebase-token:user@example.com',
+              description: 'Firebase ID token.',
+              example: 'firebase-id-token-xyz123',
             },
-          },
-        },
-
-        DevLoginInput: {
-          type: 'object',
-          required: ['email'],
-          properties: {
-            email: { type: 'string', format: 'email', example: 'user@example.com' },
-          },
-        },
-
-        DevRegisterInput: {
-          type: 'object',
-          required: ['email'],
-          properties: {
-            email: { type: 'string', format: 'email', example: 'user@example.com' },
-            fullName: { type: 'string', example: 'Nguyen Van A' },
           },
         },
 
@@ -550,7 +527,7 @@ const options = {
       },
     },
     security: [
-      { DevAuth: [] },
+      { BearerAuth: [] },
     ],
   },
   apis: ['./config/swagger-docs.js', './routes/*.js'],

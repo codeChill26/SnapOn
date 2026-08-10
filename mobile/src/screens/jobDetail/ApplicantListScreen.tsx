@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -42,6 +42,15 @@ export const ApplicantListScreen: React.FC = () => {
   } | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
 
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     loadApplicants();
   }, [route.params.taskId]);
@@ -65,20 +74,26 @@ export const ApplicantListScreen: React.FC = () => {
           console.warn('AI ranking not available:', err);
         }
       }
-      setApplicants(apps);
+      if (isMountedRef.current) {
+        setApplicants(apps);
+      }
     } catch (error) {
       if (__DEV__) {
         console.error('Failed to load applicants:', error);
       }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadApplicants();
-    setRefreshing(false);
+    if (isMountedRef.current) {
+      setRefreshing(false);
+    }
   };
 
   const handleUpdateStatus = (applicantId: string, status: 'ACCEPTED' | 'REJECTED', name: string) => {
@@ -95,7 +110,9 @@ export const ApplicantListScreen: React.FC = () => {
         {
           text: 'Xác nhận',
           onPress: async () => {
-            setActionInProgressId(applicantId);
+            if (isMountedRef.current) {
+              setActionInProgressId(applicantId);
+            }
             try {
               const result = await applicationService.updateApplicationStatus(applicantId, status);
 
@@ -120,7 +137,9 @@ export const ApplicantListScreen: React.FC = () => {
               const msg = err.response?.data?.message || err.message || 'Cập nhật trạng thái thất bại.';
               Alert.alert('Lỗi', msg);
             } finally {
-              setActionInProgressId(null);
+              if (isMountedRef.current) {
+                setActionInProgressId(null);
+              }
             }
           },
         },

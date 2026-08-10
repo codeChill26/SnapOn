@@ -62,7 +62,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'home',
     iconOutline: 'home-outline',
     component: HomeScreen,
-    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
+    roles: ['USER', 'ADMIN'],
   },
   {
     name: 'PostJob',
@@ -70,7 +70,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'add',
     iconOutline: 'add',
     component: PostJobScreen,
-    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
+    roles: ['USER', 'ADMIN'],
   },
   {
     name: 'ChatList',
@@ -78,7 +78,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'chatbubble-ellipses',
     iconOutline: 'chatbubble-ellipses-outline',
     component: ChatListScreen,
-    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
+    roles: ['USER', 'ADMIN'],
   },
   {
     name: 'Activity',
@@ -86,7 +86,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'clipboard',
     iconOutline: 'clipboard-outline',
     component: ActivityScreen,
-    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
+    roles: ['USER', 'ADMIN'],
   },
   {
     name: 'Profile',
@@ -94,7 +94,7 @@ const tabConfigs: TabConfig[] = [
     iconFocused: 'person',
     iconOutline: 'person-outline',
     component: ProfileScreen,
-    roles: ['USER', 'ADMIN', 'hirer', 'worker'],
+    roles: ['USER', 'ADMIN'],
   },
 ];
 
@@ -102,8 +102,8 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export const MainTabNavigator: React.FC = () => {
   const { user } = useAuth();
-
-  const role: UserRole = user?.role ?? 'USER';
+  const rawRole = user?.role ? String(user.role).toUpperCase() : 'USER';
+  const role: UserRole = rawRole === 'ADMIN' ? 'ADMIN' : 'USER';
 
   const visibleTabs = tabConfigs.filter((tab) =>
     tab.roles.includes(role),
@@ -138,6 +138,8 @@ export const MainTabNavigator: React.FC = () => {
             options={{
               tabBarLabel: tab.label,
               tabBarAccessibilityLabel: tab.label,
+              // @ts-ignore
+              unmountOnBlur: tab.name === 'PostJob' || tab.name === 'Profile',
 
               tabBarIcon: ({ focused, color, size }) => {
                 if (isPostJob) {

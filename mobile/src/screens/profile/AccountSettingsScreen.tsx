@@ -15,14 +15,16 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
-import { useApp } from '../../context/AppContext';
+import { useWallet } from '../../context/AppContext';
 import { walletService } from '../../services/walletService';
 import { authService } from '../../services/authService';
+import { storage } from '../../utils/storage';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { Ionicons } from '@expo/vector-icons';
 import { AccountConfigSection } from '../../components/profile/AccountConfigSection';
 import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { ChangePasswordModal } from '../../components/profile/ChangePasswordModal';
+import { WithdrawModal } from '../../components/profile/WithdrawModal';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -33,16 +35,41 @@ type SettingsNavProp = NativeStackNavigationProp<RootStackParamList>;
 export const AccountSettingsScreen: React.FC = () => {
   const navigation = useNavigation<SettingsNavProp>();
   const { user: currentUser, logout, updateUser } = useAuth();
-  const { wallet, setWallet } = useApp();
+  const { wallet, setWallet } = useWallet();
 
   // States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser?.avatarUrl || '');
   const [editCoverUrl, setEditCoverUrl] = useState(currentUser?.coverUrl || '');
+  const [userBankName, setUserBankName] = useState('MB Bank');
+  const [userBankAccountNumber, setUserBankAccountNumber] = useState('');
+
+  useEffect(() => {
+    // 1. Sync fresh user profile from DB API
+    authService.getProfile().then((freshUser) => {
+      if (freshUser) {
+        updateUser(freshUser);
+        if (freshUser.bankName) setUserBankName(freshUser.bankName);
+        if (freshUser.bankAccountNumber) setUserBankAccountNumber(freshUser.bankAccountNumber);
+      }
+    }).catch(() => {});
+
+    // 2. Fallback to currentUser or storage
+    if (currentUser?.bankName) setUserBankName(currentUser.bankName);
+    if (currentUser?.bankAccountNumber) setUserBankAccountNumber(currentUser.bankAccountNumber);
+
+    storage.getBankDetails().then((details) => {
+      if (details) {
+        if (details.bankName) setUserBankName((prev) => prev || details.bankName);
+        if (details.bankAccountNumber) setUserBankAccountNumber((prev) => prev || details.bankAccountNumber);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Verification Wizard States
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
@@ -167,6 +194,8 @@ export const AccountSettingsScreen: React.FC = () => {
     bio: string;
     headline: string;
     skills: string[];
+    bankName?: string;
+    bankAccountNumber?: string;
   }) => {
     if (!formData.fullName.trim()) {
       Alert.alert('Lỗi', 'Họ và tên không được để trống');
@@ -183,6 +212,12 @@ export const AccountSettingsScreen: React.FC = () => {
         headline: formData.headline.trim() || undefined,
         skills: formData.skills,
       });
+
+      if (formData.bankName || formData.bankAccountNumber) {
+        setUserBankName(formData.bankName || 'MB Bank');
+        setUserBankAccountNumber(formData.bankAccountNumber || '');
+        await storage.setBankDetails(formData.bankName || 'MB Bank', formData.bankAccountNumber || '').catch(() => {});
+      }
 
       updateUser(updatedUser);
       setIsEditModalOpen(false);
@@ -362,8 +397,9 @@ export const AccountSettingsScreen: React.FC = () => {
             }
           }}
           onWalletPress={() => navigation.navigate('Wallet')}
-          onTransactionHistory={() => navigation.navigate('Wallet', { scrollToHistory: true } as any)}
           onTopUp={() => navigation.navigate('Wallet', { hideHistory: true } as any)}
+          onWithdraw={() => setIsWithdrawModalOpen(true)}
+          onTransactionHistory={() => navigation.navigate('Wallet', { scrollToHistory: true } as any)}
           onPostedTasks={() => navigation.navigate('MainTabs', { screen: 'Activity', params: { view: 'POSTED' } } as any)}
           onMyApplications={() => navigation.navigate('MainTabs', { screen: 'Activity', params: { view: 'PARTICIPATING' } } as any)}
           onNotificationPress={() => Alert.alert('Thông báo', 'Cài đặt thông báo đang được phát triển.')}
@@ -372,6 +408,23 @@ export const AccountSettingsScreen: React.FC = () => {
           onLogout={handleLogout}
         />
       </ScrollView>
+
+      {/* Withdraw Modal */}
+      {isWithdrawModalOpen && (
+        <WithdrawModal
+          visible={isWithdrawModalOpen}
+          onClose={() => setIsWithdrawModalOpen(false)}
+          availableBalance={wallet?.availableBalance || 0}
+          initialBankName={userBankName}
+          initialBankAccountNumber={userBankAccountNumber}
+          onSuccess={async () => {
+            try {
+              const updatedWallet = await walletService.getMyWallet();
+              setWallet(updatedWallet);
+            } catch (e) {}
+          }}
+        />
+      )}
 
       {/* Change Password Modal */}
       {isChangePasswordOpen && (
@@ -393,6 +446,8 @@ export const AccountSettingsScreen: React.FC = () => {
           initialBio={currentUser?.bio || ''}
           initialHeadline={currentUser?.headline || ''}
           initialSkills={currentUser?.skills || []}
+          initialBankName={userBankName}
+          initialBankAccountNumber={userBankAccountNumber}
           isSaving={isSaving}
           isUploading={isUploading}
           isUploadingCover={isUploadingCover}

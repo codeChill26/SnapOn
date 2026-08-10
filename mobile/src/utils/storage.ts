@@ -7,6 +7,7 @@ const KEYS = {
   WALLET: '@snapon/wallet',
   ROLE: '@snapon/role',
   CHAT_DRAFTS: '@snapon/chat_drafts',
+  BANK_DETAILS: '@snapon/bank_details',
 };
 
 export interface ChatDraft {
@@ -15,8 +16,12 @@ export interface ChatDraft {
 }
 
 export const storage = {
-  async setToken(token: string): Promise<void> {
-    await AsyncStorage.setItem(KEYS.AUTH_TOKEN, token);
+  async setToken(token?: string | null): Promise<void> {
+    if (!token) {
+      await AsyncStorage.removeItem(KEYS.AUTH_TOKEN);
+    } else {
+      await AsyncStorage.setItem(KEYS.AUTH_TOKEN, token);
+    }
   },
 
   async getToken(): Promise<string | null> {
@@ -27,8 +32,12 @@ export const storage = {
     await AsyncStorage.removeItem(KEYS.AUTH_TOKEN);
   },
 
-  async setRefreshToken(token: string): Promise<void> {
-    await AsyncStorage.setItem(KEYS.REFRESH_TOKEN, token);
+  async setRefreshToken(token?: string | null): Promise<void> {
+    if (!token) {
+      await AsyncStorage.removeItem(KEYS.REFRESH_TOKEN);
+    } else {
+      await AsyncStorage.setItem(KEYS.REFRESH_TOKEN, token);
+    }
   },
 
   async getRefreshToken(): Promise<string | null> {
@@ -40,7 +49,11 @@ export const storage = {
   },
 
   async setUserData(user: any): Promise<void> {
-    await AsyncStorage.setItem(KEYS.USER_DATA, JSON.stringify(user));
+    if (!user) {
+      await AsyncStorage.removeItem(KEYS.USER_DATA);
+    } else {
+      await AsyncStorage.setItem(KEYS.USER_DATA, JSON.stringify(user));
+    }
   },
 
   async getUserData(): Promise<any | null> {
@@ -53,7 +66,11 @@ export const storage = {
   },
 
   async setWallet(wallet: any): Promise<void> {
-    await AsyncStorage.setItem(KEYS.WALLET, JSON.stringify(wallet));
+    if (!wallet) {
+      await AsyncStorage.removeItem(KEYS.WALLET);
+    } else {
+      await AsyncStorage.setItem(KEYS.WALLET, JSON.stringify(wallet));
+    }
   },
 
   async getWallet(): Promise<any | null> {
@@ -61,8 +78,12 @@ export const storage = {
     return data ? JSON.parse(data) : null;
   },
 
-  async setRole(role: string): Promise<void> {
-    await AsyncStorage.setItem(KEYS.ROLE, role);
+  async setRole(role?: string | null): Promise<void> {
+    if (!role) {
+      await AsyncStorage.removeItem(KEYS.ROLE);
+    } else {
+      await AsyncStorage.setItem(KEYS.ROLE, role);
+    }
   },
 
   async getRole(): Promise<string | null> {
@@ -99,6 +120,19 @@ export const storage = {
     const drafts = await this.getChatDrafts();
     delete drafts[conversationId];
     await AsyncStorage.setItem(KEYS.CHAT_DRAFTS, JSON.stringify(drafts));
+  },
+
+  async setBankDetails(bankName?: string | null, bankAccountNumber?: string | null): Promise<void> {
+    if (!bankName && !bankAccountNumber) {
+      await AsyncStorage.removeItem(KEYS.BANK_DETAILS);
+    } else {
+      await AsyncStorage.setItem(KEYS.BANK_DETAILS, JSON.stringify({ bankName: bankName || '', bankAccountNumber: bankAccountNumber || '' }));
+    }
+  },
+
+  async getBankDetails(): Promise<{ bankName: string; bankAccountNumber: string } | null> {
+    const data = await AsyncStorage.getItem(KEYS.BANK_DETAILS);
+    return data ? JSON.parse(data) : null;
   },
 
   async clearAll(): Promise<void> {

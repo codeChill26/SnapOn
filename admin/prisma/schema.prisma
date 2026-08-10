@@ -584,3 +584,15 @@ model VoucherRedemption {
   @@index([taskId], map: "voucher_redemptions_task_idx")
   @@map("voucher_redemptions")
 }
+
+model AccountDeletionRequest {
+  id        String   @id @default(uuid()) @db.Uuid
+  fullName  String   @map("full_name")
+  email     String
+  reason    String?
+  status    String   @default("PENDING") @db.VarChar(50) // PENDING, PROCESSED, REJECTED
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@map("account_deletion_requests")
+}
+

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -29,24 +31,50 @@ export const SavedJobsScreen: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [savingTaskIds, setSavingTaskIds] = useState<Record<string, boolean>>({});
 
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const subSaved = DeviceEventEmitter.addListener('task_saved_changed', ({ taskId, isSaved }) => {
+      if (isMountedRef.current) {
+        if (!isSaved) {
+          setTasks((current) => current.filter((item) => item.id !== taskId));
+        }
+      }
+    });
+    return () => {
+      subSaved.remove();
+    };
+  }, []);
+
   const fetchSavedTasks = useCallback(async (pageNum = 1, append = false) => {
     try {
       if (pageNum === 1 && !append) {
-        setLoading(true);
+        if (isMountedRef.current) setLoading(true);
       }
 
       const result = await taskService.getSavedTasks({ page: pageNum, limit: 20 });
-      setTasks((current) => append ? [...current, ...result.data] : result.data);
-      setPage(result.pagination.page);
-      setTotalPages(result.pagination.totalPages);
-      setTotalCount(result.pagination.total ?? result.data.length);
+      if (isMountedRef.current) {
+        setTasks((current) => append ? [...current, ...result.data] : result.data);
+        setPage(result.pagination.page);
+        setTotalPages(result.pagination.totalPages);
+        setTotalCount(result.pagination.total ?? result.data.length);
+      }
     } catch (error) {
       console.warn('Failed to fetch saved tasks:', error);
       Alert.alert('Không tải được danh sách', 'Vui lòng thử lại sau ít phút.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+      }
     }
   }, []);
 
@@ -68,6 +96,7 @@ export const SavedJobsScreen: React.FC = () => {
   }, [fetchSavedTasks, loadingMore, page, totalPages]);
 
   const handleJobPress = useCallback((task: Task) => {
+    taskService.prefetchTaskDetail(task.id);
     navigation.navigate('JobDetail', { taskId: task.id });
   }, [navigation]);
 
@@ -76,19 +105,23 @@ export const SavedJobsScreen: React.FC = () => {
 
     setSavingTaskIds((current) => ({ ...current, [task.id]: true }));
     setTasks((current) => current.filter((item) => item.id !== task.id));
+    DeviceEventEmitter.emit('task_saved_changed', { taskId: task.id, isSaved: false });
 
     try {
       await taskService.unsaveTask(task.id);
     } catch (error) {
       console.warn('Failed to unsave task:', error);
       setTasks((current) => [{ ...task, isSaved: true }, ...current]);
+      DeviceEventEmitter.emit('task_saved_changed', { taskId: task.id, isSaved: true });
       Alert.alert('Không bỏ lưu được', 'Vui lòng thử lại sau ít phút.');
     } finally {
-      setSavingTaskIds((current) => {
-        const next = { ...current };
-        delete next[task.id];
-        return next;
-      });
+      if (isMountedRef.current) {
+        setSavingTaskIds((current) => {
+          const next = { ...current };
+          delete next[task.id];
+          return next;
+        });
+      }
     }
   }, [savingTaskIds]);
 
@@ -100,6 +133,21 @@ export const SavedJobsScreen: React.FC = () => {
       saving={Boolean(savingTaskIds[item.id])}
     />
   ), [handleJobPress, handleToggleSaved, savingTaskIds]);
+
+  const { width: screenWidth } = useWindowDimensions();
+  const rowHeight = useMemo(() => {
+    const cardWidth = (screenWidth - 16 * 2 - 8) / 2;
+    return (cardWidth / 1.25) + 124 + 16;
+  }, [screenWidth]);
+
+  const getItemLayout = useCallback((_data: any, index: number) => {
+    const rowIndex = Math.floor(index / 2);
+    return {
+      length: rowHeight,
+      offset: rowHeight * rowIndex,
+      index,
+    };
+  }, [rowHeight]);
 
   const emptyComponent = useMemo(() => {
     if (loading) {
@@ -157,6 +205,9 @@ export const SavedJobsScreen: React.FC = () => {
         ListFooterComponent={footerComponent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4}
+        windowSize={11}
+        removeClippedSubviews={true}
+        getItemLayout={getItemLayout}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chính sách Quyền riêng tư & An toàn dữ liệu - SnapOn</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="assets/LogoMain.jpg">
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind Configuration for customized colors -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#fff5ec',
+              100: '#ffe8d3',
+              200: '#ffd0a7',
+              300: '#ffb070',
+              400: '#ff8637',
+              500: '#ff6600', // SnapOn Primary Orange
+              600: '#f04e00',
+              700: '#c73a00',
+              800: '#9e2f03',
+              900: '#7f2806',
+            },
+            dark: {
+              50: '#f6f7f9',
+              100: '#eceff3',
+              200: '#d5dde6',
+              300: '#b1c1d1',
+              400: '#869eb6',
+              500: '#64819e',
+              600: '#4e6782',
+              700: '#3f536a',
+              800: '#090e17', // SnapOn Dark Blue/Black
+              900: '#060a10',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Ionicons for modern icons -->
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+<body class="bg-dark-50 text-dark-800 font-sans antialiased leading-relaxed">
+
+  <!-- Header / Navigation -->
+  <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-dark-100 transition-all duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <!-- Logo -->
+        <div class="flex items-center space-x-3">
+          <img src="assets/LogoMain.jpg" alt="SnapOn Logo" class="w-10 h-10 rounded-xl object-cover shadow-md shadow-brand-500/10">
+          <span class="text-2xl font-extrabold text-dark-800 tracking-tight">Snap<span class="text-brand-500">On</span></span>
+        </div>
+        <!-- Right Navigation -->
+        <div class="hidden md:flex space-x-8 text-sm font-medium text-dark-600">
+          <a href="#introduction" class="hover:text-brand-500 transition-colors duration-200">Giới thiệu</a>
+          <a href="#data-collected" class="hover:text-brand-500 transition-colors duration-200">Dữ liệu thu thập</a>
+          <a href="#data-usage" class="hover:text-brand-500 transition-colors duration-200">Mục đích sử dụng</a>
+          <a href="#data-sharing" class="hover:text-brand-500 transition-colors duration-200">Bên thứ ba</a>
+          <a href="#data-security" class="hover:text-brand-500 transition-colors duration-200">Bảo mật</a>
+          <a href="#data-deletion" class="hover:text-brand-500 transition-colors duration-200">Xóa dữ liệu</a>
+        </div>
+        <!-- Contact Button -->
+        <div class="flex items-center space-x-4">
+          <a href="#deletion-form" class="inline-flex items-center justify-center px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl text-white bg-brand-500 hover:bg-brand-600 transition-all duration-200 shadow-md shadow-brand-500/10 hover:shadow-brand-500/20 hover:-translate-y-0.5">
+            Yêu cầu xóa tài khoản
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative bg-gradient-to-b from-brand-50 via-white to-dark-50 py-16 sm:py-20 border-b border-dark-100 overflow-hidden">
+    <!-- Decorative background elements -->
+    <div class="absolute top-1/2 left-0 w-72 h-72 bg-brand-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -translate-y-1/2 -translate-x-1/2"></div>
+    <div class="absolute top-0 right-0 w-80 h-80 bg-brand-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 translate-x-1/3 -translate-y-1/3"></div>
+    
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div class="grid gap-8 lg:grid-cols-12 lg:items-center">
+        <!-- Text Content -->
+        <div class="lg:col-span-8 text-center lg:text-left">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-100 text-brand-700 mb-4 tracking-wider uppercase">
+            Google Play Compliance Center
+          </span>
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-dark-800 tracking-tight leading-tight mb-6">
+            Chính sách Quyền riêng tư <br class="hidden sm:inline"><span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-brand-700">& An toàn Dữ liệu</span>
+          </h1>
+          <p class="text-base sm:text-lg text-dark-600 max-w-2xl mx-auto lg:mx-0 font-medium">
+            SnapOn cam kết bảo vệ tuyệt đối thông tin riêng tư và các dữ liệu cá nhân của bạn. Dưới đây là thông tin minh bạch về cách chúng tôi thu thập, lưu trữ, bảo mật và cung cấp quyền kiểm soát dữ liệu cho bạn.
+          </p>
+          <div class="mt-6 text-xs sm:text-sm text-dark-400 font-semibold flex items-center justify-center lg:justify-start space-x-2">
+            <ion-icon name="time-outline" class="text-brand-500 text-base"></ion-icon>
+            <span>Cập nhật mới nhất: Ngày 30 tháng 06 năm 2026</span>
+          </div>
+        </div>
+        <!-- Mascot Image -->
+        <div class="hidden lg:flex lg:col-span-4 justify-center">
+          <div class="relative">
+            <div class="absolute -inset-4 bg-gradient-to-tr from-brand-500 to-brand-300 rounded-full blur opacity-20 animate-pulse"></div>
+            <img src="assets/mascot_sunglasses.png" alt="SnapOn Mascot" class="relative w-56 h-56 object-contain drop-shadow-xl">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content Layout -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="lg:flex lg:gap-8">
+      
+      <!-- Table of Contents (Sidebar Sticky on Desktop) -->
+      <aside class="hidden lg:block lg:w-1/4">
+        <div class="sticky top-24 bg-white p-6 rounded-2xl border border-dark-100 shadow-sm space-y-4">
+          <h3 class="text-sm font-bold text-dark-800 uppercase tracking-wider border-b border-dark-100 pb-3">Danh mục chính</h3>
+          <nav class="space-y-1 text-sm">
+            <a href="#introduction" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-brand-500 bg-brand-50 font-semibold transition-all">
+              <ion-icon name="information-circle-outline" class="text-base"></ion-icon>
+              <span>1. Giới thiệu chung</span>
+            </a>
+            <a href="#data-collected" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all">
+              <ion-icon name="cube-outline" class="text-base"></ion-icon>
+              <span>2. Thông tin thu thập</span>
+            </a>
+            <a href="#data-usage" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all">
+              <ion-icon name="rocket-outline" class="text-base"></ion-icon>
+              <span>3. Mục đích sử dụng</span>
+            </a>
+            <a href="#data-sharing" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all">
+              <ion-icon name="share-social-outline" class="text-base"></ion-icon>
+              <span>4. Chia sẻ bên thứ ba</span>
+            </a>
+            <a href="#data-security" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all">
+              <ion-icon name="shield-checkmark-outline" class="text-base"></ion-icon>
+              <span>5. Cơ chế Bảo mật</span>
+            </a>
+            <a href="#device-permissions" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all">
+              <ion-icon name="phone-portrait-outline" class="text-base"></ion-icon>
+              <span>6. Quyền truy cập thiết bị</span>
+            </a>
+            <a href="#data-deletion" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all font-medium">
+              <ion-icon name="trash-outline" class="text-base"></ion-icon>
+              <span>7. Quyền xóa dữ liệu</span>
+            </a>
+            <a href="#contact" class="sidebar-link flex items-center space-x-2 px-3 py-2 rounded-lg text-dark-600 hover:text-brand-500 hover:bg-dark-50 transition-all">
+              <ion-icon name="mail-outline" class="text-base"></ion-icon>
+              <span>8. Thông tin liên hệ</span>
+            </a>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Content Area -->
+      <div class="lg:w-3/4 space-y-12">
+
+        <!-- 1. Giới thiệu chung -->
+        <section id="introduction" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="information-circle"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">1. Giới thiệu chung</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              Chào mừng bạn đến với ứng dụng <strong>SnapOn</strong>. SnapOn là nền tảng kết nối trực tuyến kết nối người dùng có nhu cầu đăng tuyển công việc (Poster) và người dùng có mong muốn tìm kiếm nhận việc (Tasker).
+            </p>
+            <p>
+              Chúng tôi hiểu rằng việc chia sẻ thông tin cá nhân trên mạng xã hội và các ứng dụng di động đòi hỏi sự tin tưởng rất lớn. Vì vậy, Chính sách Quyền riêng tư này được thiết lập để giải thích một cách minh bạch về loại dữ liệu chúng tôi thu thập, cách chúng tôi bảo mật và kiểm soát dữ liệu đó nhằm đáp ứng 100% các tiêu chuẩn nghiêm ngặt của chính sách <strong>An toàn dữ liệu Google Play (Google Play Data Safety)</strong>. 
+            </p>
+            <p class="bg-brand-50 border-l-4 border-brand-500 p-4 rounded-r-lg text-dark-800 font-medium">
+              Bằng việc cài đặt và sử dụng ứng dụng SnapOn, bạn đồng ý với các điều khoản thu thập và xử lý thông tin được nêu chi tiết trong chính sách này.
+            </p>
+          </div>
+        </section>
+
+        <!-- 2. Thông tin chúng tôi thu thập -->
+        <section id="data-collected" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="cube"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">2. Thông tin chúng tôi thu thập</h2>
+          </div>
+          <div class="space-y-6 text-dark-700 text-sm sm:text-base">
+            <p>
+              Chúng tôi thu thập một số thông tin cá nhân và kỹ thuật nhất định nhằm tối ưu hóa chức năng kết nối việc làm và bảo vệ cộng đồng SnapOn khỏi các hành vi gian lận. Cụ thể gồm các nhóm dữ liệu sau:
+            </p>
+            
+            <div class="grid gap-6 md:grid-cols-2">
+              <!-- Item 1 -->
+              <div class="p-5 rounded-xl border border-dark-100 hover:border-brand-200 hover:bg-brand-50/10 transition-all">
+                <div class="flex items-center space-x-2 text-brand-500 mb-2">
+                  <ion-icon name="person-circle-outline" class="text-xl"></ion-icon>
+                  <h4 class="font-bold text-dark-800">Thông tin cá nhân cơ bản</h4>
+                </div>
+                <p class="text-xs sm:text-sm text-dark-600">
+                  Họ tên đầy đủ, địa chỉ email, và số điện thoại. Dữ liệu này được thu thập khi bạn tạo tài khoản và xác thực qua OTP.
+                </p>
+              </div>
+
+
+              <!-- Item 3 -->
+              <div class="p-5 rounded-xl border border-dark-100 hover:border-brand-200 hover:bg-brand-50/10 transition-all">
+                <div class="flex items-center space-x-2 text-brand-500 mb-2">
+                  <ion-icon name="wallet-outline" class="text-xl"></ion-icon>
+                  <h4 class="font-bold text-dark-800">Thông tin tài chính</h4>
+                </div>
+                <p class="text-xs sm:text-sm text-dark-600">
+                  Tên ngân hàng thụ hưởng, số tài khoản ngân hàng thụ hưởng và lịch sử chi tiết các giao dịch nạp, rút tiền nội bộ trong hệ thống.
+                </p>
+              </div>
+
+              <!-- Item 4 -->
+              <div class="p-5 rounded-xl border border-dark-100 hover:border-brand-200 hover:bg-brand-50/10 transition-all">
+                <div class="flex items-center space-x-2 text-brand-500 mb-2">
+                  <ion-icon name="id-card-outline" class="text-xl"></ion-icon>
+                  <h4 class="font-bold text-dark-800">Định danh chính phủ & KYC</h4>
+                </div>
+                <p class="text-xs sm:text-sm text-dark-600">
+                  Ảnh chụp giấy tờ tùy thân (CCCD/Thẻ sinh viên) mặt trước/sau, ảnh chụp chân dung (Selfie) và mã băm một chiều của số định danh CCCD.
+                </p>
+              </div>
+
+              <!-- Item 5 -->
+              <div class="p-5 rounded-xl border border-dark-100 hover:border-brand-200 hover:bg-brand-50/10 transition-all">
+                <div class="flex items-center space-x-2 text-brand-500 mb-2">
+                  <ion-icon name="images-outline" class="text-xl"></ion-icon>
+                  <h4 class="font-bold text-dark-800">Hình ảnh và Tệp tin</h4>
+                </div>
+                <p class="text-xs sm:text-sm text-dark-600">
+                  Ảnh đại diện, ảnh bìa trang cá nhân, hình ảnh mô tả thực tế đính kèm tại các bài đăng tuyển việc và hình ảnh trao đổi trong tin nhắn.
+                </p>
+              </div>
+
+              <!-- Item 6 -->
+              <div class="p-5 rounded-xl border border-dark-100 hover:border-brand-200 hover:bg-brand-50/10 transition-all">
+                <div class="flex items-center space-x-2 text-brand-500 mb-2">
+                  <ion-icon name="hardware-chip-outline" class="text-xl"></ion-icon>
+                  <h4 class="font-bold text-dark-800">Thông tin thiết bị & Mạng</h4>
+                </div>
+                <p class="text-xs sm:text-sm text-dark-600">
+                  Mã Token đẩy thông báo (Push Token), địa chỉ IP kết nối, thông tin hệ điều hành và phiên bản trình duyệt để duy trì bảo mật phiên.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Mục đích sử dụng dữ liệu -->
+        <section id="data-usage" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="rocket"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">3. Mục đích sử dụng dữ liệu</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              Chúng tôi thu thập và xử lý các loại dữ liệu trên phục vụ các mục đích chính đáng dưới đây:
+            </p>
+            <ul class="space-y-4 mt-4">
+              <li class="flex items-start space-x-3">
+                <div class="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <span class="text-xs font-bold">1</span>
+                </div>
+                <div>
+                  <strong class="text-dark-800 font-semibold">Cung cấp chức năng cốt lõi của ứng dụng:</strong>
+                  <p class="text-sm text-dark-600 mt-0.5">
+                    Họ tên, email, và số điện thoại dùng để tạo hồ sơ người dùng cá nhân, duy trì thông tin liên lạc và giúp kết nối cuộc gọi/tin nhắn giữa hai bên làm việc.
+                  </p>
+                </div>
+              </li>
+              <li class="flex items-start space-x-3">
+                <div class="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <span class="text-xs font-bold">2</span>
+                </div>
+                <div>
+                  <strong class="text-dark-800 font-semibold">Thuật toán Tự động khớp việc làm (Auto-Match Algorithm):</strong>
+                  <p class="text-sm text-dark-600 mt-0.5">
+                    So khớp điểm số ưu tiên giữa các ứng viên (Tasker) và công việc dựa trên giá thầu ứng tuyển, điểm đánh giá trung bình và tỷ lệ hoàn thành công việc trước đó để đề xuất người phù hợp nhất.
+                  </p>
+                </div>
+              </li>
+              <li class="flex items-start space-x-3">
+                <div class="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <span class="text-xs font-bold">3</span>
+                </div>
+                <div>
+                  <strong class="text-dark-800 font-semibold">Thanh toán bảo đảm & Rút tiền mặt:</strong>
+                  <p class="text-sm text-dark-600 mt-0.5">
+                    Thông tin ví, lịch sử giao dịch và tài khoản ngân hàng phục vụ các thao tác nạp tiền đảm bảo (Escrow) trước khi thực hiện công việc, giải ngân và chuyển khoản tiền công về ngân hàng cá nhân sau khi hoàn thành.
+                  </p>
+                </div>
+              </li>
+              <li class="flex items-start space-x-3">
+                <div class="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <span class="text-xs font-bold">4</span>
+                </div>
+                <div>
+                  <strong class="text-dark-800 font-semibold">Định danh KYC, Chống gian lận & Bảo vệ hệ thống:</strong>
+                  <p class="text-sm text-dark-600 mt-0.5">
+                    Thông tin thẻ CCCD, ảnh selfie nhằm ngăn ngừa việc đăng ký tài khoản rác, lừa đảo công việc, hành vi gian lận tài chính. Địa chỉ IP và mã thiết bị được dùng để kiểm tra bảo mật ngăn chặn các đợt tấn công tự động (Spam/Brute-force).
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 4. Chia sẻ dữ liệu với bên thứ ba -->
+        <section id="data-sharing" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="share-social"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">4. Chia sẻ dữ liệu với bên thứ ba</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              Chúng tôi tuyệt đối không bán hay cung cấp dữ liệu cá nhân của bạn cho các mục đích tiếp thị thương mại. Để vận hành dịch vụ kỹ thuật ổn định và an toàn, chúng tôi chỉ truyền các thông tin cần thiết đến các đối tác kỹ thuật uy tín sau:
+            </p>
+            
+            <div class="space-y-4 mt-4">
+              <!-- Service 1 -->
+              <div class="flex items-start space-x-3 p-4 rounded-xl bg-dark-50/50 border border-dark-100">
+                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-brand-500 font-bold shrink-0 shadow-sm">
+                  <ion-icon name="logo-google" class="text-xl"></ion-icon>
+                </div>
+                <div>
+                  <h5 class="font-bold text-dark-800">Google Firebase (Google LLC)</h5>
+                  <p class="text-xs sm:text-sm text-dark-600 mt-0.5">
+                    Hỗ trợ xác thực đăng nhập bảo mật bằng tài khoản Google thông qua SDK Firebase Auth và đồng bộ tài khoản dữ liệu người dùng.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Service 2 -->
+              <div class="flex items-start space-x-3 p-4 rounded-xl bg-dark-50/50 border border-dark-100">
+                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-500 font-bold shrink-0 shadow-sm">
+                  <ion-icon name="mail-unread-outline" class="text-xl text-blue-600"></ion-icon>
+                </div>
+                <div>
+                  <h5 class="font-bold text-dark-800">Brevo (Sendinblue SAS)</h5>
+                  <p class="text-xs sm:text-sm text-dark-600 mt-0.5">
+                    Sử dụng hạ tầng truyền tải email để gửi mã OTP, thông báo giao dịch giao dịch tiền công, và khôi phục lại mật khẩu cho người dùng.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Service 3 -->
+              <div class="flex items-start space-x-3 p-4 rounded-xl bg-dark-50/50 border border-dark-100">
+                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-green-500 font-bold shrink-0 shadow-sm">
+                  <ion-icon name="card-outline" class="text-xl text-emerald-600"></ion-icon>
+                </div>
+                <div>
+                  <h5 class="font-bold text-dark-800">PayOS (Cổng thanh toán điện tử)</h5>
+                  <p class="text-xs sm:text-sm text-dark-600 mt-0.5">
+                    Truyền dữ liệu mã hóa đơn thanh toán và số tiền để khởi tạo liên kết tạo mã QR chuyển khoản ngân hàng an toàn.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Service 4 -->
+              <div class="flex items-start space-x-3 p-4 rounded-xl bg-dark-50/50 border border-dark-100">
+                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-indigo-500 font-bold shrink-0 shadow-sm">
+                  <ion-icon name="notifications-outline" class="text-xl text-violet-600"></ion-icon>
+                </div>
+                <div>
+                  <h5 class="font-bold text-dark-800">Expo Application Services (EAS)</h5>
+                  <p class="text-xs sm:text-sm text-dark-600 mt-0.5">
+                    Đăng ký mã Push Token thiết bị của người dùng nhằm chuyển giao và hiển thị thông báo đẩy về trạng thái công việc và tin nhắn mới trong app.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Cơ chế bảo mật dữ liệu thực tế -->
+        <section id="data-security" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="shield-checkmark"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">5. Cơ chế Bảo mật Dữ liệu Thực tế</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              Chúng tôi áp dụng các tiêu chuẩn kỹ thuật bảo mật nghiêm ngặt nhất để ngăn chặn truy cập trái phép và bảo toàn dữ liệu người dùng:
+            </p>
+            <div class="space-y-4">
+              <div class="border-l-4 border-emerald-500 pl-4 py-1">
+                <h5 class="font-bold text-dark-800">Mã hóa truyền tải (In Transit)</h5>
+                <p class="text-sm text-dark-600 mt-1">
+                  Toàn bộ các gói tin dữ liệu gửi từ thiết bị ứng dụng SnapOn lên hệ thống máy chủ đều được mã hóa hoàn toàn qua đường truyền bảo mật **HTTPS/TLS**. Các phiên kết nối thời gian thực qua socket chat được bảo vệ thông qua kiểm tra tính hợp lệ của Token bắt tay ban đầu.
+                </p>
+              </div>
+              <div class="border-l-4 border-emerald-500 pl-4 py-1">
+                <h5 class="font-bold text-dark-800">Mã hóa lưu trữ (At Rest)</h5>
+                <p class="text-sm text-dark-600 mt-1">
+                  Mật khẩu tài khoản của bạn được băm một chiều bằng thuật toán mã hóa **SHA-256** trước khi lưu vào CSDL, không thể giải mã ngược lại. Các khóa đăng nhập được lưu trữ ở thiết bị di động của bạn bằng **SecureStore** (phần cứng mã hóa riêng của iOS/Android). Số tài liệu định danh quốc gia (CCCD) được băm an toàn để đối chiếu duy nhất, hạn chế lộ lọt thông tin tối đa.
+                </p>
+              </div>
+              <div class="border-l-4 border-emerald-500 pl-4 py-1">
+                <h5 class="font-bold text-dark-800">Quản lý kiểm soát quyền đăng nhập</h5>
+                <p class="text-sm text-dark-600 mt-1">
+                  Áp dụng cơ chế phân phối token kép **JWT (Access Token hết hạn sau 15 phút & Refresh Token xoay vòng tự động)** giúp hạn chế tối đa lỗ hổng chiếm đoạt quyền điều khiển session.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. Quyền truy cập thiết bị -->
+        <section id="device-permissions" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="phone-portrait"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">6. Quyền truy cập thiết bị</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              Để vận hành trơn tru và cung cấp đầy đủ các tiện ích công nghệ, ứng dụng SnapOn yêu cầu người dùng phê duyệt các quyền truy cập hệ thống thiết bị sau đây:
+            </p>
+            <div class="space-y-3">
+              <div class="flex justify-between items-start p-3 bg-dark-50 rounded-xl border border-dark-100">
+                <div>
+                  <span class="font-bold text-dark-800 text-xs sm:text-sm">Quyền Máy ảnh (Camera)</span>
+                  <p class="text-xs text-dark-500 mt-0.5">Chụp ảnh hồ sơ trực tiếp, chụp ảnh thẻ định danh cá nhân (CCCD) và ảnh chân dung selfie để gửi xác minh KYC.</p>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded bg-blue-100 text-blue-800 shrink-0">Yêu cầu khi cần</span>
+              </div>
+              <div class="flex justify-between items-start p-3 bg-dark-50 rounded-xl border border-dark-100">
+                <div>
+                  <span class="font-bold text-dark-800 text-xs sm:text-sm">Quyền Thư viện Ảnh (Media Library)</span>
+                  <p class="text-xs text-dark-500 mt-0.5">Cho phép người dùng chọn hình ảnh minh họa có sẵn từ bộ nhớ máy đăng việc hoặc gửi kèm qua khung chat.</p>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded bg-blue-100 text-blue-800 shrink-0">Yêu cầu khi cần</span>
+              </div>
+              <div class="flex justify-between items-start p-3 bg-dark-50 rounded-xl border border-dark-100">
+                <div>
+                  <span class="font-bold text-dark-800 text-xs sm:text-sm">Quyền Thông báo Đẩy (Push Notifications)</span>
+                  <p class="text-xs text-dark-500 mt-0.5">Gửi thông báo âm thanh/nhìn thấy khi có tin nhắn chat mới hoặc khi công việc được duyệt thành công.</p>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded bg-blue-100 text-blue-800 shrink-0">Yêu cầu khi cần</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. Quyền xóa dữ liệu (Đặc biệt quan trọng) -->
+        <section id="data-deletion" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="trash"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">7. Quyền xóa dữ liệu & Tài khoản</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              SnapOn hoàn toàn tôn trọng quyền tự chủ thông tin cá nhân của người dùng. Theo quy định chính sách An toàn dữ liệu của Google Play, chúng tôi cung cấp đầy đủ các phương thức để bạn yêu cầu xóa tài khoản và dữ liệu liên quan.
+            </p>
+
+            <div class="bg-brand-50 p-5 rounded-xl border border-brand-100 space-y-3">
+              <h4 class="font-bold text-brand-700 flex items-center space-x-2">
+                <ion-icon name="git-commit-outline" class="text-lg"></ion-icon>
+                <span>Cơ chế xử lý Xóa (Soft-Delete & Vô danh hóa)</span>
+              </h4>
+              <p class="text-xs sm:text-sm text-dark-800 leading-relaxed">
+                Khi thực hiện yêu cầu xóa tài khoản, hệ thống sẽ chuyển trạng thái người dùng thành **BANNED (Chặn truy cập vĩnh viễn)**, đồng thời áp dụng cơ chế **Vô danh hóa dữ liệu (Anonymization)**: họ tên thật của bạn sẽ được thay thế bằng một chuỗi băm ngẫu nhiên dạng `HọTên_deleted_uuid`. Hành động này giúp ẩn danh hoàn toàn thông tin cá nhân của bạn đối với cộng đồng trên hệ thống, trong khi vẫn lưu giữ cấu trúc kỹ thuật cho các hóa đơn giao dịch hoặc báo cáo cũ để tuân thủ pháp luật thuế/tài chính.
+              </p>
+            </div>
+
+            <div class="grid gap-6 md:grid-cols-2 mt-6">
+              <div class="p-5 rounded-xl border border-dark-100 bg-dark-50/50">
+                <h5 class="font-bold text-dark-800 mb-2">Cách 1: Yêu cầu trực tiếp trong app</h5>
+                <p class="text-xs text-dark-600">
+                  Tại ứng dụng di động SnapOn, đi tới phần **Cài đặt cá nhân** -> chọn **Hồ sơ bảo mật** -> Nhấn nút **Xóa tài khoản**. Phiên làm việc của bạn sẽ lập tức bị hủy bỏ và gửi yêu cầu vô danh hóa thông tin lên máy chủ trung tâm.
+                </p>
+              </div>
+
+              <div class="p-5 rounded-xl border border-dark-100 bg-dark-50/50">
+                <h5 class="font-bold text-dark-800 mb-2">Cách 2: Gửi yêu cầu từ xa qua Web Link</h5>
+                <p class="text-xs text-dark-600">
+                  Nếu bạn đã gỡ cài đặt ứng dụng hoặc không có thiết bị di động bên cạnh, bạn có thể thực hiện gửi trực tiếp biểu mẫu yêu cầu xóa tài khoản dưới đây. Đội ngũ kỹ thuật của chúng tôi sẽ xử lý yêu cầu của bạn trong vòng 24 - 48 giờ làm việc.
+                </p>
+              </div>
+            </div>
+
+            <!-- Web Link Deletion Form Mockup -->
+            <div id="deletion-form" class="mt-8 bg-white border border-dark-200 rounded-2xl p-6 shadow-md shadow-dark-800/5 relative overflow-hidden">
+              <div class="absolute top-0 left-0 w-2 h-full bg-brand-500"></div>
+              <h4 class="text-lg font-extrabold text-dark-800 mb-2">Biểu mẫu Yêu cầu Xóa tài khoản & Dữ liệu từ xa</h4>
+              <p class="text-xs text-dark-500 mb-6">Điền chính xác các thông tin đã dùng đăng ký tài khoản SnapOn để hệ thống xác minh và thực hiện xóa dữ liệu.</p>
+              
+              <form id="mockDeletionForm" class="space-y-4" onsubmit="handleRealSubmit(event)">
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="block text-xs font-bold text-dark-700 uppercase tracking-wider mb-2">Họ và tên của bạn</label>
+                    <input type="text" id="inputFullName" required placeholder="Ví dụ: Nguyễn Văn A" class="w-full px-4 py-2.5 rounded-xl bg-dark-50 border border-dark-200 text-sm focus:outline-none focus:border-brand-500 focus:bg-white transition-all duration-200">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-dark-700 uppercase tracking-wider mb-2">Email đăng ký tài khoản</label>
+                    <div class="flex space-x-2">
+                      <input type="email" id="inputEmail" required placeholder="Ví dụ: emailcua-ban@gmail.com" class="flex-1 px-4 py-2.5 rounded-xl bg-dark-50 border border-dark-200 text-sm focus:outline-none focus:border-brand-500 focus:bg-white transition-all duration-200">
+                      <button type="button" id="sendOtpBtn" onclick="handleSendOtp()" class="px-4 py-2.5 text-xs font-bold rounded-xl text-brand-600 bg-brand-50 border border-brand-200 hover:bg-brand-100 hover:text-brand-700 transition-all duration-200 cursor-pointer shrink-0">
+                        <span id="otpBtnText">Gửi mã OTP</span>
+                        <span id="otpBtnSpinner" class="hidden">Đang gửi...</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- OTP verification code wrapper -->
+                <div id="otpWrapper" class="hidden p-4 rounded-xl bg-brand-50/20 border border-brand-100/50 space-y-2">
+                  <label class="block text-xs font-bold text-dark-700 uppercase tracking-wider mb-1">Mã xác thực OTP (Đã gửi qua email)</label>
+                  <input type="text" id="inputOtp" placeholder="Nhập 6 chữ số mã OTP" maxLength="6" class="w-full sm:w-64 px-4 py-2.5 rounded-xl bg-white border border-dark-200 text-sm font-semibold tracking-widest text-center focus:outline-none focus:border-brand-500 transition-all duration-200">
+                  <span id="otpMessage" class="block text-[11px] text-brand-600 font-medium">Vui lòng kiểm tra email (bao gồm thư rác/spam) để lấy mã xác thực.</span>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-dark-700 uppercase tracking-wider mb-2">Lý do yêu cầu xóa (Tùy chọn)</label>
+                  <textarea id="inputReason" rows="3" placeholder="Chúng tôi mong nhận được phản hồi của bạn để cải tiến sản phẩm..." class="w-full px-4 py-2.5 rounded-xl bg-dark-50 border border-dark-200 text-sm focus:outline-none focus:border-brand-500 focus:bg-white transition-all duration-200"></textarea>
+                </div>
+
+                <div class="flex items-start space-x-2 py-2">
+                  <input type="checkbox" required id="consentDelete" class="w-4 h-4 mt-0.5 text-brand-500 border-dark-300 rounded focus:ring-brand-400">
+                  <label for="consentDelete" class="text-xs text-dark-600 leading-normal">
+                    Tôi xác nhận việc xóa tài khoản sẽ là vĩnh viễn. Tôi chấp nhận điều khoản vô danh hóa dữ liệu hồ sơ cá nhân và chịu trách nhiệm đối với các cam kết tài chính/giao dịch chưa hoàn thành (nếu có).
+                  </label>
+                </div>
+
+                <div id="errorMessage" class="hidden p-3 text-xs text-red-600 bg-red-50 rounded-xl border border-red-200"></div>
+
+                <button type="submit" id="submitBtn" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10 hover:shadow-brand-500/20 active:translate-y-0 -translate-y-0.5 transition-all duration-200">
+                  <span id="btnText" class="flex items-center">
+                    <ion-icon name="send" class="mr-2"></ion-icon>
+                    Gửi yêu cầu xóa tài khoản
+                  </span>
+                  <span id="btnSpinner" class="hidden flex items-center justify-center">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Đang gửi yêu cầu...
+                  </span>
+                </button>
+              </form>
+
+              <!-- Form Success State (hidden initially) -->
+              <div id="formSuccessState" class="hidden text-center py-8 space-y-4">
+                <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+                  <ion-icon name="checkmark-circle"></ion-icon>
+                </div>
+                <h5 class="text-lg font-bold text-dark-800">Yêu cầu đã được tiếp nhận thành công!</h5>
+                <p class="text-sm text-dark-600 max-w-md mx-auto">
+                  Yêu cầu xóa tài khoản đã được ghi nhận trên hệ thống SnapOn. Đội ngũ quản trị viên sẽ tiến hành xác minh và xử lý tài khoản của bạn theo chính sách vô danh hóa trong vòng 24 - 48 giờ.
+                </p>
+                <button onclick="resetForm()" class="px-4 py-2 bg-dark-100 hover:bg-dark-200 text-dark-800 text-xs font-semibold rounded-xl transition-all">
+                  Quay lại biểu mẫu
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 8. Thông tin liên hệ -->
+        <section id="contact" class="bg-white p-6 sm:p-8 rounded-2xl border border-dark-100 shadow-sm scroll-mt-24">
+          <div class="flex items-center space-x-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-500 text-xl">
+              <ion-icon name="mail"></ion-icon>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-dark-800">8. Thông tin liên hệ</h2>
+          </div>
+          <div class="space-y-4 text-dark-700 text-sm sm:text-base">
+            <p>
+              Nếu bạn có bất kỳ câu hỏi, khiếu nại, phản hồi nào liên quan đến Chính sách Quyền riêng tư hoặc có các thắc mắc về luồng xử lý an toàn thông tin cá nhân của ứng dụng SnapOn, xin vui lòng liên hệ với bộ phận phụ trách bảo mật thông tin của chúng tôi:
+            </p>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <div class="p-4 bg-dark-50 rounded-xl border border-dark-100 flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-white text-brand-500 flex items-center justify-center text-xl shadow-sm">
+                  <ion-icon name="mail-unread"></ion-icon>
+                </div>
+                <div>
+                  <span class="block text-xs font-semibold text-dark-400">Email Hỗ trợ pháp lý</span>
+                  <a href="mailto:tuankietpro04@gmail.com" class="text-sm font-bold text-dark-800 hover:text-brand-500 transition-colors">tuankietpro04@gmail.com</a>
+                </div>
+              </div>
+
+              <div class="p-4 bg-dark-50 rounded-xl border border-dark-100 flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-white text-brand-500 flex items-center justify-center text-xl shadow-sm">
+                  <ion-icon name="business"></ion-icon>
+                </div>
+                <div>
+                  <span class="block text-xs font-semibold text-dark-400">Đơn vị quản lý sản phẩm</span>
+                  <span class="text-sm font-bold text-dark-800">Dự án SnapOn App Việt Nam</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-dark-800 text-white mt-20 border-t border-dark-700">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="md:flex md:items-center md:justify-between">
+        <div class="flex items-center space-x-3">
+          <img src="assets/LogoMain.jpg" alt="SnapOn Logo" class="w-8 h-8 rounded-lg object-cover">
+          <span class="text-lg font-bold">Snap<span class="text-brand-400">On</span></span>
+        </div>
+        <div class="mt-4 md:mt-0 text-xs sm:text-sm text-dark-400">
+          <p>&copy; 2026 SnapOn App. Mọi quyền được bảo lưu. Thiết kế và phát triển tuân thủ Quy chế Bảo mật Google Play.</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script for Mock Form Submission & Scrollspy Active Class -->
+  <script>
+    const getApiBaseUrl = () => {
+      // Connect to the deployed debug backend by default
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('local') === 'true') {
+        return 'http://localhost:3000/api';
+      }
+      return 'https://graceful-playfulness-production.up.railway.app/api';
+    };
+
+    let cooldownInterval = null;
+
+    async function handleSendOtp() {
+      const emailInput = document.getElementById('inputEmail');
+      const email = emailInput.value.trim();
+      
+      const otpBtn = document.getElementById('sendOtpBtn');
+      const otpBtnText = document.getElementById('otpBtnText');
+      const otpBtnSpinner = document.getElementById('otpBtnSpinner');
+      const errorMessage = document.getElementById('errorMessage');
+      const otpWrapper = document.getElementById('otpWrapper');
+
+      errorMessage.classList.add('hidden');
+      errorMessage.innerText = '';
+
+      if (!email || !emailInput.checkValidity()) {
+        errorMessage.innerText = 'Vui lòng nhập một địa chỉ email hợp lệ đăng ký trong hệ thống SnapOn.';
+        errorMessage.classList.remove('hidden');
+        return;
+      }
+
+      // Disable button & show sending state
+      otpBtn.disabled = true;
+      otpBtnText.classList.add('hidden');
+      otpBtnSpinner.classList.remove('hidden');
+
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/auth/deletion-request/send-otp`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Gửi mã OTP thất bại. Vui lòng thử lại.');
+        }
+
+        // OTP sent successfully! Reveal OTP input field
+        otpWrapper.classList.remove('hidden');
+        document.getElementById('inputOtp').focus();
+
+        // Start cooldown timer
+        let secondsLeft = 60;
+        otpBtnText.innerText = `Gửi lại (${secondsLeft}s)`;
+        otpBtnText.classList.remove('hidden');
+        otpBtnSpinner.classList.add('hidden');
+
+        cooldownInterval = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft <= 0) {
+            clearInterval(cooldownInterval);
+            cooldownInterval = null;
+            otpBtnText.innerText = 'Gửi mã OTP';
+            otpBtn.disabled = false;
+          } else {
+            otpBtnText.innerText = `Gửi lại (${secondsLeft}s)`;
+          }
+        }, 1000);
+
+      } catch (error) {
+        console.error('Send OTP error:', error);
+        errorMessage.innerText = error.message || 'Lỗi kết nối khi gửi mã OTP. Vui lòng kiểm tra lại mạng.';
+        errorMessage.classList.remove('hidden');
+        otpBtn.disabled = false;
+        otpBtnText.classList.remove('hidden');
+        otpBtnSpinner.classList.add('hidden');
+      }
+    }
+
+    async function handleRealSubmit(event) {
+      event.preventDefault();
+      
+      const fullName = document.getElementById('inputFullName').value;
+      const email = document.getElementById('inputEmail').value;
+      const reason = document.getElementById('inputReason').value;
+      const otp = document.getElementById('inputOtp').value;
+      
+      const submitBtn = document.getElementById('submitBtn');
+      const btnText = document.getElementById('btnText');
+      const btnSpinner = document.getElementById('btnSpinner');
+      const errorMessage = document.getElementById('errorMessage');
+      
+      if (!otp || otp.trim().length !== 6) {
+        errorMessage.innerText = 'Vui lòng nhập đủ 6 chữ số mã OTP đã được gửi vào email.';
+        errorMessage.classList.remove('hidden');
+        return;
+      }
+
+      // Clear previous error
+      errorMessage.classList.add('hidden');
+      errorMessage.innerText = '';
+      
+      // Show spinner & disable button
+      submitBtn.disabled = true;
+      btnText.classList.add('hidden');
+      btnSpinner.classList.remove('hidden');
+      
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/auth/deletion-request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ fullName, email, reason, otp })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Gửi yêu cầu thất bại. Vui lòng thử lại sau.');
+        }
+        
+        // Success
+        document.getElementById('mockDeletionForm').classList.add('hidden');
+        document.getElementById('formSuccessState').classList.remove('hidden');
+      } catch (error) {
+        console.error('Submit deletion error:', error);
+        errorMessage.innerText = error.message || 'Lỗi kết nối đến máy chủ. Vui lòng kiểm tra lại mạng.';
+        errorMessage.classList.remove('hidden');
+      } finally {
+        // Re-enable button & hide spinner
+        submitBtn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+      }
+    }
+
+    function resetForm() {
+      if (cooldownInterval) {
+        clearInterval(cooldownInterval);
+        cooldownInterval = null;
+      }
+      document.getElementById('mockDeletionForm').reset();
+      document.getElementById('mockDeletionForm').classList.remove('hidden');
+      document.getElementById('formSuccessState').classList.add('hidden');
+      document.getElementById('errorMessage').classList.add('hidden');
+      document.getElementById('errorMessage').innerText = '';
+      document.getElementById('otpWrapper').classList.add('hidden');
+      
+      const otpBtn = document.getElementById('sendOtpBtn');
+      const otpBtnText = document.getElementById('otpBtnText');
+      otpBtnText.innerText = 'Gửi mã OTP';
+      otpBtnText.classList.remove('hidden');
+      document.getElementById('otpBtnSpinner').classList.add('hidden');
+      otpBtn.disabled = false;
+    }
+
+    // Dynamic scroll active link styling (Scrollspy)
+    window.addEventListener('DOMContentLoaded', () => {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          const id = entry.target.getAttribute('id');
+          const sidebarLink = document.querySelector(`.sidebar-link[href="#${id}"]`);
+          
+          if (!sidebarLink) return;
+
+          if (entry.intersectionRatio > 0.3) {
+            // Remove active classes from all links
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+              link.classList.remove('text-brand-500', 'bg-brand-50', 'font-semibold');
+              link.classList.add('text-dark-600');
+            });
+            // Add active classes to current link
+            sidebarLink.classList.remove('text-dark-600');
+            sidebarLink.classList.add('text-brand-500', 'bg-brand-50', 'font-semibold');
+          }
+        });
+      }, {
+        threshold: [0.1, 0.3, 0.5, 0.8],
+        rootMargin: '-50px 0px -50% 0px'
+      });
+
+      // Track all sections that have an id
+      document.querySelectorAll('main section[id]').forEach(section => {
+        observer.observe(section);
+      });
+    });
+  </script>
+</body>
+</html>

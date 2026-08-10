@@ -622,7 +622,7 @@ model AccountDeletionRequest {
   @@map("account_deletion_requests")
 }
 
-model ForgotPasswordOtp {
+model ForgotPasswordOTP {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email     String
   otpHash   String   @map("otp_hash")

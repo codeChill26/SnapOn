@@ -297,18 +297,23 @@ Hiện tại `frontend/src/app/components/WalletModal.tsx` đang “nạp tiền
 
 ---
 
-## 7) Demo nhanh bằng DEV auth
+## 7) Demo nhanh bằng Phone OTP Auth
 
-Backend có DEV mode (`backend/middleware/auth.js`):
+Bạn có thể sử dụng số điện thoại để thực hiện kiểm thử nhanh qua luồng Phone OTP (sử dụng Redis Cache):
 
-- Set `AUTH_MODE=dev`
-- Gọi API kèm header: `x-user-id: <uuid>`
-
-Ví dụ (cần thay UUID):
-
-```bash
-curl -H "x-user-id: <POSTER_UUID>" http://localhost:3000/api/wallet/me
-```
+1. Tạo yêu cầu gửi mã OTP:
+   ```bash
+   curl -X POST -H "Content-Type: application/json" -d '{"phone": "0987654321"}' http://localhost:3000/api/auth/send-otp
+   ```
+2. Kiểm tra log của server backend để lấy mã OTP 6 chữ số đã sinh.
+3. Xác minh OTP để nhận backend JWT tokens:
+   ```bash
+   curl -X POST -H "Content-Type: application/json" -d '{"phone": "0987654321", "otp": "xxxxxx"}' http://localhost:3000/api/auth/verify-otp
+   ```
+4. Sử dụng JWT Access Token nhận được để truy cập các API Authenticated:
+   ```bash
+   curl -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" http://localhost:3000/api/wallet/me
+   ```
 
 ---
 

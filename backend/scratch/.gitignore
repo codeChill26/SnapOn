@@ -1,0 +1,4 @@
+# Ignore everything in scratch by default
+*
+# Allow tracking of this .gitignore only
+!.gitignore

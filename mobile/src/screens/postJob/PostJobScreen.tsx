@@ -34,13 +34,26 @@ import { PostJobRequirements } from './sections/PostJobRequirements';
 import { PostJobMediaTags } from './sections/PostJobMediaTags';
 import { PostJobErrors } from './sections/PostJobErrors';
 
+import { CompositeNavigationProp, RouteProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainTabParamList } from '../../navigation/MainTabNavigator';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+
+export type PostJobScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'PostJob'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
+type PostJobScreenRouteProp = RouteProp<MainTabParamList, 'PostJob'>;
+
 export const PostJobScreen: React.FC = () => {
   const theme = useTheme();
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const navigation = useNavigation<PostJobScreenNavigationProp>();
+  const route = useRoute<PostJobScreenRouteProp>();
 
   const initialPostType = route.params?.initialPostType || 'RECRUITMENT';
-  const editingTaskId = route.params?.taskId as string | undefined;
+  const editingTaskId = route.params?.taskId;
 
   const hookData = usePostJob({
     editingTaskId,
@@ -49,101 +62,103 @@ export const PostJobScreen: React.FC = () => {
   });
 
   const {
-    postType,
-    setPostType,
-    title,
-    setTitle,
-    description,
-    setDescription,
-    fieldId,
-    setFieldId,
-    fieldName,
-    setFieldName,
-    subcategoryId,
-    setSubcategoryId,
-    subcategoryName,
-    setSubcategoryName,
-    apiCategoryId,
-    setApiCategoryId,
-    budgetMinInput,
-    setBudgetMinInput,
-    budgetMaxInput,
-    setBudgetMaxInput,
-    activePricePreset,
-    setActivePricePreset,
-    salaryUnit,
-    setSalaryUnit,
-    workMode,
-    setWorkMode,
-    employmentType,
-    setEmploymentType,
-    address,
-    setAddress,
-    peopleNeeded,
-    setPeopleNeeded,
-    contactPhone,
-    setContactPhone,
-    startDate,
-    setStartDate,
-    experienceLevel,
-    setExperienceLevel,
-    educationLevel,
-    setEducationLevel,
-    genderRequirement,
-    setGenderRequirement,
-    minAge,
-    setMinAge,
-    maxAge,
-    setMaxAge,
-    minHeightCm,
-    setMinHeightCm,
-    maxHeightCm,
-    setMaxHeightCm,
-    hashtagInput,
-    setHashtagInput,
-    hashtags,
-    setHashtags,
-    selectedImages,
-    setSelectedImages,
-    categoriesList,
-    selectedDeadlinePreset,
-    setSelectedDeadlinePreset,
-    
-    // Modal states
-    categoryModalVisible,
-    setCategoryModalVisible,
-    workModeModalVisible,
-    setWorkModeModalVisible,
-    employmentModalVisible,
-    setEmploymentModalVisible,
-    experienceModalVisible,
-    setExperienceModalVisible,
-    educationModalVisible,
-    setEducationModalVisible,
-    genderModalVisible,
-    setGenderModalVisible,
-    ageModalVisible,
-    setAgeModalVisible,
-    heightModalVisible,
-    setHeightModalVisible,
-    datePickerVisible,
-    setDatePickerVisible,
-
-    // Helpers / handlers
-    isEditMode,
-    loading,
-    editingTask,
-    validationErrors,
-    isFormValid,
-    handlePostTypeChange,
-    increasePeople,
-    decreasePeople,
-    pickImages,
-    removeImage,
-    addHashtag,
-    removeHashtag,
-    handleSubmit,
-    handleDiscardDraft,
+    state: {
+      postType,
+      title,
+      description,
+      fieldId,
+      fieldName,
+      subcategoryId,
+      subcategoryName,
+      apiCategoryId,
+      budgetMinInput,
+      budgetMaxInput,
+      activePricePreset,
+      salaryUnit,
+      workMode,
+      employmentType,
+      address,
+      peopleNeeded,
+      contactPhone,
+      startDate,
+      experienceLevel,
+      educationLevel,
+      genderRequirement,
+      minAge,
+      maxAge,
+      minHeightCm,
+      maxHeightCm,
+      hashtagInput,
+      hashtags,
+      selectedImages,
+      categoriesList,
+      selectedDeadlinePreset,
+      isEditMode,
+      loading,
+      editingTask,
+      validationErrors,
+      isFormValid,
+    },
+    actions: {
+      setPostType,
+      setTitle,
+      setDescription,
+      setFieldId,
+      setFieldName,
+      setSubcategoryId,
+      setSubcategoryName,
+      setApiCategoryId,
+      setBudgetMinInput,
+      setBudgetMaxInput,
+      setActivePricePreset,
+      setSalaryUnit,
+      setWorkMode,
+      setEmploymentType,
+      setAddress,
+      setPeopleNeeded,
+      setContactPhone,
+      setStartDate,
+      setExperienceLevel,
+      setEducationLevel,
+      setGenderRequirement,
+      setMinAge,
+      setMaxAge,
+      setMinHeightCm,
+      setMaxHeightCm,
+      setHashtagInput,
+      setHashtags,
+      setSelectedImages,
+      setSelectedDeadlinePreset,
+      handlePostTypeChange,
+      increasePeople,
+      decreasePeople,
+      pickImages,
+      removeImage,
+      addHashtag,
+      removeHashtag,
+      handleSubmit,
+      handleDiscardDraft,
+    },
+    modals: {
+      categoryModalVisible,
+      setCategoryModalVisible,
+      workModeModalVisible,
+      setWorkModeModalVisible,
+      employmentModalVisible,
+      setEmploymentModalVisible,
+      experienceModalVisible,
+      setExperienceModalVisible,
+      educationModalVisible,
+      setEducationModalVisible,
+      genderModalVisible,
+      setGenderModalVisible,
+      ageModalVisible,
+      setAgeModalVisible,
+      heightModalVisible,
+      setHeightModalVisible,
+      datePickerVisible,
+      setDatePickerVisible,
+    }
   } = hookData;
 
   const selectedWorkModeLabel = useMemo(() => WORK_MODES.find((m) => m.value === workMode)?.label || 'Chọn hình thức', [workMode]);
@@ -296,7 +311,7 @@ export const PostJobScreen: React.FC = () => {
         options={WORK_MODES}
         selectedValue={workMode}
         onSelect={(val) => {
-          setWorkMode(val as any);
+          setWorkMode(val as 'ONSITE' | 'REMOTE' | 'NEGOTIABLE');
           if (val === 'REMOTE') {
             setAddress('');
           }
@@ -309,7 +324,7 @@ export const PostJobScreen: React.FC = () => {
         title="Loại công việc"
         options={EMPLOYMENT_TYPES}
         selectedValue={employmentType}
-        onSelect={(val) => setEmploymentType(val as any)}
+        onSelect={(val) => setEmploymentType(val as 'ONE_TIME' | 'PART_TIME' | 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'SHIFT' | 'INTERNSHIP' | 'NEGOTIABLE')}
         onClose={() => setEmploymentModalVisible(false)}
       />
 

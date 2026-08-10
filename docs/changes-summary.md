@@ -51,53 +51,37 @@ Logic:
 
 ---
 
-## 3. Auto-fallback Firebase → Dev Mode
+## 3. Auto-fallback Firebase → Dev Mode [ĐÃ LOẠI BỎ / DEPRECATED]
 
-**File thay đổi**: `backend/middleware/auth.js`
+Cơ chế tự động fallback sang Dev Mode khi thiếu Firebase Admin SDK credentials đã bị loại bỏ hoàn toàn để tăng cường bảo mật cho môi trường production. 
 
-Cơ chế tự động:
-1. Kiểm tra biến môi trường `FIREBASE_PROJECT_ID` hoặc `VITE_FIREBASE_PROJECT_ID`
-2. Nếu không có → tự set `AUTH_MODE = 'dev'`
-3. Nếu có nhưng init Firebase Admin thất bại → tự set `AUTH_MODE = 'dev'`
-
-Trong dev mode:
-- **Sync-user**: Decode Firebase JWT payload bằng base64 (không verify) để lấy uid, email, name
-- **API thường**: Dùng `x-user-id` header hoặc Bearer token làm user UUID
-- **Fallback Bearer**: Nếu không có `x-user-id`, thử dùng Bearer token làm user ID
+- Không còn hỗ trợ `AUTH_MODE=dev`.
+- Không hỗ trợ decode JWT payload mà không verify.
+- Không cho phép bypass qua header `x-user-id` hoặc Bearer token dạng plain UUID.
 
 ---
 
-## 4. Dev login/register endpoints
+## 4. Dev login/register endpoints [ĐÃ XOÁ / DEPRECATED]
 
-**File**: `backend/routes/auth.js`
-
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/auth/dev/login` | POST | Login bằng email (không password). Trả về `{ user, token: user.id }` |
-| `/auth/dev/register` | POST | Register bằng email. Tạo user + wallet. Trả về `{ user, token: user.id }` |
-
-Frontend khi `VITE_AUTH_MODE=dev` sẽ gọi các endpoint này thay vì Firebase.
+Các endpoint `/auth/dev/login` và `/auth/dev/register` đã bị xoá hoàn toàn khỏi codebase backend (`backend/routes/auth.js` và `backend/controllers/auth.js`) để tránh lỗ hổng bảo mật truy cập trái phép.
 
 ---
 
-## 5. Frontend Dev Mode
+## 5. Frontend/Mobile Dev Mode [ĐÃ XOÁ / DEPRECATED]
 
-**File thay đổi**:
-- `frontend/.env` — thêm `VITE_AUTH_MODE=dev`
-- `frontend/src/app/pages/Login.tsx` — nếu `VITE_AUTH_MODE=dev`, gọi `/auth/dev/login` hoặc `/auth/dev/register`
-- `frontend/src/app/context/AppContext.tsx` — skip Firebase `onAuthStateChanged` trong dev mode; skip `signOut(auth)` trong logout
+Các tham chiếu, cấu hình biến môi trường liên quan đến `VITE_AUTH_MODE=dev` hoặc `AUTH_MODE=dev` đã bị dọn dẹp sạch trên cả mã nguồn Frontend Web và Mobile App.
 
 ---
 
 ## 6. Kiểm tra Auth Middleware
 
-Tất cả 26 route endpoints đã được kiểm tra:
-- **22 route có auth** (authenticate/verifyFirebaseToken)
-- **4 route public** (intentional):
+Tất cả các route endpoints đã được rà soát:
+- **Các route có auth**: Yêu cầu xác thực qua Firebase ID Token hoặc JWT Token hợp lệ của backend.
+- **Các route public**:
   - `GET /api/health` — health check
   - `GET /` — API info
-  - `POST /auth/dev/login`, `POST /auth/dev/register` — auth entry points
-  - `POST /wallet/topup/payos/webhook` — external webhook callback
+  - `POST /api/auth/send-otp`, `POST /api/auth/verify-otp` — luồng xác thực Phone OTP
+  - `POST /api/wallet/topup/payos/webhook` — webhook callback của PayOS
 
 Không có route nào thiếu auth.
 

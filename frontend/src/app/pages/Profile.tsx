@@ -6,11 +6,12 @@ import {
   Lock, ChevronDown, ChevronUp, MessageCircle, Search,
   Filter, SlidersHorizontal, Check, X, Plus, Trash2,
   DollarSign, CalendarDays, BadgeCheck, CornerDownRight,
-  SmilePlus, Meh, Frown, TrendingDown, Package,
+  SmilePlus, Meh, Frown, TrendingDown, Package, Landmark, CreditCard,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
 import { useApp, CATEGORIES } from '../context/AppContext';
+import { BankSelectModal } from '../components/BankSelectModal';
 
 // ─── Helper ──────────────────────────────────────────────────
 function fmt(n: number) {
@@ -32,16 +33,22 @@ function Stars({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' | '
 
 // ─── Inline editable field ────────────────────────────────────
 function EditableField({
-  label, value, icon, onSave, type = 'text',
+  label, value, icon, onSave, type = 'text', onClickCustom
 }: {
   label: string; value: string; icon: React.ReactNode;
-  onSave: (v: string) => void; type?: string;
+  onSave: (v: string) => void; type?: string; onClickCustom?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleEdit = () => { setDraft(value); setEditing(true); setTimeout(() => inputRef.current?.focus(), 50); };
+  const handleEdit = () => {
+    if (onClickCustom) {
+      onClickCustom();
+      return;
+    }
+    setDraft(value); setEditing(true); setTimeout(() => inputRef.current?.focus(), 50);
+  };
   const handleSave = () => { onSave(draft); setEditing(false); };
   const handleCancel = () => { setDraft(value); setEditing(false); };
 
@@ -425,15 +432,34 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 // WORKER PROFILE
 // ═════════════════════════════════════════════════════════════
 function WorkerProfile() {
-  const { jobs, currentUser, updateProfile } = useApp();
+  const { jobs, currentUser, updateProfile, fetchJobs } = useApp();
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'feedback' | 'settings'>('profile');
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   // Editable fields
   const [name,    setName]    = useState(currentUser.name || '');
   const [phone,   setPhone]   = useState(currentUser.phone || '');
   const [email,   setEmail]   = useState(currentUser.email || '');
   const [area,    setArea]    = useState('Quận 1, TP.HCM');
+  const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
+  const [bankModalOpen, setBankModalOpen] = useState(false);
   const [bio,     setBio]     = useState((currentUser as any).bio || '');
+
+  const handleSaveBankName = async (val: string) => {
+    setBankName(val);
+    localStorage.setItem('userBankName', val.trim());
+    await updateProfile({ bankName: val.trim() } as any).catch(() => {});
+  };
+
+  const handleSaveBankAccountNumber = async (val: string) => {
+    setBankAccountNumber(val);
+    localStorage.setItem('userBankAccountNumber', val.trim());
+    await updateProfile({ bankAccountNumber: val.trim() } as any).catch(() => {});
+  };
   const [editBio, setEditBio] = useState(false);
   const [draftBio, setDraftBio] = useState(bio);
   const [skills,  setSkills]  = useState<string[]>([]);
@@ -444,7 +470,38 @@ function WorkerProfile() {
     setName(currentUser.name || '');
     setPhone(currentUser.phone || '');
     setEmail(currentUser.email || '');
+    setBio(currentUser.bio || '');
+    setSkills(currentUser.skills || []);
+    if ((currentUser as any).bankName) {
+      setBankName((currentUser as any).bankName);
+      localStorage.setItem('userBankName', (currentUser as any).bankName);
+    }
+    if ((currentUser as any).bankAccountNumber) {
+      setBankAccountNumber((currentUser as any).bankAccountNumber);
+      localStorage.setItem('userBankAccountNumber', (currentUser as any).bankAccountNumber);
+    }
   }, [currentUser]);
+
+  const handleSaveBio = async () => {
+    setBio(draftBio);
+    setEditBio(false);
+    await updateProfile({ bio: draftBio });
+  };
+
+  const handleRemoveSkill = async (skillToRemove: string) => {
+    const updated = skills.filter(sk => sk !== skillToRemove);
+    setSkills(updated);
+    await updateProfile({ skills: updated });
+  };
+
+  const handleAddSkill = async (skillToAdd: string) => {
+    if (!skillToAdd.trim()) return;
+    const updated = [...skills, skillToAdd.trim()];
+    setSkills(updated);
+    setNewSkill('');
+    setAddingSkill(false);
+    await updateProfile({ skills: updated });
+  };
 
   const handleSavePhone = async (val: string) => {
     setPhone(val);
@@ -471,9 +528,21 @@ function WorkerProfile() {
     setWorkerReviews(prev => prev.map(r => r.id === id ? { ...r, reply: text } : r));
   };
 
-  const appliedJobs = jobs.filter(j => j.applicants.some(a => a.workerId === currentUser.id));
-  const wonJobs     = appliedJobs.filter(j => j.aiMatchId === currentUser.id);
-  const totalEarned = wonJobs.reduce((s, j) => s + j.price, 0);
+  const appliedJobs = jobs.filter(j => 
+    j.applicants.some(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi' || ((currentUser as any).dbUser?.id && a.workerId === (currentUser as any).dbUser.id)) ||
+    j.aiMatchId === currentUser.id ||
+    (j as any).assignedWorker?.id === currentUser.id
+  );
+  const wonJobs = appliedJobs.filter(j => {
+    const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
+    return j.aiMatchId === currentUser.id || app?.status === 'ACCEPTED' || j.status === 'completed' || j.status === 'matched';
+  });
+  const completedJobsList = appliedJobs.filter(j => j.status === 'completed');
+  const totalEarned = completedJobsList.reduce((s, j) => {
+    const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
+    const bid = app?.bidPrice || j.price;
+    return s + Math.round(bid * 0.92);
+  }, 0);
   const avgRating   = workerReviews.reduce((s, r) => s + r.rating, 0) / (workerReviews.length || 1);
 
   const TABS = [
@@ -535,7 +604,7 @@ function WorkerProfile() {
         {/* Stats row */}
         <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
           {[
-            { v: (currentUser as any).completed_jobs || 0, l: 'Việc done' },
+            { v: Math.max(completedJobsList.length, (currentUser as any).completed_jobs || 0), l: 'Việc done' },
             { v: appliedJobs.length,        l: 'Đã apply' },
             { v: workerReviews.length,       l: 'Đánh giá' },
             { v: fmt(totalEarned) + '₫',    l: 'Tổng thu' },
@@ -608,7 +677,7 @@ function WorkerProfile() {
                   ) : (
                     <div className="flex gap-2">
                       <button onClick={() => setEditBio(false)} className="text-xs text-gray-400">Huỷ</button>
-                      <button onClick={() => { setBio(draftBio); setEditBio(false); }}
+                      <button onClick={handleSaveBio}
                         className="text-xs bg-orange-500 text-white px-3 py-1 rounded-full" style={{ fontWeight: 600 }}>
                         Lưu
                       </button>
@@ -619,7 +688,7 @@ function WorkerProfile() {
                   <textarea value={draftBio} onChange={e => setDraftBio(e.target.value)} rows={3}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300" />
                 ) : (
-                  <p className="text-gray-600 text-sm leading-relaxed">{bio}</p>
+                  <p className="text-gray-600 text-sm leading-relaxed">{bio || 'Chưa có giới thiệu bản thân.'}</p>
                 )}
               </div>
 
@@ -635,7 +704,7 @@ function WorkerProfile() {
                   {skills.map(s => (
                     <div key={s} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100 group">
                       <span className="text-xs" style={{ fontWeight: 500 }}>{s}</span>
-                      <button onClick={() => setSkills(prev => prev.filter(sk => sk !== s))}
+                      <button onClick={() => handleRemoveSkill(s)}
                         className="opacity-0 group-hover:opacity-100 transition ml-0.5">
                         <X className="w-3 h-3 text-blue-400 hover:text-red-500 transition" />
                       </button>
@@ -648,13 +717,13 @@ function WorkerProfile() {
                         value={newSkill}
                         onChange={e => setNewSkill(e.target.value)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter' && newSkill.trim()) { setSkills(p => [...p, newSkill.trim()]); setNewSkill(''); setAddingSkill(false); }
+                          if (e.key === 'Enter' && newSkill.trim()) { handleAddSkill(newSkill); }
                           if (e.key === 'Escape') { setNewSkill(''); setAddingSkill(false); }
                         }}
                         placeholder="Kỹ năng mới..."
                         className="text-xs border border-blue-300 rounded-full px-3 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
                       />
-                      <button onClick={() => { if (newSkill.trim()) { setSkills(p => [...p, newSkill.trim()]); setNewSkill(''); } setAddingSkill(false); }}
+                      <button onClick={() => { if (newSkill.trim()) handleAddSkill(newSkill); else setAddingSkill(false); }}
                         className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
                         <Check className="w-3.5 h-3.5 text-white" />
                       </button>
@@ -672,6 +741,8 @@ function WorkerProfile() {
                   <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-blue-500" />} />
                   <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
                   <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-orange-500" />} />
+                  <EditableField label="Tên ngân hàng" value={bankName || 'Chưa cập nhật'} onSave={handleSaveBankName} icon={<Landmark className="w-4 h-4 text-emerald-500" />} onClickCustom={() => setBankModalOpen(true)} />
+                  <EditableField label="Số tài khoản ngân hàng" value={bankAccountNumber || 'Chưa cập nhật'} onSave={handleSaveBankAccountNumber} icon={<CreditCard className="w-4 h-4 text-indigo-500" />} />
                 </div>
                 <div className="px-4 py-3.5 border-t border-gray-50 flex items-center gap-3 hover:bg-gray-50/80 transition cursor-pointer">
                   <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -713,13 +784,13 @@ function WorkerProfile() {
               ) : (
                 appliedJobs.map(job => {
                   const applicant = job.applicants.find(a => a.workerId === currentUser.id);
-                  const isWinner  = job.aiMatchId === currentUser.id;
+                  const isWinner  = job.aiMatchId === currentUser.id || applicant?.status === 'ACCEPTED';
                   return (
                     <Link key={job.id} to={`/job/${job.id}`}>
                       <motion.div
                         whileHover={{ y: -1 }}
                         className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition ${
-                          isWinner ? 'border-green-200' : 'border-gray-100'
+                          isWinner ? 'border-green-200 shadow-green-50' : 'border-gray-100'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -730,11 +801,12 @@ function WorkerProfile() {
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-gray-900 text-sm truncate pr-1" style={{ fontWeight: 600 }}>{job.title}</p>
                               <span className={`text-xs px-2.5 py-0.5 rounded-full flex-shrink-0 border ${
-                                isWinner            ? 'bg-green-50 text-green-700 border-green-200' :
-                                job.status === 'active' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                isWinner                   ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                job.status === 'active'    ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                 'bg-gray-50 text-gray-500 border-gray-200'
                               }`} style={{ fontWeight: 600 }}>
-                                {isWinner ? '🏆 Được chọn' : job.status === 'active' ? '⏳ Chờ kết quả' : 'Không được chọn'}
+                                {job.status === 'completed' ? '🏆 Hoàn thành' : isWinner ? '🎖️ Được chọn' : job.status === 'active' ? '⏳ Chờ kết quả' : 'Không được chọn'}
                               </span>
                             </div>
                             <p className="text-gray-400 text-xs mt-0.5 truncate">{job.hirerName}</p>
@@ -743,8 +815,16 @@ function WorkerProfile() {
                                 {applicant?.bidPrice ? applicant.bidPrice.toLocaleString('vi-VN') + '₫' : job.price.toLocaleString('vi-VN') + '₫'}
                                 <span className="text-xs text-gray-400 ml-1" style={{ fontWeight: 400 }}>giá chào</span>
                               </span>
+                              {job.status === 'completed' ? (
+                                <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
+                                  💵 Đã nhận: {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫
+                                </span>
+                              ) : isWinner ? (
+                                <span className="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 flex items-center gap-1">
+                                  ⏳ Dự kiến nhận: {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫ (chờ xác nhận)
+                                </span>
+                              ) : null}
                               <span className="text-gray-400 text-xs flex items-center gap-1"><Clock className="w-3 h-3" />{job.duration}h</span>
-                              {applicant && <span className="text-blue-500 text-xs">📍 {applicant.distance} km</span>}
                             </div>
                           </div>
                         </div>
@@ -807,6 +887,12 @@ function WorkerProfile() {
           )}
         </motion.div>
       </AnimatePresence>
+      <BankSelectModal
+        isOpen={bankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        selectedBank={bankName}
+        onSelectBank={handleSaveBankName}
+      />
     </div>
   );
 }
@@ -815,17 +901,34 @@ function WorkerProfile() {
 // HIRER PROFILE
 // ═════════════════════════════════════════════════════════════
 function HirerProfile() {
-  const { jobs, currentUser, updateProfile } = useApp();
+  const { jobs, currentUser, updateProfile, fetchJobs } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'feedback' | 'settings'>('overview');
 
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
   // Editable fields
-  const [phone,    setPhone]    = useState(currentUser.phone || '0912 345 678');
-  const [email,    setEmail]    = useState(currentUser.email || 'hoa.nguyen@gmail.com');
+  const [phone,    setPhone]    = useState(currentUser.phone || '');
+  const [email,    setEmail]    = useState(currentUser.email || '');
   const [area,     setArea]     = useState('Quận 1, Bình Thạnh, TP.HCM');
+  const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
+  const [bankModalOpen, setBankModalOpen] = useState(false);
+
+  const handleSaveBankName = (val: string) => {
+    setBankName(val);
+    localStorage.setItem('userBankName', val.trim());
+  };
+
+  const handleSaveBankAccountNumber = (val: string) => {
+    setBankAccountNumber(val);
+    localStorage.setItem('userBankAccountNumber', val.trim());
+  };
 
   useEffect(() => {
-    setPhone(currentUser.phone || '0912 345 678');
-    setEmail(currentUser.email || 'hoa.nguyen@gmail.com');
+    setPhone(currentUser.phone || '');
+    setEmail(currentUser.email || '');
   }, [currentUser]);
 
   const handleSavePhone = async (val: string) => {
@@ -838,7 +941,11 @@ function HirerProfile() {
   const [notifRemind, setNotifRemind] = useState(true);
   const [notifPromo,  setNotifPromo]  = useState(false);
 
-  const myJobs        = jobs.filter(j => j.hirerId === currentUser.id || j.hirerName === currentUser.name || j.hirerName === 'Nguyễn Thị Hoa');
+  const myJobs = jobs.filter(j => 
+    (currentUser?.id && j.hirerId === currentUser.id) ||
+    ((currentUser as any)?.dbUser?.id && j.hirerId === (currentUser as any).dbUser.id) ||
+    (currentUser?.name && j.hirerName && (j.hirerName.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(j.hirerName.toLowerCase())))
+  );
   const activeJobs    = myJobs.filter(j => j.status === 'active');
   const matchedJobs   = myJobs.filter(j => j.status === 'matched' || j.status === 'completed');
   const totalSpent    = matchedJobs.reduce((s, j) => s + j.price, 0);
@@ -1015,6 +1122,8 @@ function HirerProfile() {
                   <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-orange-500" />} />
                   <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
                   <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-blue-500" />} />
+                  <EditableField label="Tên ngân hàng" value={bankName || 'Chưa cập nhật'} onSave={handleSaveBankName} icon={<Landmark className="w-4 h-4 text-emerald-500" />} onClickCustom={() => setBankModalOpen(true)} />
+                  <EditableField label="Số tài khoản ngân hàng" value={bankAccountNumber || 'Chưa cập nhật'} onSave={handleSaveBankAccountNumber} icon={<CreditCard className="w-4 h-4 text-indigo-500" />} />
                 </div>
               </div>
             </div>
@@ -1134,6 +1243,12 @@ function HirerProfile() {
           )}
         </motion.div>
       </AnimatePresence>
+      <BankSelectModal
+        isOpen={bankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        selectedBank={bankName}
+        onSelectBank={handleSaveBankName}
+      />
     </div>
   );
 }

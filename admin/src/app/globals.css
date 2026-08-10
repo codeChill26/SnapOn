@@ -2,33 +2,33 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 0 0% 98%;   /* #FAFAFA Cloud White */
+    --foreground: 240 10% 3.9%;/* #18181B Dark Text */
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 100%;        /* #FFFFFF Pure White Card */
+    --card-foreground: 240 10% 3.9%;
 
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
 
-    --primary: 263.4 70% 50.4%;
-    --primary-foreground: 210 20% 98%;
+    --primary: 24 6% 18%;     /* #312F2C Jet Accent */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
 
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 263.4 70% 50.4%;
+    --border: 240 5.9% 90%;    /* #E4E4E7 Border */
+    --input: 240 5.9% 90%;
+    --ring: 24 6% 18%;
 
     --radius: 0.75rem;
   }
@@ -61,42 +61,42 @@
 }
 
 body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background-color: #FAFAFA;
+  color: #18181B;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   overflow-x: hidden;
 }
 
-/* Custom Scrollbar for Sleek Look */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #FAFAFA;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--secondary));
+  background: #D4D4D8;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: #A1A1AA;
 }
 
-/* Custom animations and styling utilities */
+/* Custom glassmorphism utilities */
 .glassmorphism {
-  background: rgba(9, 9, 11, 0.6);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(63, 63, 70, 0.4);
+  border: 1px solid rgba(228, 228, 231, 0.8);
 }
 
 .glassmorphism-light {
-  background: rgba(20, 20, 25, 0.4);
+  background: rgba(250, 250, 250, 0.8);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(63, 63, 70, 0.2);
+  border: 1px solid rgba(228, 228, 231, 0.6);
 }
 
 @keyframes slideIn {

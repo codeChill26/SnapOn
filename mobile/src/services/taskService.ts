@@ -159,7 +159,16 @@ const mapLocationFromApi = (loc: any): TaskLocation => {
   };
 };
 
+const taskDetailCache = new Map<string, { data: Task; timestamp: number }>();
+
+let savedTasksCache: { data: PaginatedResponse<Task>; timestamp: number } | null = null;
+const SAVED_CACHE_TTL = 10000; // 10 seconds
+
 export const taskService = {
+  invalidateSavedTasksCache(): void {
+    savedTasksCache = null;
+  },
+
   async getTasks(filters: TaskFilters = {}): Promise<PaginatedResponse<Task>> {
     const params: Record<string, any> = {
       page: filters.page || 1,
@@ -189,19 +198,40 @@ export const taskService = {
     };
   },
 
-  async getSavedTasks(params: PaginationParams = {}): Promise<PaginatedResponse<Task>> {
+  async getSavedTasks(params: PaginationParams = {}, forceRefresh = false): Promise<PaginatedResponse<Task>> {
+    const isDefaultRequest = (!params.page || params.page === 1) && (!params.limit || params.limit === 20);
+    if (!forceRefresh && isDefaultRequest && savedTasksCache && Date.now() - savedTasksCache.timestamp < SAVED_CACHE_TTL) {
+      return savedTasksCache.data;
+    }
     const response = await api.get<any>('/tasks/saved', {
       params: { page: params.page || 1, limit: params.limit || 20 },
     });
-    return {
+    const result = {
       data: (response.data.data || []).map(mapTaskFromApi),
       pagination: response.data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 },
     };
+    if (isDefaultRequest) {
+      savedTasksCache = { data: result, timestamp: Date.now() };
+    }
+    return result;
   },
 
   async getTaskById(id: string): Promise<Task> {
+    const cached = taskDetailCache.get(id);
+    if (cached && Date.now() - cached.timestamp < 10000) {
+      return cached.data;
+    }
     const response = await api.get<ApiResponse<any>>(`/tasks/${id}`);
-    return mapTaskFromApi(response.data.data);
+    const task = mapTaskFromApi(response.data.data);
+    taskDetailCache.set(id, { data: task, timestamp: Date.now() });
+    return task;
+  },
+
+  prefetchTaskDetail(id: string): void {
+    if (taskDetailCache.size > 50) {
+      taskDetailCache.clear();
+    }
+    void this.getTaskById(id).catch(() => {});
   },
 
   async createTask(payload: CreateTaskPayload): Promise<Task> {
@@ -231,10 +261,12 @@ export const taskService = {
 
   async saveTask(id: string): Promise<void> {
     await api.post<ApiResponse<{ taskId: string; isSaved: boolean }>>(`/tasks/${id}/save`);
+    this.invalidateSavedTasksCache();
   },
 
   async unsaveTask(id: string): Promise<void> {
     await api.delete<ApiResponse<{ taskId: string; isSaved: boolean }>>(`/tasks/${id}/save`);
+    this.invalidateSavedTasksCache();
   },
 
   async uploadTaskImages(base64Images: string[]): Promise<string[]> {

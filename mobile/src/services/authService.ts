@@ -57,7 +57,7 @@ export const authService = {
 
   async getProfile(): Promise<User> {
     const response = await api.get<any>('/users/profile');
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async updateProfile(profileData: {
@@ -68,30 +68,32 @@ export const authService = {
     bio?: string;
     headline?: string;
     skills?: string[];
+    bankName?: string;
+    bankAccountNumber?: string;
   }): Promise<User> {
     const response = await api.put<any>('/users/profile', profileData);
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async uploadAvatar(base64Image: string): Promise<string> {
     const response = await api.post<any>('/users/upload-avatar', {
       base64Image,
     });
-    return response.data.avatarUrl;
+    return response.data.data.avatarUrl;
   },
 
   async uploadCover(base64Image: string): Promise<string> {
     const response = await api.post<any>('/users/upload-cover', {
       base64Image,
     });
-    return response.data.coverUrl;
+    return response.data.data.coverUrl;
   },
 
   async searchUserByPhone(phone: string): Promise<User | null> {
     const response = await api.get<any>('/users/search', {
       params: { phone },
     });
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async tokenLogin(): Promise<{ user: User; wallet: any }> {
@@ -115,7 +117,7 @@ export const authService = {
       backImage,
       selfieImage,
     });
-    return response.data.user;
+    return response.data.data.user;
   },
 
   async sendOtp(phone: string): Promise<{ success: boolean; message: string; otp?: string }> {
@@ -135,6 +137,21 @@ export const authService = {
 
   async resendVerificationEmail(email: string): Promise<{ success: boolean; message: string; data?: { debugOtp?: string; warning?: string } }> {
     const response = await api.post<any>('/auth/resend-verification', { email });
+    return response.data;
+  },
+
+  async forgotPassword(email: string): Promise<{ message: string; debugOtp?: string }> {
+    const response = await api.post<any>('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  async verifyForgotPasswordOtp(email: string, otp: string): Promise<{ resetToken: string }> {
+    const response = await api.post<any>('/auth/verify-forgot-password-otp', { email, otp });
+    return response.data;
+  },
+
+  async resetPassword(resetToken: string, newPassword: string): Promise<{ message: string }> {
+    const response = await api.post<any>('/auth/reset-password', { resetToken, newPassword });
     return response.data;
   },
 };

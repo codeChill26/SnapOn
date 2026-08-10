@@ -9,20 +9,24 @@ const globalForPrisma = globalThis as unknown as {
 
 // Retrieve connection URL from environment
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL environment variable is missing');
+if (!databaseUrl && typeof window === 'undefined') {
+  console.warn('DATABASE_URL environment variable is missing in process.env');
 }
 
 // SSL theo connection string (giống backend/config/db.js): Supabase cần SSL,
 // Postgres local (sslmode=disable hoặc localhost) thì không hỗ trợ SSL.
+const connectionString = databaseUrl || 'postgresql://localhost:5432/dummy';
 const sslDisabled =
-  databaseUrl.includes('sslmode=disable') ||
-  /@(localhost|127\.0\.0\.1)[:/]/.test(databaseUrl) ||
+  connectionString.includes('sslmode=disable') ||
+  /@(localhost|127\.0\.0\.1)[:/]/.test(connectionString) ||
   String(process.env.PGSSLMODE || '').toLowerCase() === 'disable';
 
 const pool = globalForPrisma.pool ?? new Pool({
-  connectionString: databaseUrl,
+  connectionString,
+  // SSL theo connection string: Supabase cần SSL, Postgres local thì không.
   ssl: sslDisabled ? false : { rejectUnauthorized: false },
+  max: 5, // Limit max pool size per serverless container
+  idleTimeoutMillis: 30000,
 });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.pool = pool;

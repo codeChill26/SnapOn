@@ -53,46 +53,75 @@ export default function PostJob() {
       setUserRole('hirer');
     }
   }, [currentUser.role, setUserRole]);
+
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [newJobId, setNewJobId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [form, setForm] = useState<FormData>({
     title: '', description: '', category: '', categoryIcon: '',
-    duration: 1, priceMin: 150000, priceMax: 300000, location: null,
+    duration: 1, priceMin: 150000, priceMax: 300000,
+    location: { lat: 10.7769, lng: 106.7009, address: 'Làm việc Online (Toàn quốc)' },
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
   const validate = (): boolean => {
     const e: typeof errors = {};
     if (step === 1) {
-      if (!form.category)          e.category    = 'Vui lòng chọn danh mục';
-      if (!form.title.trim())      e.title       = 'Vui lòng nhập tiêu đề';
-      if (!form.description.trim())e.description = 'Vui lòng mô tả công việc';
+      if (!form.category) {
+        e.category = 'Vui lòng chọn danh mục';
+      }
+      
+      if (!form.title.trim()) {
+        e.title = 'Vui lòng nhập tiêu đề';
+      } else if (form.title.trim().length < 5) {
+        e.title = 'Tiêu đề phải từ 5 ký tự trở lên';
+      } else if (form.title.trim().length > 255) {
+        e.title = 'Tiêu đề không được vượt quá 255 ký tự';
+      }
+
+      if (!form.description.trim()) {
+        e.description = 'Vui lòng mô tả công việc';
+      } else if (form.description.trim().length < 10) {
+        e.description = 'Mô tả công việc phải từ 10 ký tự trở lên';
+      } else if (form.description.trim().length > 2000) {
+        e.description = 'Mô tả không được vượt quá 2000 ký tự';
+      }
+
       if (form.priceMin >= form.priceMax) e.price = 'Giá tối thiểu phải nhỏ hơn tối đa';
-    }
-    if (step === 2) {
-      if (!form.location) e.location = 'Vui lòng chọn địa điểm';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (!form.location) return;
-    const cat = CATEGORIES.find(c => c.id === form.category)!;
-    const id = addJob({
-      title: form.title,
-      description: form.description,
-      category: form.category,
-      categoryIcon: cat.icon,
-      duration: form.duration,
-      price: form.priceMin,
-      priceMin: form.priceMin,
-      priceMax: form.priceMax,
-      location: form.location,
-    });
-    setNewJobId(id);
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      const onlineLocation = form.location || { lat: 10.7769, lng: 106.7009, address: 'Làm việc Online (Toàn quốc)' };
+      const cat = CATEGORIES.find(c => c.id === form.category);
+      const id = await addJob({
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        categoryIcon: cat?.icon || '⚡',
+        duration: form.duration,
+        price: form.priceMin,
+        priceMin: form.priceMin,
+        priceMax: form.priceMax,
+        location: onlineLocation,
+      });
+      setNewJobId(id);
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error('Error submitting job:', err);
+      const msg = err.response?.data?.errors?.[0]?.message || err.response?.data?.message || 'Không thể đăng công việc. Vui lòng kiểm tra lại thông tin và thử lại.';
+      setSubmitError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -103,10 +132,10 @@ export default function PostJob() {
             className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-green-500" />
           </motion.div>
-          <h2 className="text-gray-900 mb-2" style={{ fontWeight: 800, fontSize: '1.5rem' }}>Đăng việc thành công! 🎉</h2>
+          <h2 className="text-gray-900 mb-2" style={{ fontWeight: 800, fontSize: '1.5rem' }}>Đăng việc Online thành công! 🎉</h2>
           <p className="text-gray-500 mb-6 leading-relaxed text-sm">
             Khoảng giá <strong className="text-orange-500">{fmt(form.priceMin)} – {fmt(form.priceMax)}</strong> đã được công khai.
-            Người lao động sẽ đặt giá trong khoảng này. Khi bạn sẵn sàng, nhấn <strong>"Chốt phiên"</strong> để AI chọn người tốt nhất.
+            Người làm trên toàn quốc có thể nộp đơn ứng tuyển ngay bây giờ.
           </p>
           <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 mb-6">
             <div className="flex items-center gap-2 mb-1">
@@ -114,9 +143,9 @@ export default function PostJob() {
               <span className="text-orange-600 text-sm" style={{ fontWeight: 600 }}>Thuật toán AI sẽ ưu tiên:</span>
             </div>
             <div className="text-orange-500 text-xs space-y-1 ml-7">
-              <div>📍 45% — Khoảng cách (người gần nhất)</div>
-              <div>💰 35% — Giá thầu (thấp hơn = điểm cao hơn)</div>
-              <div>⭐ 20% — Đánh giá chất lượng</div>
+              <div>🌐 100% — Làm việc từ xa (Online toàn quốc)</div>
+              <div>💰 50% — Giá thầu hợp lý</div>
+              <div>⭐ 50% — Đánh giá & Kỹ năng người làm</div>
             </div>
           </div>
           <div className="flex flex-col gap-3">
@@ -143,14 +172,14 @@ export default function PostJob() {
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-gray-900" style={{ fontWeight: 700, fontSize: '1.25rem' }}>Đăng việc làm</h1>
-          <p className="text-gray-400 text-sm">Bước {step} / 3</p>
+          <h1 className="text-gray-900" style={{ fontWeight: 700, fontSize: '1.25rem' }}>Đăng việc làm Online</h1>
+          <p className="text-gray-400 text-sm">Bước {step} / 2</p>
         </div>
       </div>
 
       {/* Progress */}
       <div className="flex gap-2 mb-8">
-        {[1,2,3].map(s => (
+        {[1,2].map(s => (
           <div key={s} className={`flex-1 h-1.5 rounded-full transition-all ${s <= step ? 'bg-orange-500' : 'bg-gray-200'}`} />
         ))}
       </div>
@@ -299,28 +328,10 @@ export default function PostJob() {
         </div>
       )}
 
-      {/* ── STEP 2: Location ── */}
+      {/* ── STEP 2: Preview ── */}
       {step === 2 && (
         <div>
-          <div className="mb-4">
-            <h2 className="text-gray-900 mb-1" style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-              <MapPin className="w-5 h-5 inline mr-1 text-orange-500" />Địa điểm làm việc
-            </h2>
-            <p className="text-gray-500 text-sm">Tìm địa chỉ hoặc nhấn thẳng vào bản đồ để chọn vị trí.</p>
-          </div>
-          <MapPicker
-            value={form.location || undefined}
-            onChange={loc => { setForm(f => ({ ...f, location: loc })); setErrors(e => ({ ...e, location: undefined })); }}
-            height="350px"
-          />
-          {errors.location && <p className="text-red-500 text-sm mt-2">{errors.location}</p>}
-        </div>
-      )}
-
-      {/* ── STEP 3: Preview ── */}
-      {step === 3 && (
-        <div>
-          <h2 className="text-gray-900 mb-4" style={{ fontWeight: 700, fontSize: '1.1rem' }}>Xem trước bài đăng</h2>
+          <h2 className="text-gray-900 mb-4" style={{ fontWeight: 700, fontSize: '1.1rem' }}>Xem trước bài đăng Online</h2>
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-4">
             <div className="p-5">
               <div className="flex items-start gap-3 mb-3">
@@ -360,36 +371,47 @@ export default function PostJob() {
                 </div>
               </div>
 
-              {form.location && (
-                <div className="flex items-start gap-2 bg-orange-50 rounded-xl p-3">
-                  <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm text-gray-600">{form.location.address}</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3 text-blue-700">
+                <span className="text-base">🌐</span>
+                <span className="text-xs font-semibold">Hình thức: Làm việc từ xa (Online toàn quốc)</span>
+              </div>
             </div>
             <div className="bg-orange-50 border-t border-orange-100 px-5 py-3">
               <div className="flex items-center gap-2 text-orange-600 text-sm">
                 <Sparkles className="w-4 h-4" />
-                <span className="text-xs">AI chấm điểm: <strong>45% khoảng cách + 35% giá thầu + 20% đánh giá</strong></span>
+                <span className="text-xs">AI ưu tiên: <strong>100% Online toàn quốc + 50% giá thầu + 50% kỹ năng & đánh giá</strong></span>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm flex items-center justify-between">
+          <span>⚠️ {submitError}</span>
+          <button onClick={() => setSubmitError('')} className="text-red-500 font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="fixed bottom-0 left-0 right-0 md:relative md:bottom-auto p-4 bg-white md:bg-transparent border-t border-gray-100 md:border-0 md:mt-6">
-        {step < 3 ? (
+        {step < 2 ? (
           <button onClick={() => { if (validate()) setStep(s => s + 1); }}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl transition"
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl transition cursor-pointer"
             style={{ fontWeight: 700, fontSize: '1rem' }}>
-            Tiếp theo →
+            Xem trước bài đăng →
           </button>
         ) : (
-          <button onClick={handleSubmit}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl transition flex items-center justify-center gap-2"
+          <button onClick={handleSubmit} disabled={isSubmitting}
+            className={`w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
             style={{ fontWeight: 700, fontSize: '1rem' }}>
-            <PlusCircle className="w-5 h-5" /> Đăng việc ngay!
+            {isSubmitting ? (
+              <span>Đang lưu...</span>
+            ) : (
+              <>
+                <PlusCircle className="w-5 h-5" /> Đăng việc ngay!
+              </>
+            )}
           </button>
         )}
       </div>
