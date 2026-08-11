@@ -1,0 +1,39 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Snap On" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e13]:
+          - generic [ref=e14]: Snap
+          - generic [ref=e15]: "On"
+      - navigation [ref=e17]:
+        - link "Trang chủ" [ref=e18] [cursor=pointer]:
+          - /url: /
+        - link "+ Đăng việc" [ref=e19] [cursor=pointer]:
+          - /url: /login
+      - link "Đăng nhập / Đăng ký" [ref=e21] [cursor=pointer]:
+        - /url: /login
+  - main [ref=e26]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - link "← Về trang chủ" [ref=e31] [cursor=pointer]:
+          - /url: /
+        - heading "Đăng nhập" [level=1] [ref=e32]
+        - paragraph [ref=e33]: Sử dụng Gmail hoặc đăng nhập nhanh bằng Google
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - text: Gmail
+          - textbox "example@gmail.com" [ref=e36]
+        - generic [ref=e37]:
+          - text: Mật khẩu
+          - textbox "Nhập mật khẩu" [ref=e38]
+        - button "Đăng nhập" [ref=e39]
+        - generic [ref=e40]: hoặc
+        - button "Đăng nhập với Google" [ref=e44]
+      - button "Chưa có tài khoản? Đăng ký" [ref=e46]
+  - contentinfo [ref=e47]:
+    - generic [ref=e48]:
+      - generic [ref=e56]:
+        - generic [ref=e57]: Snap
+        - generic [ref=e58]: "On"
+      - paragraph [ref=e60]: Nền tảng kết nối việc làm ngắn hạn — Nhanh · Gần · Tin cậy
