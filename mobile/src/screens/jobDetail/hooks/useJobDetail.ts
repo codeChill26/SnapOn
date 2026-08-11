@@ -171,6 +171,14 @@ export const useJobDetail = () => {
 
   const handleDeleteTask = () => {
     if (!task) return;
+    if (task.status === 'COMPLETED') {
+      Alert.alert('Không thể xóa', 'Bài đăng đã hoàn thành. Bạn không thể xóa bài đăng này.');
+      return;
+    }
+    if (applications.length > 0 || ((task as any).applicantCount || 0) > 0) {
+      Alert.alert('Không thể xóa', 'Bài đăng đã có người ứng tuyển. Bạn không thể xóa bài đăng này.');
+      return;
+    }
     Alert.alert(
       'Xác nhận xóa',
       'Bạn có chắc chắn muốn xóa vĩnh viễn bài đăng này?',

@@ -102,8 +102,8 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export const MainTabNavigator: React.FC = () => {
   const { user } = useAuth();
-
-  const role: UserRole = user?.role ?? 'USER';
+  const rawRole = user?.role ? String(user.role).toUpperCase() : 'USER';
+  const role: UserRole = rawRole === 'ADMIN' ? 'ADMIN' : 'USER';
 
   const visibleTabs = tabConfigs.filter((tab) =>
     tab.roles.includes(role),

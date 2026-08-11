@@ -10,7 +10,7 @@ export const NotificationInitializer: React.FC<{ children: React.ReactNode }> = 
   useEffect(() => {
     if (token && user) {
       socketService.connect(user.id);
-      void notificationService.registerDeviceForChatNotifications().catch((error) => {
+      void notificationService.registerDeviceForChatNotifications().catch((error: any) => {
         console.warn('Failed to register push token:', error);
       });
 

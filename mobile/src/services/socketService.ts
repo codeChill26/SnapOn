@@ -3,6 +3,7 @@ import io from 'socket.io-client/dist/socket.io.js';
 import type { Socket } from 'socket.io-client';
 import Config from '../constants/config';
 import { storage } from '../utils/storage';
+import { detectBackend } from '../utils/backendDetector';
 
 type SocketCallback<T = unknown> = (payload: T) => void;
 
@@ -25,21 +26,25 @@ class SocketService {
       authPayload.xUserId = userId;
     }
 
-    // Replace backend api suffix to get base server url
-    const baseUrl = Config.API_BASE_URL.replace('/api', '');
+    // Resolve current active backend base URL dynamically
+    const currentApiUrl = await detectBackend();
+    const baseUrl = currentApiUrl.replace(/\/api\/?$/, '');
 
     const socketInstance = io(baseUrl, {
       auth: authPayload,
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       autoConnect: true,
       reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 3000,
+      timeout: 10000,
     }) as Socket;
 
     this.socket = socketInstance;
 
     socketInstance.on('connect', () => {
       if (__DEV__) {
-        console.log('Socket connected successfully:', socketInstance.id);
+        console.log('✅ Socket connected successfully:', socketInstance.id);
       }
     });
 

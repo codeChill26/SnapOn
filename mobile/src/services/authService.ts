@@ -43,6 +43,8 @@ export const authService = {
     bio?: string;
     headline?: string;
     skills?: string[];
+    bankName?: string;
+    bankAccountNumber?: string;
   }): Promise<User> {
     const response = await api.put<any>('/users/profile', profileData);
     return response.data.data.user;

@@ -17,6 +17,8 @@ import { HomeCompactJobCard } from '../../components/home/HomeCompactJobCard';
 import { HomeJobGridSkeleton } from '../../components/home/HomeJobGridSkeleton';
 import { HomeBannerCarousel } from '../../components/home/HomeBannerCarousel';
 import { CategoryPickerModal } from '../../components/categories/CategoryPickerModal';
+import { NotificationModal } from '../../components/notifications/NotificationModal';
+import { notificationService } from '../../services/notificationService';
 import { useAuth } from '../../context/AuthContext';
 
 import { Task } from '../../types';
@@ -67,6 +69,22 @@ export const HomeScreen: React.FC = () => {
       handleSubmitSearch,
     }
   } = useHomeTasks();
+
+  const [notifModalVisible, setNotifModalVisible] = React.useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = React.useState(0);
+
+  const fetchUnreadNotifCount = useCallback(async () => {
+    try {
+      const data = await notificationService.getNotifications();
+      setUnreadNotifCount(data.unreadCount);
+    } catch (err) {
+      // Ignore
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchUnreadNotifCount();
+  }, [fetchUnreadNotifCount]);
 
   const handleJobPress = useCallback(
     (task: Task) => {
@@ -191,6 +209,8 @@ export const HomeScreen: React.FC = () => {
           selectedCategoryName={selectedSubcategoryName || selectedFieldName}
           onCategoryPress={() => setCategoryModalVisible(true)}
           onSavedPress={handleSavedPress}
+          onNotificationPress={() => setNotifModalVisible(true)}
+          unreadCount={unreadNotifCount}
         />
 
         <View style={[styles.bannerContainer, { paddingBottom: theme.spacing.md }]}>
@@ -429,6 +449,7 @@ export const HomeScreen: React.FC = () => {
       handleSubmitSearch,
       handleClearSearch,
       handleClearCategoryFilter,
+      unreadNotifCount,
       theme,
     ]
   );
@@ -469,6 +490,12 @@ export const HomeScreen: React.FC = () => {
         onSelectSubcategory={handleSelectSubcategory}
         onClear={handleClearCategoryFilter}
         fields={categoriesList}
+      />
+
+      <NotificationModal
+        visible={notifModalVisible}
+        onClose={() => setNotifModalVisible(false)}
+        onRefreshUnreadCount={fetchUnreadNotifCount}
       />
     </View>
   );

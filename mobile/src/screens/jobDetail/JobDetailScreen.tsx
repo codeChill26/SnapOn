@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Linking,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -94,6 +95,21 @@ export const JobDetailScreen: React.FC = () => {
     },
   } = useJobDetail();
 
+  const completedWorker = useMemo(() => {
+    if (task?.assignedWorker) return task.assignedWorker;
+    const completedApp = applications.find(
+      (a) => a.assignmentStatus === 'COMPLETED' || a.status === 'ACCEPTED'
+    );
+    if (completedApp) {
+      return {
+        id: completedApp.taskerId,
+        name: completedApp.taskerName || 'Người làm việc',
+        avatarUrl: completedApp.taskerAvatar,
+      };
+    }
+    return null;
+  }, [task, applications]);
+
   if (loading) {
     return <LoadingState fullScreen message="Đang tải chi tiết..." />;
   }
@@ -105,6 +121,19 @@ export const JobDetailScreen: React.FC = () => {
   const category = getCategoryById(task.categoryId);
   const subcategoryName = task.subcategory?.name || (task.skills && task.skills[0]?.name) || 'Chưa phân loại';
   const deadlineText = task.applicationDeadline ? formatDate(task.applicationDeadline) : 'Không giới hạn thời gian';
+
+  const handleEditPress = () => {
+    if (!task) return;
+    if (task.status === 'COMPLETED') {
+      Alert.alert('Không thể chỉnh sửa', 'Bài đăng đã hoàn thành. Bạn không thể chỉnh sửa bài đăng này.');
+      return;
+    }
+    if (applications.length > 0 || ((task as any).applicantCount || 0) > 0) {
+      Alert.alert('Không thể chỉnh sửa', 'Bài đăng đã có người ứng tuyển. Bạn không thể chỉnh sửa bài đăng này.');
+      return;
+    }
+    navigation.navigate('MainTabs', { screen: 'PostJob', params: { taskId: task.id } });
+  };
 
   const renderCarousel = () => {
     const images = task.images || [];
@@ -434,6 +463,70 @@ export const JobDetailScreen: React.FC = () => {
             )}
           </View>
 
+          {/* Completed Worker Card (Visible to everyone when task is COMPLETED) */}
+          {(task.status === 'COMPLETED' || task.assignedWorker?.status === 'COMPLETED') && (
+            <View
+              style={[
+                styles.sectionContainer,
+                {
+                  backgroundColor: theme.colors.status.successSoft || '#E6F4EA',
+                  borderRadius: theme.radius.medium,
+                  borderColor: theme.colors.status.success,
+                  borderWidth: 1,
+                  padding: theme.spacing.lg,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+                <Ionicons name="checkmark-circle" size={22} color={theme.colors.status.success} />
+                <Text style={[styles.sectionTitle, { color: theme.colors.status.success, marginLeft: theme.spacing.xs, marginBottom: 0 }]}>
+                  Công việc đã hoàn thành
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 13, color: theme.colors.text.secondary, marginBottom: theme.spacing.md }}>
+                Người thực hiện công việc này:
+              </Text>
+
+              {completedWorker ? (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.colors.background.primary,
+                    borderRadius: theme.radius.small,
+                    borderColor: theme.colors.border.subtle,
+                    borderWidth: 1,
+                    padding: theme.spacing.md,
+                  }}
+                  onPress={() => {
+                    if (completedWorker.id) {
+                      navigation.navigate('PublicProfile', { userId: completedWorker.id });
+                    }
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Xem trang cá nhân của ${completedWorker.name}`}
+                >
+                  <UserAvatar name={completedWorker.name || 'Người thực hiện'} avatarUrl={completedWorker.avatarUrl} size={44} />
+                  <View style={[styles.ownerInfo, { marginLeft: theme.spacing.sm, flex: 1 }]}>
+                    <Text style={[styles.ownerName, { color: theme.colors.text.primary }]}>
+                      {completedWorker.name || 'Người thực hiện'}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: theme.colors.status.success, fontWeight: '700', marginTop: 2 }}>
+                      ✓ Đã thực hiện & hoàn thành công việc
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.colors.text.muted} />
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ fontSize: 13, color: theme.colors.text.muted, fontStyle: 'italic' }}>
+                  Công việc đã được hoàn thành bởi ứng viên.
+                </Text>
+              )}
+            </View>
+          )}
+
           {/* Poster Management card */}
           {isPoster && task.postType !== 'SERVICE_OFFER' && (
             <View
@@ -720,7 +813,7 @@ export const JobDetailScreen: React.FC = () => {
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[styles.btn, styles.btnOutline, { flex: 1, borderRadius: theme.radius.small }]}
-                onPress={() => navigation.navigate('MainTabs', { screen: 'PostJob', params: { taskId: task.id } })}
+                onPress={handleEditPress}
                 accessibilityRole="button"
                 accessibilityLabel="Chỉnh sửa bài viết"
               >
@@ -741,7 +834,7 @@ export const JobDetailScreen: React.FC = () => {
                 <>
                   <TouchableOpacity
                     style={[styles.btn, styles.btnOutline, { borderRadius: theme.radius.small }]}
-                    onPress={() => navigation.navigate('MainTabs', { screen: 'PostJob', params: { taskId: task.id } })}
+                    onPress={handleEditPress}
                     accessibilityRole="button"
                     accessibilityLabel="Chỉnh sửa bài viết"
                   >
