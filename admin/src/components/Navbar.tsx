@@ -17,14 +17,27 @@ interface NavbarProps {
 }
 
 const navItems = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/users', label: 'Users' },
-  { href: '/categories', label: 'Categories' },
-  { href: '/tasks', label: 'Tasks' },
-  { href: '/banners', label: 'Banners' },
-  { href: '/reports', label: 'Reports' },
-  { href: '/withdraws', label: 'Withdrawals' },
+  { href: '/', label: 'Tổng quan' },
+  { href: '/users', label: 'Người dùng' },
+  { href: '/categories', label: 'Danh mục & Kỹ năng' },
+  { href: '/tasks', label: 'Công việc' },
+  { href: '/banners', label: 'Banners & Quảng cáo' },
+  { href: '/reports', label: 'Báo cáo vi phạm' },
+  { href: '/withdraws', label: 'Yêu cầu Rút tiền' },
+  { href: '/deletions', label: 'Xóa tài khoản' },
 ];
+
+const getTitleFromPath = (path: string) => {
+  if (path === '/') return 'Tổng quan hệ thống';
+  if (path.startsWith('/users')) return 'Quản lý Người dùng';
+  if (path.startsWith('/categories')) return 'Quản lý Danh mục & Kỹ năng';
+  if (path.startsWith('/tasks')) return 'Quản lý Công việc';
+  if (path.startsWith('/banners')) return 'Quản lý Banners & Quảng cáo';
+  if (path.startsWith('/reports')) return 'Quản lý Báo cáo vi phạm';
+  if (path.startsWith('/withdraws')) return 'Quản lý Yêu cầu Rút tiền';
+  if (path.startsWith('/deletions')) return 'Yêu cầu Xóa tài khoản';
+  return 'Quản trị hệ thống';
+};
 
 export default function Navbar({ adminUser }: NavbarProps) {
   const router = useRouter();
@@ -52,7 +65,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
           <Menu className="h-6 w-6" />
         </button>
         <h1 className="text-lg font-bold text-[#18181B] capitalize md:block hidden">
-          {pathname === '/' ? 'Overview' : pathname.split('/')[1] || ''}
+          {getTitleFromPath(pathname)}
         </h1>
       </div>
 
@@ -77,7 +90,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
             </div>
           )}
           <div className="hidden sm:block text-left">
-            <p className="text-sm font-semibold text-[#18181B] leading-none">{adminUser?.fullName || 'Administrator'}</p>
+            <p className="text-sm font-semibold text-[#18181B] leading-none">{adminUser?.fullName || 'Quản trị viên'}</p>
             <p className="text-xs text-[#71717A] mt-1 leading-none">{adminUser?.email}</p>
           </div>
         </div>
@@ -87,7 +100,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
           className="flex items-center gap-2 rounded-xl border border-[#E4E4E7] bg-[#F4F4F5] hover:bg-[#E4E4E7] px-3 py-1.5 text-xs font-semibold text-[#312F2C] transition-all cursor-pointer shadow-xs"
         >
           <LogOut className="h-3.5 w-3.5" />
-          <span>Sign Out</span>
+          <span>Đăng xuất</span>
         </button>
       </div>
 
@@ -147,7 +160,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
                       className="object-cover w-full h-full"
                       onError={(e) => {
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = '/default-avatar.png';
+                        e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(adminUser?.fullName || 'Admin')}`;
                       }}
                     />
                   </div>
@@ -157,7 +170,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
                   </div>
                 )}
                 <div className="text-left text-xs">
-                  <p className="font-semibold text-white leading-none">{adminUser?.fullName}</p>
+                  <p className="font-semibold text-white leading-none">{adminUser?.fullName || 'Quản trị viên'}</p>
                   <p className="text-zinc-500 mt-0.5 leading-none">{adminUser?.email}</p>
                 </div>
               </div>
@@ -166,7 +179,7 @@ export default function Navbar({ adminUser }: NavbarProps) {
                 className="w-full flex items-center justify-center gap-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 py-2.5 text-sm font-semibold text-white transition-colors"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
+                <span>Đăng xuất</span>
               </button>
             </div>
           </div>

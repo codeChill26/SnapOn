@@ -16,14 +16,14 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/users', label: 'Users', icon: Users },
-  { href: '/categories', label: 'Categories', icon: Tag },
-  { href: '/tasks', label: 'Tasks', icon: Briefcase },
-  { href: '/banners', label: 'Banners', icon: Image },
-  { href: '/reports', label: 'Reports', icon: Flag },
-  { href: '/withdraws', label: 'Withdrawals', icon: Wallet },
-  { href: '/deletions', label: 'Deletions', icon: Trash2 },
+  { href: '/', label: 'Tổng quan', icon: LayoutDashboard },
+  { href: '/users', label: 'Người dùng', icon: Users },
+  { href: '/categories', label: 'Danh mục & Kỹ năng', icon: Tag },
+  { href: '/tasks', label: 'Công việc', icon: Briefcase },
+  { href: '/banners', label: 'Banners & Ads', icon: Image },
+  { href: '/reports', label: 'Báo cáo vi phạm', icon: Flag },
+  { href: '/withdraws', label: 'Yêu cầu Rút tiền', icon: Wallet },
+  { href: '/deletions', label: 'Yêu cầu Xóa tài khoản', icon: Trash2 },
 ];
 
 export default function Sidebar() {

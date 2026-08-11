@@ -297,15 +297,15 @@ export default function CategoriesPage() {
       {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Categories & Skills</h2>
-          <p className="text-[#71717A] text-sm mt-1 font-medium">Configure categories and job capabilities for users and tasks.</p>
+          <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Danh Mục & Kỹ Năng</h2>
+          <p className="text-[#71717A] text-sm mt-1 font-medium">Cấu hình hệ thống danh mục dịch vụ và năng lực ngành nghề.</p>
         </div>
         <button
           onClick={activeTab === 'categories' ? handleOpenCreateCat : handleOpenCreateSkill}
           className="bg-[#312F2C] hover:bg-[#18181B] text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-md self-start"
         >
           <Plus className="h-4 w-4" />
-          <span>Create {activeTab === 'categories' ? 'Category' : 'Skill'}</span>
+          <span>Tạo {activeTab === 'categories' ? 'Danh mục' : 'Kỹ năng'}</span>
         </button>
       </div>
 
@@ -320,7 +320,7 @@ export default function CategoriesPage() {
           }`}
         >
           <Tag className="h-4 w-4" />
-          <span>Categories</span>
+          <span>Danh Mục</span>
         </button>
         <button
           onClick={() => setActiveTab('skills')}
@@ -331,7 +331,7 @@ export default function CategoriesPage() {
           }`}
         >
           <Bookmark className="h-4 w-4" />
-          <span>Skills</span>
+          <span>Kỹ Năng</span>
         </button>
       </div>
 
@@ -346,7 +346,7 @@ export default function CategoriesPage() {
               </span>
               <input
                 type="text"
-                placeholder="Search category name..."
+                placeholder="Tìm tên danh mục..."
                 value={catSearch}
                 onChange={(e) => { setCatSearch(e.target.value); setCatPage(1); }}
                 className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 pl-9 pr-4 text-[#18181B] text-sm placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all font-medium"
@@ -360,41 +360,41 @@ export default function CategoriesPage() {
               <table className="w-full text-left text-sm text-[#71717A]">
                 <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
                   <tr>
-                    <th className="px-6 py-3.5">Category Name</th>
-                    <th className="px-6 py-3.5">Slug Identifier</th>
-                    <th className="px-6 py-3.5">Sub-skills</th>
-                    <th className="px-6 py-3.5 text-center">Tasks Count</th>
-                    <th className="px-6 py-3.5 text-right">Actions</th>
+                    <th className="px-6 py-3.5 font-extrabold">Tên Danh Mục</th>
+                    <th className="px-6 py-3.5 font-extrabold">Mã Slug</th>
+                    <th className="px-6 py-3.5 font-extrabold">Kỹ Năng Con</th>
+                    <th className="px-6 py-3.5 font-extrabold text-center">Số Công Việc</th>
+                    <th className="px-6 py-3.5 font-extrabold text-right">Thao Tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
                   {catLoading ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">Loading categories...</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">Đang tải danh mục...</td>
                     </tr>
                   ) : catError ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-10 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
-                          <p className="text-red-400">{catError}</p>
+                          <p className="text-rose-600 font-semibold">{catError}</p>
                           <button
                             onClick={fetchCategories}
-                            className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 text-zinc-200 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
+                            className="px-4 py-2 bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer text-xs font-bold"
                           >
-                            Retry Load
+                            Tải lại
                           </button>
                         </div>
                       </td>
                     </tr>
                   ) : categories.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">No categories found.</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-[#71717A] font-medium">Không tìm thấy danh mục nào.</td>
                     </tr>
                   ) : (
                     categories.map((cat) => (
-                      <tr key={cat.id} className="hover:bg-zinc-900/20 transition-colors">
-                        <td className="px-6 py-4 font-semibold text-white">{cat.name}</td>
-                        <td className="px-6 py-4 text-zinc-500 font-mono text-xs">{cat.slug}</td>
+                      <tr key={cat.id} className="hover:bg-[#FAFAFA] transition-colors">
+                        <td className="px-6 py-4 font-bold text-[#18181B] text-base">{cat.name}</td>
+                        <td className="px-6 py-4 text-[#71717A] font-mono text-xs font-semibold">{cat.slug}</td>
                         <td className="px-6 py-4">
                           {(() => {
                             const catSkills = cat.skills || [];
@@ -407,7 +407,7 @@ export default function CategoriesPage() {
                                 {visibleSkills.map(skill => (
                                   <span 
                                     key={skill.id} 
-                                    className="inline-flex items-center rounded-full bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+                                    className="inline-flex items-center rounded-full bg-[#312F2C] text-white px-2.5 py-0.5 text-[10px] font-bold shadow-2xs"
                                   >
                                     {skill.name}
                                   </span>
@@ -415,33 +415,33 @@ export default function CategoriesPage() {
                                 {hasMore && !isExpanded && (
                                   <button
                                     onClick={() => toggleExpandCategory(cat.id)}
-                                    className="inline-flex items-center rounded-full bg-indigo-950/40 border border-indigo-850/60 hover:bg-indigo-900/40 px-2 py-0.5 text-[10px] font-semibold text-indigo-300 transition-colors cursor-pointer"
+                                    className="inline-flex items-center rounded-full bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] px-2.5 py-0.5 text-[10px] font-bold text-[#312F2C] transition-colors cursor-pointer"
                                   >
-                                    +{catSkills.length - 8} more
+                                    +{catSkills.length - 8} kỹ năng
                                   </button>
                                 )}
                                 {hasMore && isExpanded && (
                                   <button
                                     onClick={() => toggleExpandCategory(cat.id)}
-                                    className="inline-flex items-center rounded-full bg-zinc-950/40 border border-zinc-850/60 hover:bg-zinc-900/40 px-2 py-0.5 text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                    className="inline-flex items-center rounded-full bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] px-2.5 py-0.5 text-[10px] font-bold text-[#71717A] transition-colors cursor-pointer"
                                   >
-                                    Show less
+                                    Thu gọn
                                   </button>
                                 )}
                                 {catSkills.length === 0 && (
-                                  <span className="text-xs text-zinc-650 italic">No sub-skills</span>
+                                  <span className="text-xs text-[#71717A] italic">Chưa có kỹ năng con</span>
                                 )}
                               </div>
                             );
                           })()}
                         </td>
-                        <td className="px-6 py-4 text-center text-emerald-450 font-semibold">{cat._count?.tasks || 0}</td>
+                        <td className="px-6 py-4 text-center text-emerald-700 font-extrabold">{cat._count?.tasks || 0}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleOpenEditCat(cat)}
-                              className="rounded-lg p-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                              title="Edit Category"
+                              className="rounded-lg p-2 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#312F2C] hover:text-white text-[#312F2C] transition-colors cursor-pointer shadow-2xs"
+                              title="Sửa Danh mục"
                             >
                               <Edit2 className="h-4 w-4" />
                             </button>
@@ -450,8 +450,8 @@ export default function CategoriesPage() {
                                 setDeleteTarget({ id: cat.id, name: cat.name, type: 'category' });
                                 setDeleteConfirmOpen(true);
                               }}
-                              className="rounded-lg p-1.5 bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-900/20 hover:text-red-200 transition-colors cursor-pointer"
-                              title="Delete Category"
+                              className="rounded-lg p-2 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer shadow-2xs"
+                              title="Xóa Danh mục"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -466,23 +466,23 @@ export default function CategoriesPage() {
 
             {/* Pagination */}
             {catTotal > 10 && (
-              <div className="flex items-center justify-between border-t border-zinc-900 px-6 py-4">
-                <div className="text-xs text-zinc-500">
-                  Showing page <span className="font-semibold text-white">{catPage}</span> of{' '}
-                  <span className="font-semibold text-white">{Math.ceil(catTotal / 10)}</span> ({catTotal} categories)
+              <div className="flex items-center justify-between border-t border-[#E4E4E7] px-6 py-4 bg-white">
+                <div className="text-xs text-[#71717A]">
+                  Hiển thị trang <span className="font-bold text-[#18181B]">{catPage}</span> /{' '}
+                  <span className="font-bold text-[#18181B]">{Math.ceil(catTotal / 10)}</span> ({catTotal} danh mục)
                 </div>
                 <div className="flex gap-2">
                   <button
                     disabled={catPage <= 1}
                     onClick={() => setCatPage(catPage - 1)}
-                    className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className="rounded-lg border border-[#E4E4E7] bg-[#F4F4F5] p-2 text-[#312F2C] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
                     disabled={catPage >= Math.ceil(catTotal / 10)}
                     onClick={() => setCatPage(catPage + 1)}
-                    className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className="rounded-lg border border-[#E4E4E7] bg-[#F4F4F5] p-2 text-[#312F2C] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
@@ -497,18 +497,18 @@ export default function CategoriesPage() {
       {activeTab === 'skills' && (
         <div className="space-y-6">
           {/* Filters Card */}
-          <Card className="flex flex-col sm:flex-row gap-4 items-center">
+          <Card className="flex flex-col sm:flex-row gap-4 items-center bg-white border-[#E4E4E7] shadow-sm">
             {/* Search */}
             <div className="relative w-full sm:w-80">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#71717A]">
                 <Search className="h-4 w-4" />
               </span>
               <input
                 type="text"
-                placeholder="Search skill name..."
+                placeholder="Tìm tên kỹ năng..."
                 value={skillSearch}
                 onChange={(e) => { setSkillSearch(e.target.value); setSkillPage(1); }}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 pl-9 pr-4 text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 pl-9 pr-4 text-[#18181B] text-sm placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all font-medium"
               />
             </div>
 
@@ -517,9 +517,9 @@ export default function CategoriesPage() {
               <select
                 value={skillFilterCat}
                 onChange={(e) => { setSkillFilterCat(e.target.value); setSkillPage(1); }}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 px-3 text-[#18181B] text-sm focus:outline-none focus:border-[#312F2C] transition-all font-medium"
               >
-                <option value="">All Categories</option>
+                <option value="">Tất cả danh mục</option>
                 {allCategories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -528,56 +528,56 @@ export default function CategoriesPage() {
           </Card>
 
           {/* Skills Grid Table */}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+              <table className="w-full text-left text-sm text-[#71717A]">
+                <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
                   <tr>
-                    <th className="px-6 py-3.5 font-semibold">Skill Name</th>
-                    <th className="px-6 py-3.5 font-semibold">Slug Identifier</th>
-                    <th className="px-6 py-3.5 font-semibold">Linked Category</th>
-                    <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
+                    <th className="px-6 py-3.5 font-extrabold">Tên Kỹ Năng</th>
+                    <th className="px-6 py-3.5 font-extrabold">Mã Slug</th>
+                    <th className="px-6 py-3.5 font-extrabold">Danh Mục Liên Kết</th>
+                    <th className="px-6 py-3.5 font-extrabold text-right">Thao Tác</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-900 text-zinc-300">
+                <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
                   {skillLoading ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-zinc-500">Loading skills...</td>
+                      <td colSpan={4} className="px-6 py-10 text-center text-[#71717A] font-medium">Đang tải kỹ năng...</td>
                     </tr>
                   ) : skillError ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-10 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
-                          <p className="text-red-400">{skillError}</p>
+                          <p className="text-rose-600 font-semibold">{skillError}</p>
                           <button
                             onClick={fetchSkills}
-                            className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 text-zinc-200 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
+                            className="px-4 py-2 bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer text-xs font-bold"
                           >
-                            Retry Load
+                            Tải lại
                           </button>
                         </div>
                       </td>
                     </tr>
                   ) : skills.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-zinc-500">No skills found.</td>
+                      <td colSpan={4} className="px-6 py-10 text-center text-[#71717A] font-medium">Không tìm thấy kỹ năng nào.</td>
                     </tr>
                   ) : (
                     skills.map((skill) => (
-                      <tr key={skill.id} className="hover:bg-zinc-900/20 transition-colors">
-                        <td className="px-6 py-4 font-semibold text-white">{skill.name}</td>
-                        <td className="px-6 py-4 text-zinc-500 font-mono text-xs">{skill.slug}</td>
+                      <tr key={skill.id} className="hover:bg-[#FAFAFA] transition-colors">
+                        <td className="px-6 py-4 font-bold text-[#18181B] text-base">{skill.name}</td>
+                        <td className="px-6 py-4 text-[#71717A] font-mono text-xs font-semibold">{skill.slug}</td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center rounded-full bg-indigo-950/40 border border-indigo-900/40 text-indigo-305 px-2.5 py-0.5 text-xs font-semibold uppercase">
-                            {skill.category?.name || 'N/A'}
+                          <span className="inline-flex items-center rounded-full bg-[#312F2C] text-white px-2.5 py-0.5 text-xs font-bold uppercase shadow-2xs">
+                            {skill.category?.name || 'Chưa phân loại'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleOpenEditSkill(skill)}
-                              className="rounded-lg p-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                              title="Edit Skill"
+                              className="rounded-lg p-2 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#312F2C] hover:text-white text-[#312F2C] transition-colors cursor-pointer shadow-2xs"
+                              title="Sửa Kỹ năng"
                             >
                               <Edit2 className="h-4 w-4" />
                             </button>
@@ -586,8 +586,8 @@ export default function CategoriesPage() {
                                 setDeleteTarget({ id: skill.id, name: skill.name, type: 'skill' });
                                 setDeleteConfirmOpen(true);
                               }}
-                              className="rounded-lg p-1.5 bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-900/20 hover:text-red-200 transition-colors cursor-pointer"
-                              title="Delete Skill"
+                              className="rounded-lg p-2 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer shadow-2xs"
+                              title="Xóa Kỹ năng"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -602,23 +602,23 @@ export default function CategoriesPage() {
 
             {/* Pagination */}
             {skillTotal > 10 && (
-              <div className="flex items-center justify-between border-t border-zinc-900 px-6 py-4">
-                <div className="text-xs text-zinc-500">
-                  Showing page <span className="font-semibold text-white">{skillPage}</span> of{' '}
-                  <span className="font-semibold text-white">{Math.ceil(skillTotal / 10)}</span> ({skillTotal} skills)
+              <div className="flex items-center justify-between border-t border-[#E4E4E7] px-6 py-4 bg-white">
+                <div className="text-xs text-[#71717A]">
+                  Hiển thị trang <span className="font-bold text-[#18181B]">{skillPage}</span> /{' '}
+                  <span className="font-bold text-[#18181B]">{Math.ceil(skillTotal / 10)}</span> ({skillTotal} kỹ năng)
                 </div>
                 <div className="flex gap-2">
                   <button
                     disabled={skillPage <= 1}
                     onClick={() => setSkillPage(skillPage - 1)}
-                    className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className="rounded-lg border border-[#E4E4E7] bg-[#F4F4F5] p-2 text-[#312F2C] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
                     disabled={skillPage >= Math.ceil(skillTotal / 10)}
                     onClick={() => setSkillPage(skillPage + 1)}
-                    className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className="rounded-lg border border-[#E4E4E7] bg-[#F4F4F5] p-2 text-[#312F2C] hover:bg-[#E4E4E7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
@@ -634,50 +634,50 @@ export default function CategoriesPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={
-          modalType === 'create_cat' ? 'Create Category' :
-          modalType === 'edit_cat' ? 'Edit Category' :
-          modalType === 'create_skill' ? 'Create Skill' :
-          'Edit Skill'
+          modalType === 'create_cat' ? 'Tạo Danh Mục Mới' :
+          modalType === 'edit_cat' ? 'Chỉnh Sửa Danh Mục' :
+          modalType === 'create_skill' ? 'Tạo Kỹ Năng Mới' :
+          'Chỉnh Sửa Kỹ Năng'
         }
       >
-        <form onSubmit={handleFormSubmit} className="space-y-4 text-sm">
+        <form onSubmit={handleFormSubmit} className="space-y-4 text-sm text-[#18181B]">
           {formError && (
-            <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl text-red-200">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 font-semibold text-xs">
               {formError}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Display Name</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#312F2C] mb-2">Tên hiển thị</label>
             <input
               type="text"
               required
-              placeholder="e.g. Graphic Design"
+              placeholder="ví dụ: Thiết kế đồ họa"
               value={formName}
               onChange={handleNameChange}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+              className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2.5 px-3.5 text-[#18181B] placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all text-sm font-semibold"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Slug URL Identifier</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#312F2C] mb-2">Mã Slug URL</label>
             <input
               type="text"
               required
-              placeholder="e.g. graphic-design"
+              placeholder="ví dụ: thiet-ke-do-hoa"
               value={formSlug}
               onChange={(e) => setFormSlug(generateSlug(e.target.value))}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3.5 text-white placeholder-zinc-500 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2.5 px-3.5 text-[#18181B] placeholder-[#71717A] font-mono text-xs focus:outline-none focus:border-[#312F2C] transition-all font-semibold"
             />
           </div>
 
           {(modalType === 'create_skill' || modalType === 'edit_skill') && (
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Linked Category</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#312F2C] mb-2">Danh mục liên kết</label>
               <select
                 value={formCategoryId}
                 onChange={(e) => setFormCategoryId(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2.5 px-3 text-[#18181B] focus:outline-none focus:border-[#312F2C] transition-all font-semibold text-sm"
               >
                 {allCategories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -686,20 +686,20 @@ export default function CategoriesPage() {
             </div>
           )}
 
-          <div className="flex gap-3 pt-3 border-t border-zinc-900">
+          <div className="flex gap-3 pt-3 border-t border-[#E4E4E7]">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-2.5 px-4 rounded-xl font-semibold text-zinc-300 transition-colors cursor-pointer text-center"
+              className="flex-1 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] py-2.5 px-4 rounded-xl font-bold text-[#312F2C] transition-colors cursor-pointer text-center"
             >
-              Cancel
+              Hủy
             </button>
             <button
               type="submit"
               disabled={formSubmitting}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 py-2.5 px-4 rounded-xl font-semibold text-white transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
+              className="flex-1 bg-[#312F2C] hover:bg-[#18181B] disabled:opacity-50 py-2.5 px-4 rounded-xl font-bold text-white transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
             >
-              {formSubmitting ? 'Saving...' : 'Save Settings'}
+              {formSubmitting ? 'Đang lưu...' : 'Lưu Thay Đổi'}
             </button>
           </div>
         </form>
@@ -714,15 +714,15 @@ export default function CategoriesPage() {
           setDeleteTarget(null);
         }}
         onConfirm={executeDelete}
-        title={deleteTarget?.type === 'category' ? 'Delete Category' : 'Delete Skill'}
+        title={deleteTarget?.type === 'category' ? 'Xóa Danh Mục' : 'Xóa Kỹ Năng'}
         description={
           deleteTarget
             ? deleteTarget.type === 'category'
-              ? `Are you sure you want to delete the category "${deleteTarget.name}"? This will unlink it from its sub-skills and associated jobs.`
-              : `Are you sure you want to delete the skill "${deleteTarget.name}"? This action cannot be undone.`
+              ? `Bạn có chắc chắn muốn xóa danh mục "${deleteTarget.name}"? Thao tác này sẽ bỏ liên kết với các kỹ năng con và công việc liên quan.`
+              : `Bạn có chắc chắn muốn xóa kỹ năng "${deleteTarget.name}"? Thao tác này không thể hoàn tác.`
             : ''
         }
-        confirmText="Confirm Delete"
+        confirmText="Xác nhận Xóa"
       />
     </div>
   );

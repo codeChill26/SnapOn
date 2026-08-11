@@ -8,6 +8,8 @@ import {
   TrendingDown, 
   Minus,
   Layers,
+  BarChart2,
+  LineChart
 } from 'lucide-react';
 
 export interface RawRecord {
@@ -22,6 +24,7 @@ interface GrowthAnalyticsChartsProps {
 
 type ModeType = '7d' | 'month' | 'custom';
 type MetricType = 'users' | 'tasks' | 'withdraws';
+type MonthViewType = 'weekly' | 'daily';
 
 export default function GrowthAnalyticsCharts({
   userRecords,
@@ -30,6 +33,8 @@ export default function GrowthAnalyticsCharts({
 }: GrowthAnalyticsChartsProps) {
   const [mode, setMode] = useState<ModeType>('7d');
   const [metric, setMetric] = useState<MetricType>('users');
+  const [monthView, setMonthView] = useState<MonthViewType>('weekly'); // Default weekly for clean 30-day view
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const formatDateForInput = (d: Date) => {
     const year = d.getFullYear();
@@ -91,6 +96,66 @@ export default function GrowthAnalyticsCharts({
       prevStart.setHours(0, 0, 0, 0);
     }
 
+    // Check if we should aggregate by weeks in Month mode
+    const isWeeklyMode = mode === 'month' && monthView === 'weekly';
+
+    if (isWeeklyMode) {
+      // Group into 4 clean weeks: T1 (1-7), T2 (8-14), T3 (15-21), T4 (22-cuối tháng)
+      const currentBuckets = [0, 0, 0, 0];
+      const prevBuckets = [0, 0, 0, 0];
+      const labels = ['Tuần 1 (1-7)', 'Tuần 2 (8-14)', 'Tuần 3 (15-21)', 'Tuần 4 (22-30)'];
+
+      activeRecords.forEach((r) => {
+        const d = new Date(r.createdAt);
+        const dayOfMonth = d.getDate();
+        const m = d.getMonth();
+        const y = d.getFullYear();
+
+        // Current Month
+        if (m === now.getMonth() && y === now.getFullYear()) {
+          if (dayOfMonth <= 7) currentBuckets[0]++;
+          else if (dayOfMonth <= 14) currentBuckets[1]++;
+          else if (dayOfMonth <= 21) currentBuckets[2]++;
+          else currentBuckets[3]++;
+        }
+
+        // Previous Month
+        const prevMonthVal = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+        const prevYearVal = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+
+        if (m === prevMonthVal && y === prevYearVal) {
+          if (dayOfMonth <= 7) prevBuckets[0]++;
+          else if (dayOfMonth <= 14) prevBuckets[1]++;
+          else if (dayOfMonth <= 21) prevBuckets[2]++;
+          else prevBuckets[3]++;
+        }
+      });
+
+      const currentTotal = currentBuckets.reduce((a, b) => a + b, 0);
+      const prevTotal = prevBuckets.reduce((a, b) => a + b, 0);
+
+      let percentChange = 0;
+      if (prevTotal > 0) {
+        percentChange = Math.round(((currentTotal - prevTotal) / prevTotal) * 1000) / 10;
+      } else if (currentTotal > 0) {
+        percentChange = 100;
+      }
+
+      return {
+        currentStart,
+        currentEnd,
+        prevStart,
+        prevEnd,
+        currentBuckets,
+        prevBuckets,
+        labels,
+        currentTotal,
+        prevTotal,
+        percentChange,
+      };
+    }
+
+    // Daily buckets mode
     const daysCount = Math.max(1, Math.round((currentEnd.getTime() - currentStart.getTime()) / (86400 * 1000)));
 
     const currentBuckets: number[] = new Array(daysCount).fill(0);
@@ -141,18 +206,20 @@ export default function GrowthAnalyticsCharts({
       prevTotal,
       percentChange,
     };
-  }, [mode, metric, customStartDate, customEndDate, activeRecords]);
+  }, [mode, metric, monthView, activeRecords, customStartDate, customEndDate]);
 
-  const height = 240;
-  const width = 750;
-  const padding = 35;
+  // SVG Chart Geometry Constants
+  const width = 800;
+  const height = 230;
+  const padding = 45;
+  const bottomMargin = 35;
 
   const maxVal = Math.max(...comparisonData.currentBuckets, ...comparisonData.prevBuckets, 1);
 
   const getPoints = (buckets: number[]) => {
     return buckets.map((v, i) => {
       const x = padding + (i / Math.max(buckets.length - 1, 1)) * (width - 2 * padding);
-      const y = height - padding - (v / maxVal) * (height - 2 * padding);
+      const y = (height - padding - bottomMargin) - (v / maxVal) * (height - 2 * padding - bottomMargin);
       return { x, y, value: v };
     });
   };
@@ -164,7 +231,7 @@ export default function GrowthAnalyticsCharts({
   const prevPathD = prevPoints.length > 0 ? `M ${prevPoints.map(p => `${p.x},${p.y}`).join(' L ')}` : '';
 
   const currentAreaD = currentPoints.length > 0
-    ? `M ${padding},${height - padding} L ${currentPoints.map(p => `${p.x},${p.y}`).join(' L ')} L ${width - padding},${height - padding} Z`
+    ? `M ${padding},${height - padding - bottomMargin} L ${currentPoints.map(p => `${p.x},${p.y}`).join(' L ')} L ${width - padding},${height - padding - bottomMargin} Z`
     : '';
 
   return (
@@ -240,6 +307,35 @@ export default function GrowthAnalyticsCharts({
           </div>
         </div>
       </div>
+
+      {/* Sub-toggle for Month View Mode */}
+      {mode === 'month' && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-[#F4F4F5] border border-[#E4E4E7] text-xs">
+          <div className="flex items-center gap-2 text-[#312F2C] font-bold">
+            <BarChart2 className="h-4 w-4 text-amber-600" />
+            <span>Chế độ xem Tháng:</span>
+          </div>
+          <div className="flex bg-white border border-[#E4E4E7] rounded-lg p-0.5 shadow-2xs font-extrabold">
+            <button
+              onClick={() => setMonthView('weekly')}
+              className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                monthView === 'weekly' ? 'bg-[#312F2C] text-white' : 'text-[#71717A] hover:text-[#18181B]'
+              }`}
+            >
+              <span>Gom 4 Tuần (Dễ Nhìn 100%)</span>
+              <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.2 rounded-full uppercase">Khuyên Dùng</span>
+            </button>
+            <button
+              onClick={() => setMonthView('daily')}
+              className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                monthView === 'daily' ? 'bg-[#312F2C] text-white' : 'text-[#71717A] hover:text-[#18181B]'
+              }`}
+            >
+              <span>Xem Từng Ngày (30 Ngày)</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Date Pickers for Custom Mode */}
       {mode === 'custom' && (
@@ -334,7 +430,7 @@ export default function GrowthAnalyticsCharts({
           <span className="text-[#71717A] font-mono font-semibold">Max Value: {maxVal}</span>
         </div>
 
-        <div className="relative w-full h-[250px] bg-[#FAFAFA] rounded-2xl border border-[#E4E4E7] p-3 overflow-hidden">
+        <div className="relative w-full h-[270px] bg-[#FAFAFA] rounded-2xl border border-[#E4E4E7] p-3 overflow-hidden">
           <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
             <defs>
               <linearGradient id="currentGradientWhite" x1="0" y1="0" x2="0" y2="1">
@@ -345,8 +441,8 @@ export default function GrowthAnalyticsCharts({
 
             {/* Horizontal Grid lines */}
             <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#E4E4E7" strokeDasharray="3 3" />
-            <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#E4E4E7" strokeDasharray="3 3" />
-            <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#D4D4D8" />
+            <line x1={padding} y1={(height - bottomMargin) / 2} x2={width - padding} y2={(height - bottomMargin) / 2} stroke="#E4E4E7" strokeDasharray="3 3" />
+            <line x1={padding} y1={height - padding - bottomMargin} x2={width - padding} y2={height - padding - bottomMargin} stroke="#D4D4D8" />
 
             {/* Current Period Area */}
             <path d={currentAreaD} fill="url(#currentGradientWhite)" />
@@ -378,12 +474,12 @@ export default function GrowthAnalyticsCharts({
                 key={`prev-${i}`}
                 cx={p.x}
                 cy={p.y}
-                r="3.5"
+                r={currentPoints.length > 20 ? "2.5" : "3.5"}
                 fill="#FFFFFF"
                 stroke="#3B82F6"
                 strokeWidth="2"
               >
-                <title>{`Kỳ trước (Ngày ${i + 1}): ${p.value} lượt`}</title>
+                <title>{`Kỳ đối chứng (${comparisonData.labels[i] || `Ngày ${i + 1}`}): ${p.value} lượt`}</title>
               </circle>
             ))}
 
@@ -393,23 +489,47 @@ export default function GrowthAnalyticsCharts({
                 key={`cur-${i}`}
                 cx={p.x}
                 cy={p.y}
-                r="5"
+                r={currentPoints.length > 20 ? "3.5" : "5"}
                 fill="#312F2C"
                 stroke="#FFFFFF"
                 strokeWidth="2.5"
+                onMouseEnter={() => setHoverIndex(i)}
+                onMouseLeave={() => setHoverIndex(null)}
                 className="hover:r-7 transition-all cursor-pointer"
               >
-                <title>{`Kỳ hiện tại (${comparisonData.labels[i] || `Ngày ${i + 1}`}): ${p.value} lượt`}</title>
+                <title>{`Kỳ hiện tại (${comparisonData.labels[i]}): ${p.value} lượt | Kỳ trước: ${comparisonData.prevBuckets[i]} lượt`}</title>
               </circle>
             ))}
-          </svg>
-        </div>
 
-        {/* X-axis Labels */}
-        <div className="flex justify-between items-center text-[11px] text-[#71717A] font-mono px-2 font-semibold">
-          <span>{comparisonData.labels[0] || 'Start'}</span>
-          <span>{comparisonData.labels[Math.floor(comparisonData.labels.length / 2)] || 'Middle'}</span>
-          <span>{comparisonData.labels[comparisonData.labels.length - 1] || 'End'}</span>
+            {/* Dynamic Date Labels Positioned Pixel-Perfectly Underneath Each Point */}
+            {currentPoints.map((p, i) => {
+              const totalDots = currentPoints.length;
+              let showLabel = true;
+
+              if (totalDots > 10 && totalDots <= 20) {
+                showLabel = i % 2 === 0 || i === totalDots - 1;
+              } else if (totalDots > 20) {
+                showLabel = i % 4 === 0 || i === totalDots - 1;
+              }
+
+              if (!showLabel) return null;
+
+              return (
+                <text
+                  key={`date-lbl-${i}`}
+                  x={p.x}
+                  y={height - 12}
+                  textAnchor="middle"
+                  fill="#18181B"
+                  fontSize={totalDots <= 5 ? "12" : "11"}
+                  fontWeight="bold"
+                  fontFamily={totalDots <= 5 ? "sans-serif" : "monospace"}
+                >
+                  {comparisonData.labels[i]}
+                </text>
+              );
+            })}
+          </svg>
         </div>
       </div>
     </Card>

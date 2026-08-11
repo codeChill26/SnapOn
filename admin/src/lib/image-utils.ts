@@ -6,17 +6,25 @@
 export function formatImageUrl(url: string | null | undefined): string {
   if (!url) return '';
 
-  let formatted = url;
+  let formatted = url.trim();
+
+  // If URL uses dead via.placeholder.com service, return empty string to trigger fallback
+  if (formatted.includes('via.placeholder.com')) {
+    return '';
+  }
+
+  // Normalize any /uploads/ URL regardless of original host (127.0.0.1, 192.168.x.x, localhost, old render domains)
+  const uploadIndex = formatted.indexOf('/uploads/');
+  if (uploadIndex !== -1) {
+    const uploadPath = formatted.slice(uploadIndex);
+    formatted = `https://snapon-debug.onrender.com${uploadPath}`;
+  } else if (formatted.startsWith('uploads/')) {
+    formatted = `https://snapon-debug.onrender.com/${formatted}`;
+  }
 
   // Replace outdated snapon.onrender.com with snapon-debug.onrender.com
   if (formatted.includes('snapon.onrender.com')) {
     formatted = formatted.replace('snapon.onrender.com', 'snapon-debug.onrender.com');
-  }
-
-  // Handle relative upload paths
-  if (formatted.startsWith('/uploads/') || formatted.startsWith('uploads/')) {
-    const cleanPath = formatted.startsWith('/') ? formatted : '/' + formatted;
-    formatted = `https://snapon-debug.onrender.com${cleanPath}`;
   }
 
   // Handle Cloudinary hosted files

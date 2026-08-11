@@ -155,8 +155,8 @@ export default function UsersPage() {
     <div className="space-y-6">
       {/* Title Header */}
       <div>
-        <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Manage Users</h2>
-        <p className="text-[#71717A] text-sm mt-1 font-medium">Audit user accounts, platform status, bans, roles, and user statistics.</p>
+        <h2 className="text-3xl font-extrabold tracking-tight text-[#18181B]">Quản Lý Người Dùng</h2>
+        <p className="text-[#71717A] text-sm mt-1 font-medium">Quản lý danh sách tài khoản, trạng thái hoạt động, khóa/mở khóa tài khoản và chi tiết ví người dùng.</p>
       </div>
 
       {/* Filters Card */}
@@ -168,7 +168,7 @@ export default function UsersPage() {
           </span>
           <input
             type="text"
-            placeholder="Search by name, email, or phone..."
+            placeholder="Tìm kiếm theo tên, gmail, sđt..."
             value={search}
             onChange={handleSearchChange}
             className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 pl-9 pr-4 text-[#18181B] text-sm placeholder-[#71717A] focus:outline-none focus:border-[#312F2C] transition-all font-medium"
@@ -180,12 +180,12 @@ export default function UsersPage() {
           <select
             value={statusFilter}
             onChange={handleStatusFilterChange}
-            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 px-3 text-[#18181B] text-sm focus:outline-none focus:border-[#312F2C] transition-all font-semibold"
+            className="w-full bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl py-2 px-3 text-[#18181B] text-sm focus:outline-none focus:border-[#312F2C] transition-all font-semibold cursor-pointer"
           >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="BANNED">Banned</option>
-            <option value="SUSPENDED">Suspended</option>
+            <option value="">Tất cả trạng thái</option>
+            <option value="ACTIVE">Hoạt động (ACTIVE)</option>
+            <option value="BANNED">Bị khóa (BANNED)</option>
+            <option value="SUSPENDED">Tạm ngưng (SUSPENDED)</option>
           </select>
         </div>
       </Card>
@@ -194,21 +194,21 @@ export default function UsersPage() {
       <Card className="overflow-hidden bg-white border-[#E4E4E7] shadow-sm p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-[#71717A]">
-            <thead className="bg-[#F4F4F5] text-[11px] uppercase font-extrabold text-[#71717A] border-b border-[#E4E4E7]">
+            <thead className="bg-[#312F2C] text-white text-[11px] uppercase font-extrabold tracking-wider">
               <tr>
-                <th className="px-6 py-3.5">User Details</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Status</th>
-                <th className="px-6 py-3.5 text-center">Tasks</th>
-                <th className="px-6 py-3.5">Joined At</th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
+                <th className="px-6 py-3.5">Thông Tin Người Dùng</th>
+                <th className="px-6 py-3.5">Vai Trò</th>
+                <th className="px-6 py-3.5">Trạng Thái</th>
+                <th className="px-6 py-3.5 text-center">Công Việc</th>
+                <th className="px-6 py-3.5">Ngày Tham Gia</th>
+                <th className="px-6 py-3.5 text-right">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E4E4E7] text-[#18181B]">
               {loading ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-[#71717A] font-medium">
-                    Loading users list...
+                    Đang tải danh sách người dùng...
                   </td>
                 </tr>
               ) : error ? (
@@ -220,7 +220,7 @@ export default function UsersPage() {
                         onClick={fetchUsers}
                         className="px-4 py-2 bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer text-xs font-bold"
                       >
-                        Retry Load
+                        Tải lại
                       </button>
                     </div>
                   </td>
@@ -228,7 +228,7 @@ export default function UsersPage() {
               ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-[#71717A] font-medium">
-                    No users found matching parameters.
+                    Không tìm thấy người dùng phù hợp.
                   </td>
                 </tr>
               ) : (
@@ -261,17 +261,17 @@ export default function UsersPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold border ${
-                        user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-                        user.status === 'BANNED' ? 'bg-rose-50 text-rose-800 border-rose-200' :
-                        'bg-amber-50 text-amber-800 border-amber-200'
+                        user.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                        user.status === 'BANNED' ? 'bg-rose-100 text-rose-900 border-rose-300' :
+                        'bg-amber-100 text-amber-900 border-amber-300'
                       }`}>
                         {user.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="text-xs font-bold">
-                        <span className="text-indigo-600">{user._count.postedTasks}</span> Posted /{' '}
-                        <span className="text-emerald-600">{user._count.assignedTasks}</span> Taken
+                        <span className="text-indigo-600">{user._count.postedTasks}</span> Đăng /{' '}
+                        <span className="text-emerald-600">{user._count.assignedTasks}</span> Nhận
                       </div>
                     </td>
                     <td className="px-6 py-4 text-xs text-[#71717A] font-mono font-medium">
@@ -282,7 +282,7 @@ export default function UsersPage() {
                         <button
                           onClick={() => handleViewDetails(user.id)}
                           className="rounded-xl p-2 bg-[#F4F4F5] border border-[#E4E4E7] hover:bg-[#E4E4E7] text-[#18181B] transition-colors cursor-pointer shadow-2xs"
-                          title="View Profile Details"
+                          title="Xem Chi Tiết Hồ Sơ"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -293,7 +293,7 @@ export default function UsersPage() {
                               setConfirmOpen(true);
                             }}
                             className="rounded-xl p-2 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer shadow-2xs"
-                            title="Ban Account"
+                            title="Khóa Tài Khoản"
                           >
                             <UserX className="h-4 w-4" />
                           </button>
@@ -304,7 +304,7 @@ export default function UsersPage() {
                               setConfirmOpen(true);
                             }}
                             className="rounded-xl p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer shadow-2xs"
-                            title="Activate Account"
+                            title="Mở Khóa Tài Khoản"
                           >
                             <UserCheck className="h-4 w-4" />
                           </button>
@@ -322,8 +322,8 @@ export default function UsersPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-[#E4E4E7] px-6 py-4 bg-[#F4F4F5]">
             <div className="text-xs text-[#71717A] font-medium">
-              Showing page <span className="font-bold text-[#18181B]">{page}</span> of{' '}
-              <span className="font-bold text-[#18181B]">{totalPages}</span> ({total} entries)
+              Trang <span className="font-bold text-[#18181B]">{page}</span> /{' '}
+              <span className="font-bold text-[#18181B]">{totalPages}</span> (Tổng {total} người dùng)
             </div>
             <div className="flex gap-2">
               <button
@@ -349,72 +349,163 @@ export default function UsersPage() {
       <Modal
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
-        title="User Profile Details"
+        title="Chi Tiết Hồ Sơ Người Dùng"
       >
         {detailLoading ? (
-          <div className="py-8 text-center text-zinc-500">Loading user info...</div>
+          <div className="py-8 text-center text-[#71717A] font-semibold">Đang tải thông tin người dùng...</div>
         ) : !selectedUser ? (
-          <div className="py-8 text-center text-zinc-500">Failed to load user details.</div>
+          <div className="py-8 text-center text-[#71717A] font-semibold">Không thể tải chi tiết người dùng.</div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 text-sm text-[#18181B]">
             {/* Header info */}
             <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full overflow-hidden border border-zinc-800 bg-zinc-900 shrink-0">
+              <div className="h-16 w-16 rounded-full overflow-hidden border border-[#E4E4E7] bg-[#F4F4F5] shrink-0">
                 <img
-                  src={formatImageUrl(selectedUser.avatarUrl) || '/default-avatar.png'}
+                  src={formatImageUrl(selectedUser.avatarUrl) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(selectedUser.fullName || 'User')}`}
                   alt={`${selectedUser.fullName}'s Avatar`}
                   className="object-cover w-full h-full"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
-                    e.currentTarget.src = '/default-avatar.png';
+                    e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(selectedUser.fullName || 'User')}`;
                   }}
                 />
               </div>
               <div>
-                <h4 className="text-lg font-bold text-white flex items-center gap-2">
+                <h4 className="text-lg font-extrabold text-[#18181B] flex items-center gap-2">
                   <span>{selectedUser.fullName}</span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 uppercase text-zinc-400">
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-[#312F2C] uppercase text-white shadow-2xs">
                     {selectedUser.role || 'USER'}
                   </span>
                 </h4>
-                <p className="text-sm text-zinc-400">{selectedUser.email}</p>
+                <p className="text-xs font-mono text-[#71717A] font-semibold mt-0.5">{selectedUser.email}</p>
               </div>
             </div>
 
-            {/* Profile Data */}
-            <div className="grid grid-cols-2 gap-4 border-t border-b border-zinc-900 py-4 text-sm">
-              <div className="flex items-center gap-2 text-zinc-400">
-                <Phone className="h-4 w-4 text-indigo-500" />
-                <span>{selectedUser.phone || 'No phone number'}</span>
+            {/* Profile Data Grid */}
+            <div className="grid grid-cols-3 gap-3 bg-[#F4F4F5] p-3.5 rounded-xl border border-[#E4E4E7] text-xs">
+              <div className="flex items-center gap-2 text-[#71717A] font-semibold">
+                <Phone className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span className="text-[#18181B] font-bold">{selectedUser.phone || 'Chưa cập nhật SĐT'}</span>
               </div>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <Calendar className="h-4 w-4 text-indigo-500" />
-                <span>Joined {new Date(selectedUser.createdAt).toLocaleDateString('vi-VN')}</span>
+              <div className="flex items-center gap-2 text-[#71717A] font-semibold">
+                <Calendar className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span>Tham gia: <strong className="text-[#18181B]">{new Date(selectedUser.createdAt).toLocaleDateString('vi-VN')}</strong></span>
               </div>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <Shield className="h-4 w-4 text-indigo-500" />
-                <span className="capitalize">Status: <strong className="text-white">{selectedUser.status}</strong></span>
+              <div className="flex items-center gap-2 text-[#71717A] font-semibold">
+                <Shield className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span>Trạng thái: <strong className="text-[#18181B]">{selectedUser.status}</strong></span>
               </div>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <Wallet className="h-4 w-4 text-indigo-500" />
-                <span>Wallet Balance: <strong className="text-emerald-400">{Number(selectedUser.wallet?.balance || 0).toLocaleString('vi-VN')} VND</strong></span>
+            </div>
+
+            {/* Wallet & PayOS Deposit Log Section */}
+            <div className="space-y-3">
+              <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#312F2C] flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Wallet className="h-4 w-4 text-emerald-600" />
+                  <span>Chi Tiết Ví SnapOn & Lịch Sử Nạp Tiền PayOS</span>
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-2 py-0.5 rounded-full uppercase">
+                  PayOS Linked
+                </span>
+              </h5>
+
+              {/* Wallet Balances Breakdown */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                  <div className="text-[10px] font-extrabold uppercase text-emerald-800">Số Dư Khả Dụng</div>
+                  <div className="text-base font-black text-emerald-900 mt-0.5">
+                    {Number(selectedUser.wallet?.availableBalance || selectedUser.wallet?.balance || 0).toLocaleString('vi-VN')} <span className="text-xs font-bold text-emerald-700">đ</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200">
+                  <div className="text-[10px] font-extrabold uppercase text-amber-800">Đóng Băng Ký Quỹ</div>
+                  <div className="text-base font-black text-amber-900 mt-0.5">
+                    {Number(selectedUser.wallet?.lockedBalance || 0).toLocaleString('vi-VN')} <span className="text-xs font-bold text-amber-700">đ</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#F4F4F5] border border-[#E4E4E7]">
+                  <div className="text-[10px] font-extrabold uppercase text-[#71717A]">Tổng Số Dư Ví</div>
+                  <div className="text-base font-black text-[#18181B] mt-0.5">
+                    {Number(selectedUser.wallet?.balance || 0).toLocaleString('vi-VN')} <span className="text-xs font-bold text-[#71717A]">đ</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Wallet Transactions Table (PayOS & Wallet Events) */}
+              <div className="overflow-x-auto rounded-xl border border-[#E4E4E7]">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#312F2C] text-white text-[10px] uppercase font-extrabold tracking-wider">
+                    <tr>
+                      <th className="px-3 py-2">Loại Giao Dịch</th>
+                      <th className="px-3 py-2">Mã PayOS Order</th>
+                      <th className="px-3 py-2 text-right">Số Tiền</th>
+                      <th className="px-3 py-2 text-center">Trạng Thái</th>
+                      <th className="px-3 py-2 text-right">Thời Gian</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E4E4E7] font-medium text-[#18181B] bg-white">
+                    {!selectedUser.wallet?.transactions || selectedUser.wallet.transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-4 text-center text-[#71717A] text-xs font-semibold bg-[#FAFAFA]">
+                          Chưa có lịch sử giao dịch ví / nạp tiền PayOS.
+                        </td>
+                      </tr>
+                    ) : (
+                      selectedUser.wallet.transactions.map((tx: any) => {
+                        const isDeposit = tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND';
+                        return (
+                          <tr key={tx.id} className="hover:bg-[#FAFAFA] transition-colors">
+                            <td className="px-3 py-2.5">
+                              <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                tx.type === 'DEPOSIT' ? 'bg-blue-100 text-blue-900 border border-blue-300' :
+                                tx.type === 'ESCROW_RELEASE' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                                tx.type === 'ESCROW_HOLD' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                                'bg-purple-100 text-purple-900 border border-purple-300'
+                              }`}>
+                                {tx.type === 'DEPOSIT' ? 'Nạp Tiền PayOS' :
+                                 tx.type === 'ESCROW_HOLD' ? 'Ký Quỹ Task' :
+                                 tx.type === 'ESCROW_RELEASE' ? 'Thực Nhận 92%' : tx.type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-[11px] text-[#71717A] font-bold">
+                              {tx.order_code ? `#${tx.order_code.toString()}` : 'Ví Nội Bộ'}
+                            </td>
+                            <td className={`px-3 py-2.5 text-right font-black ${isDeposit ? 'text-emerald-700' : 'text-amber-800'}`}>
+                              {isDeposit ? '+' : '-'}{Number(tx.amount || 0).toLocaleString('vi-VN')} đ
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                {tx.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono text-[10px] text-[#71717A]">
+                              {new Date(tx.created_at || tx.createdAt).toLocaleDateString('vi-VN')}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
             {/* Bio / Headline */}
             {(selectedUser.headline || selectedUser.bio) && (
               <div className="space-y-2">
-                <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Bio & Headline</h5>
-                {selectedUser.headline && <p className="text-sm font-semibold text-white">{selectedUser.headline}</p>}
-                {selectedUser.bio && <p className="text-sm text-zinc-400 italic bg-zinc-900/30 p-3 rounded-lg border border-zinc-900">"{selectedUser.bio}"</p>}
+                <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#312F2C]">Tiểu Sử & Giới Thiệu</h5>
+                {selectedUser.headline && <p className="text-sm font-bold text-[#18181B]">{selectedUser.headline}</p>}
+                {selectedUser.bio && <p className="text-xs text-[#18181B] font-medium italic bg-[#F4F4F5] p-3 rounded-xl border border-[#E4E4E7]">"{selectedUser.bio}"</p>}
               </div>
             )}
 
             {/* User's Posted Tasks Panel */}
             <div className="space-y-3">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                <Briefcase className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Posted Tasks ({selectedUser.postedTasks?.length || 0})</span>
+              <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#312F2C] flex items-center gap-1.5">
+                <Briefcase className="h-4 w-4 text-indigo-600" />
+                <span>Công Việc Đã Đăng ({selectedUser.postedTasks?.length || 0})</span>
               </h5>
               
               {selectedUser.postedTasks && selectedUser.postedTasks.length > 0 ? (
@@ -426,47 +517,41 @@ export default function UsersPage() {
                         setActiveTaskId(task.id);
                         setTaskDetailOpen(true);
                       }}
-                      className="bg-zinc-900/35 border border-zinc-900 rounded-xl p-3 flex items-center justify-between hover:border-zinc-800 transition-colors cursor-pointer"
+                      className="bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl p-3 flex items-center justify-between hover:border-[#312F2C] transition-colors cursor-pointer"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-xs text-white truncate">{task.title}</div>
-                        <div className="text-[10px] text-zinc-500 mt-1 flex items-center gap-2">
-                          <span>{task.category?.name || 'No Category'}</span>
+                        <div className="font-bold text-xs text-[#18181B] truncate">{task.title}</div>
+                        <div className="text-[10px] text-[#71717A] mt-1 flex items-center gap-2 font-medium">
+                          <span>{task.category?.name || 'Chung'}</span>
                           <span>•</span>
-                          <span className="text-emerald-400 font-medium">
+                          <span className="text-emerald-700 font-bold">
                             {task.budgetMin && task.budgetMax
-                              ? `${Number(task.budgetMin).toLocaleString('vi-VN')} - ${Number(task.budgetMax).toLocaleString('vi-VN')} VND`
+                              ? `${Number(task.budgetMin).toLocaleString('vi-VN')} - ${Number(task.budgetMax).toLocaleString('vi-VN')} VNĐ`
                               : task.budgetMin
-                              ? `${Number(task.budgetMin).toLocaleString('vi-VN')} VND`
-                              : 'Negotiable'}
+                              ? `${Number(task.budgetMin).toLocaleString('vi-VN')} VNĐ`
+                              : 'Thỏa thuận'}
                           </span>
                         </div>
                       </div>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ml-3 shrink-0 ${
-                        task.status === 'OPEN' ? 'bg-indigo-950/40 text-indigo-300 border-indigo-800/40' :
-                        task.status === 'IN_PROGRESS' ? 'bg-blue-950/40 text-blue-300 border-blue-800/40' :
-                        task.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                        task.status === 'CANCELLED' ? 'bg-red-950/40 text-red-300 border-red-800/40' :
-                        'bg-zinc-800 text-zinc-400 border-zinc-700/60'
-                      }`}>
+                      <span className="inline-flex items-center rounded-md bg-[#312F2C] text-white px-2 py-0.5 text-[10px] font-bold uppercase ml-3 shrink-0">
                         {task.status}
                       </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-zinc-500 text-xs italic bg-zinc-900/10 p-3 rounded border border-zinc-900">
-                  <Info className="h-4 w-4 text-indigo-500" />
-                  <span>This user has not posted any tasks.</span>
+                <div className="flex items-center gap-2 text-[#71717A] text-xs font-medium bg-[#F4F4F5] p-3 rounded-xl border border-[#E4E4E7]">
+                  <Info className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>Người dùng chưa đăng bài tuyển dụng nào.</span>
                 </div>
               )}
             </div>
 
             {/* User's Taken Tasks Panel */}
             <div className="space-y-3">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                <Briefcase className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Taken Tasks ({selectedUser.assignedTasks?.length || 0})</span>
+              <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#312F2C] flex items-center gap-1.5">
+                <Briefcase className="h-4 w-4 text-emerald-600" />
+                <span>Công Việc Đã Nhận ({selectedUser.assignedTasks?.length || 0})</span>
               </h5>
               
               {selectedUser.assignedTasks && selectedUser.assignedTasks.length > 0 ? (
@@ -481,30 +566,25 @@ export default function UsersPage() {
                           setActiveTaskId(task.id);
                           setTaskDetailOpen(true);
                         }}
-                        className="bg-zinc-900/35 border border-zinc-900 rounded-xl p-3 flex items-center justify-between hover:border-zinc-800 transition-colors cursor-pointer"
+                        className="bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl p-3 flex items-center justify-between hover:border-[#312F2C] transition-colors cursor-pointer"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-xs text-white truncate">{task.title}</div>
-                          <div className="text-[10px] text-zinc-500 mt-1 flex items-center gap-2">
-                            <span>{task.category?.name || 'No Category'}</span>
+                          <div className="font-bold text-xs text-[#18181B] truncate">{task.title}</div>
+                          <div className="text-[10px] text-[#71717A] mt-1 flex items-center gap-2 font-medium">
+                            <span>{task.category?.name || 'Chung'}</span>
                             <span>•</span>
-                            <span className="text-emerald-400 font-medium">
+                            <span className="text-emerald-700 font-bold">
                               {task.budgetMin && task.budgetMax
-                                ? `${Number(task.budgetMin).toLocaleString('vi-VN')} - ${Number(task.budgetMax).toLocaleString('vi-VN')} VND`
+                                ? `${Number(task.budgetMin).toLocaleString('vi-VN')} - ${Number(task.budgetMax).toLocaleString('vi-VN')} VNĐ`
                                 : task.budgetMin
-                                ? `${Number(task.budgetMin).toLocaleString('vi-VN')} VND`
-                                : 'Negotiable'}
+                                ? `${Number(task.budgetMin).toLocaleString('vi-VN')} VNĐ`
+                                : 'Thỏa thuận'}
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-3">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${
-                            assignment.status === 'ACTIVE' || assignment.status === 'ASSIGNED' ? 'bg-indigo-950/40 text-indigo-300 border-indigo-800/40' :
-                            assignment.status === 'IN_PROGRESS' ? 'bg-blue-950/40 text-blue-300 border-blue-800/40' :
-                            assignment.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                            'bg-red-950/40 text-red-300 border-red-800/40'
-                          }`}>
-                            Work: {assignment.status}
+                          <span className="inline-flex items-center rounded-md bg-[#312F2C] text-white px-2 py-0.5 text-[10px] font-bold uppercase">
+                            {assignment.status}
                           </span>
                         </div>
                       </div>
@@ -512,25 +592,25 @@ export default function UsersPage() {
                   })}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-zinc-500 text-xs italic bg-zinc-900/10 p-3 rounded border border-zinc-900">
-                  <Info className="h-4 w-4 text-indigo-500" />
-                  <span>This user has not taken any tasks.</span>
+                <div className="flex items-center gap-2 text-[#71717A] text-xs font-medium bg-[#F4F4F5] p-3 rounded-xl border border-[#E4E4E7]">
+                  <Info className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>Người dùng chưa ứng tuyển nhận việc nào.</span>
                 </div>
               )}
             </div>
 
             {/* Verifications Panel */}
             <div className="space-y-3">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Identity Verifications</h5>
+              <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#312F2C]">Xác Thực Danh Tính</h5>
               {selectedUser.verifications && selectedUser.verifications.length > 0 ? (
                 selectedUser.verifications.map((v: any, index: number) => (
-                  <div key={index} className="bg-zinc-900/35 border border-zinc-900 rounded-xl p-4 space-y-3">
+                  <div key={index} className="bg-[#F4F4F5] border border-[#E4E4E7] rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 border border-zinc-700/60 uppercase">{v.type}</span>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${
-                        v.status === 'APPROVED' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
-                        v.status === 'PENDING' ? 'bg-amber-950/40 text-amber-300 border-amber-800/40' :
-                        'bg-red-950/40 text-red-300 border-red-800/40'
+                      <span className="text-xs font-bold bg-[#312F2C] text-white px-2.5 py-0.5 rounded uppercase">{v.type}</span>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold border ${
+                        v.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                        v.status === 'PENDING' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                        'bg-rose-100 text-rose-900 border-rose-300'
                       }`}>
                         {v.status}
                       </span>
@@ -538,10 +618,10 @@ export default function UsersPage() {
 
                     {/* OCR Details if CCCD */}
                     {v.type === 'CCCD' && v.ocrFullName && (
-                      <div className="text-xs grid grid-cols-2 gap-2 bg-zinc-950/50 p-2.5 rounded-lg border border-zinc-900 text-zinc-400">
-                        <div>OCR Name: <strong className="text-white">{v.ocrFullName}</strong></div>
-                        <div>CCCD Number Hash: <strong className="text-white truncate max-w-[100px] block">{v.ocrCccdNumberHash || 'N/A'}</strong></div>
-                        <div>OCR DOB: <strong className="text-white">{v.ocrDob ? new Date(v.ocrDob).toLocaleDateString('vi-VN') : 'N/A'}</strong></div>
+                      <div className="text-xs grid grid-cols-2 gap-2 bg-white p-2.5 rounded-lg border border-[#E4E4E7] text-[#71717A]">
+                        <div>Họ tên OCR: <strong className="text-[#18181B]">{v.ocrFullName}</strong></div>
+                        <div>Mã CCCD: <strong className="text-[#18181B] truncate max-w-[100px] block">{v.ocrCccdNumberHash || 'N/A'}</strong></div>
+                        <div>Ngày sinh OCR: <strong className="text-[#18181B]">{v.ocrDob ? new Date(v.ocrDob).toLocaleDateString('vi-VN') : 'N/A'}</strong></div>
                       </div>
                     )}
 
@@ -550,24 +630,24 @@ export default function UsersPage() {
                       <div className="grid grid-cols-3 gap-2 pt-2">
                         {v.documents[0].frontImageUrl && (
                           <div className="space-y-1">
-                            <span className="text-[10px] text-zinc-500 uppercase font-semibold">Front Side</span>
-                            <a href={formatImageUrl(v.documents[0].frontImageUrl)} target="_blank" rel="noreferrer" className="block relative aspect-video rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition-colors">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold">Mặt trước CCCD</span>
+                            <a href={formatImageUrl(v.documents[0].frontImageUrl)} target="_blank" rel="noreferrer" className="block relative aspect-video rounded-lg overflow-hidden border border-[#E4E4E7] bg-white hover:border-[#312F2C] transition-colors">
                               <img src={formatImageUrl(v.documents[0].frontImageUrl)} alt="Front Document" className="object-cover w-full h-full" />
                             </a>
                           </div>
                         )}
                         {v.documents[0].backImageUrl && (
                           <div className="space-y-1">
-                            <span className="text-[10px] text-zinc-500 uppercase font-semibold">Back Side</span>
-                            <a href={formatImageUrl(v.documents[0].backImageUrl)} target="_blank" rel="noreferrer" className="block relative aspect-video rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition-colors">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold">Mặt sau CCCD</span>
+                            <a href={formatImageUrl(v.documents[0].backImageUrl)} target="_blank" rel="noreferrer" className="block relative aspect-video rounded-lg overflow-hidden border border-[#E4E4E7] bg-white hover:border-[#312F2C] transition-colors">
                               <img src={formatImageUrl(v.documents[0].backImageUrl)} alt="Back Document" className="object-cover w-full h-full" />
                             </a>
                           </div>
                         )}
                         {v.documents[0].selfieImageUrl && (
                           <div className="space-y-1">
-                            <span className="text-[10px] text-zinc-500 uppercase font-semibold">Selfie Portrait</span>
-                            <a href={formatImageUrl(v.documents[0].selfieImageUrl)} target="_blank" rel="noreferrer" className="block relative aspect-video rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition-colors">
+                            <span className="text-[10px] text-[#71717A] uppercase font-bold">Ảnh Chân Dung Selfie</span>
+                            <a href={formatImageUrl(v.documents[0].selfieImageUrl)} target="_blank" rel="noreferrer" className="block relative aspect-video rounded-lg overflow-hidden border border-[#E4E4E7] bg-white hover:border-[#312F2C] transition-colors">
                               <img src={formatImageUrl(v.documents[0].selfieImageUrl)} alt="Selfie" className="object-cover w-full h-full" />
                             </a>
                           </div>
@@ -577,24 +657,24 @@ export default function UsersPage() {
                   </div>
                 ))
               ) : (
-                <div className="flex items-center gap-2 text-zinc-500 text-xs italic bg-zinc-900/10 p-3 rounded border border-zinc-900">
-                  <Info className="h-4 w-4 text-indigo-500" />
-                  <span>No verification documents submitted for this account.</span>
+                <div className="flex items-center gap-2 text-[#71717A] text-xs font-medium bg-[#F4F4F5] p-3 rounded-xl border border-[#E4E4E7]">
+                  <Info className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>Chưa gửi hồ sơ xác thực danh tính.</span>
                 </div>
               )}
             </div>
 
             {/* Quick Actions */}
-            <div className="border-t border-zinc-900 pt-4 flex gap-3">
+            <div className="border-t border-[#E4E4E7] pt-4 flex gap-3">
               {selectedUser.status === 'ACTIVE' ? (
                 <button
                   onClick={() => {
                     setConfirmTarget({ id: selectedUser.id, name: selectedUser.fullName, status: 'BANNED' });
                     setConfirmOpen(true);
                   }}
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer text-center"
+                  className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer text-center shadow-sm"
                 >
-                  Ban Account
+                  Khóa Tài Khoản
                 </button>
               ) : (
                 <button
@@ -602,16 +682,16 @@ export default function UsersPage() {
                     setConfirmTarget({ id: selectedUser.id, name: selectedUser.fullName, status: 'ACTIVE' });
                     setConfirmOpen(true);
                   }}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer text-center"
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer text-center shadow-sm"
                 >
-                  Activate Account
+                  Kích Hoạt Tài Khoản
                 </button>
               )}
               <button
                 onClick={() => setDetailModalOpen(false)}
-                className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 font-semibold py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer text-center"
+                className="flex-1 bg-[#312F2C] hover:bg-[#18181B] text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer text-center shadow-sm"
               >
-                Close Panel
+                Đóng
               </button>
             </div>
           </div>

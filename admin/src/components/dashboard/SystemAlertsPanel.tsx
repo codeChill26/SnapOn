@@ -17,9 +17,9 @@ export default function SystemAlertsPanel({
 
   if (pendingPayouts > 10) {
     alerts.push({
-      type: 'CRITICAL',
-      title: 'High Volume of Pending Withdrawals',
-      message: `There are currently ${pendingPayouts} payout requests waiting for approval. High queue length can impact user trust.`,
+      type: 'KHẨN CẤP',
+      title: 'Số Lượng Yêu Cầu Rút Tiền Đang Cao',
+      message: `Hiện đang có ${pendingPayouts} yêu cầu rút tiền chờ duyệt. Hãy kiểm tra xử lý sớm để đảm bảo trải nghiệm người dùng.`,
       icon: Wallet,
       color: 'bg-rose-50 border-rose-300 text-rose-900',
       btnColor: 'bg-rose-600 hover:bg-rose-700 text-white',
@@ -27,9 +27,9 @@ export default function SystemAlertsPanel({
     });
   } else if (pendingPayouts > 0) {
     alerts.push({
-      type: 'WARNING',
-      title: 'Pending Withdrawal Requests',
-      message: `${pendingPayouts} withdrawal request(s) require admin approval.`,
+      type: 'CẢNH BÁO',
+      title: 'Yêu Cầu Rút Tiền Chờ Duyệt',
+      message: `Có ${pendingPayouts} yêu cầu rút tiền đang chờ Quản trị viên phê duyệt.`,
       icon: Wallet,
       color: 'bg-amber-50 border-amber-300 text-amber-900',
       btnColor: 'bg-amber-600 hover:bg-amber-700 text-white',
@@ -39,9 +39,9 @@ export default function SystemAlertsPanel({
 
   if (pendingReports > 5) {
     alerts.push({
-      type: 'WARNING',
-      title: 'Accumulated User Reports',
-      message: `${pendingReports} report(s) are waiting for moderator review.`,
+      type: 'CẢNH BÁO',
+      title: 'Báo Cáo Vi Phạm Tích Tụ',
+      message: `Có ${pendingReports} báo cáo vi phạm từ người dùng đang chờ kiểm duyệt.`,
       icon: Flag,
       color: 'bg-amber-50 border-amber-300 text-amber-900',
       btnColor: 'bg-amber-600 hover:bg-amber-700 text-white',
@@ -51,9 +51,9 @@ export default function SystemAlertsPanel({
 
   if (pendingDeletions > 0) {
     alerts.push({
-      type: 'INFO',
-      title: 'Account Deletion Requests',
-      message: `${pendingDeletions} user account deletion request(s) need processing.`,
+      type: 'THÔNG BÁO',
+      title: 'Yêu Cầu Xóa Tài Khoản',
+      message: `Có ${pendingDeletions} yêu cầu hủy tài khoản từ người dùng cần xem xét.`,
       icon: ShieldAlert,
       color: 'bg-purple-50 border-purple-300 text-purple-900',
       btnColor: 'bg-purple-600 hover:bg-purple-700 text-white',
@@ -88,7 +88,7 @@ export default function SystemAlertsPanel({
               href={alert.href}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 flex items-center justify-center gap-1.5 transition-colors shadow-2xs ${alert.btnColor}`}
             >
-              <span>Review Now</span>
+              <span>Xem & Xử Lý</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
