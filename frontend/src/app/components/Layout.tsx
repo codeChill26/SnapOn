@@ -641,17 +641,6 @@ export function Layout() {
                   </div>
                 </Link>
 
-                <button
-                  onClick={() => setUserRole(isWorker ? 'hirer' : 'worker')}
-                  className={`px-3 py-1.5 rounded-full text-xs transition border flex items-center gap-1 cursor-pointer ${
-                    isWorker
-                      ? 'border-blue-400 bg-blue-600 hover:bg-blue-500 text-white'
-                      : 'border-orange-300 bg-orange-500 hover:bg-orange-600 text-white'
-                  }`}
-                  style={{ fontWeight: 600 }}
-                >
-                  🔄 {isWorker ? 'Thuê việc' : 'Tìm việc'}
-                </button>
 
                 <button
                   onClick={handleLogout}
