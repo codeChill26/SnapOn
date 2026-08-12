@@ -73,6 +73,8 @@ export interface Job {
     bidPrice?: number | null;
   } | null;
   rawTask?: Task;
+  workMode?: string;
+  taskType?: string;
 }
 
 export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

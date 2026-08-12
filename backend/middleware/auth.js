@@ -149,7 +149,7 @@ const authenticate = async (req, res, next) => {
         const decodedFirebaseToken = await admin.auth().verifyIdToken(token);
 
         const result = await pool.query(
-          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at FROM users WHERE firebase_uid = $1',
+          'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, bank_name, bank_account_number, created_at FROM users WHERE firebase_uid = $1',
           [decodedFirebaseToken.uid]
         );
 
@@ -266,7 +266,7 @@ const authenticateOptional = async (req, res, next) => {
     try {
       const decodedFirebaseToken = await admin.auth().verifyIdToken(token);
       const result = await pool.query(
-        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, created_at FROM users WHERE firebase_uid = $1',
+        'SELECT id, firebase_uid, full_name, email, phone, avatar_url, cover_url, role, status, is_verified, is_id_verified, bio, headline, skills, bank_name, bank_account_number, created_at FROM users WHERE firebase_uid = $1',
         [decodedFirebaseToken.uid]
       );
       if (result.rows.length > 0) {

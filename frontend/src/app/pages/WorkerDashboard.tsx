@@ -135,9 +135,8 @@ export default function WorkerDashboard() {
             initial={{ opacity: 0, y: -30, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-20 left-1/2 -translate-x-1/2 z-[9999] text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 ${
-              toastState.isError ? 'bg-amber-600' : 'bg-green-500'
-            }`}
+            className={`fixed top-20 left-1/2 -translate-x-1/2 z-[9999] text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 ${toastState.isError ? 'bg-amber-600' : 'bg-green-500'
+              }`}
           >
             {toastState.isError ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
             <span style={{ fontWeight: 600 }}>{toastState.message}</span>
@@ -170,11 +169,10 @@ export default function WorkerDashboard() {
                 </div>
 
                 {/* Header */}
-                <div className={`px-5 py-4 flex items-center justify-between ${
-                  applyingJob.applicants.length === 0
-                    ? 'bg-gradient-to-r from-green-600 to-emerald-600'
-                    : 'bg-gradient-to-r from-orange-500 to-amber-500'
-                }`}>
+                <div className={`px-5 py-4 flex items-center justify-between ${applyingJob.applicants.length === 0
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600'
+                  : 'bg-gradient-to-r from-orange-500 to-amber-500'
+                  }`}>
                   <div>
                     <p className="text-white/80 text-xs">Ứng tuyển</p>
                     <h3 className="text-white" style={{ fontWeight: 700 }}>{applyingJob.title}</h3>
@@ -211,7 +209,7 @@ export default function WorkerDashboard() {
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs text-gray-400">Khoảng giá</div>
                       <div className="text-orange-500 text-xs" style={{ fontWeight: 700 }}>
-                        {(applyingJob.priceMin/1000).toFixed(0)}K–{(applyingJob.priceMax/1000).toFixed(0)}K₫
+                        {(applyingJob.priceMin / 1000).toFixed(0)}K–{(applyingJob.priceMax / 1000).toFixed(0)}K₫
                       </div>
                     </div>
                   </div>
@@ -244,10 +242,10 @@ export default function WorkerDashboard() {
                       {/* Track labels */}
                       <div className="flex justify-between text-xs mt-1">
                         <span className="text-green-600" style={{ fontWeight: 600 }}>
-                          {(applyingJob.priceMin/1000).toFixed(0)}K₫ min
+                          {(applyingJob.priceMin / 1000).toFixed(0)}K₫ min
                         </span>
                         <span className="text-orange-500" style={{ fontWeight: 600 }}>
-                          {(applyingJob.priceMax/1000).toFixed(0)}K₫ max
+                          {(applyingJob.priceMax / 1000).toFixed(0)}K₫ max
                         </span>
                       </div>
                     </div>
@@ -258,8 +256,8 @@ export default function WorkerDashboard() {
                       const tier = ratio < 0.25
                         ? { label: '🔥 Rất cạnh tranh', bg: 'bg-green-100', text: 'text-green-700', bar: 'bg-green-500', w: '90%' }
                         : ratio < 0.55
-                        ? { label: '✅ Cạnh tranh tốt', bg: 'bg-blue-100', text: 'text-blue-700', bar: 'bg-blue-500', w: '60%' }
-                        : { label: '⚖️ Trung bình', bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-400', w: '35%' };
+                          ? { label: '✅ Cạnh tranh tốt', bg: 'bg-blue-100', text: 'text-blue-700', bar: 'bg-blue-500', w: '60%' }
+                          : { label: '⚖️ Trung bình', bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-400', w: '35%' };
                       return (
                         <div className={`${tier.bg} rounded-xl p-3`}>
                           <div className="flex items-center justify-between mb-1.5">
@@ -308,9 +306,8 @@ export default function WorkerDashboard() {
                     disabled={sending}
                     whileHover={{ scale: sending ? 1 : 1.02 }}
                     whileTap={{ scale: 0.96 }}
-                    className={`flex-1 py-3 rounded-xl text-white text-sm flex items-center justify-center gap-2 transition shadow-lg ${
-                      sending ? 'bg-orange-400' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
-                    }`}
+                    className={`flex-1 py-3 rounded-xl text-white text-sm flex items-center justify-center gap-2 transition shadow-lg ${sending ? 'bg-orange-400' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
+                      }`}
                     style={{ fontWeight: 700 }}>
                     {sending ? (
                       <>
