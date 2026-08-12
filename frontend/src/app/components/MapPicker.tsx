@@ -4,6 +4,7 @@ import type L from 'leaflet';
 
 interface MapPickerProps {
   value?: { lat: number; lng: number; address: string };
+  location?: { lat: number; lng: number; address: string } | null;
   onChange: (val: { lat: number; lng: number; address: string }) => void;
   readonly?: boolean;
   markers?: Array<{ lat: number; lng: number; label?: string; color?: string }>;
@@ -51,7 +52,8 @@ interface NominatimResult {
   lon: string;
 }
 
-export function MapPicker({ value, onChange, readonly = false, markers = [], height = '300px' }: MapPickerProps) {
+export function MapPicker({ value, location, onChange, readonly = false, markers = [], height = '300px' }: MapPickerProps) {
+  const effectiveValue = value || location || undefined;
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +63,7 @@ export function MapPicker({ value, onChange, readonly = false, markers = [], hei
   const [geoLoading, setGeoLoading] = useState(false);
   // null = unchecked, true = available, false = blocked/unavailable
   const [geoAvailable, setGeoAvailable] = useState<boolean | null>(null);
-  const [address, setAddress] = useState(value?.address || '');
+  const [address, setAddress] = useState(effectiveValue?.address || '');
 
   // Address search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,8 +114,8 @@ export function MapPicker({ value, onChange, readonly = false, markers = [], hei
         document.head.appendChild(link);
       }
 
-      const center: [number, number] = value
-        ? [value.lat, value.lng]
+      const center: [number, number] = effectiveValue
+        ? [effectiveValue.lat, effectiveValue.lng]
         : [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng];
 
       const map = L.map(containerRef.current, {
@@ -133,9 +135,9 @@ export function MapPicker({ value, onChange, readonly = false, markers = [], hei
 
       mapRef.current = map;
 
-      if (value) {
-        const marker = L.marker([value.lat, value.lng], { icon: defaultIcon }).addTo(map);
-        if (value.address) marker.bindPopup(value.address).openPopup();
+      if (effectiveValue) {
+        const marker = L.marker([effectiveValue.lat, effectiveValue.lng], { icon: defaultIcon }).addTo(map);
+        if (effectiveValue.address) marker.bindPopup(effectiveValue.address).openPopup();
         markerRef.current = marker;
       }
 

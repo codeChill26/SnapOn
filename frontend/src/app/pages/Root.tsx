@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router';
+import { Outlet, useLocation, ScrollRestoration } from 'react-router';
 import { AppProvider } from '../context/AppContext';
 import { Layout } from '../components/Layout';
 
@@ -13,6 +13,7 @@ export function Root() {
 
   return (
     <AppProvider>
+      <ScrollRestoration />
       {isAdminRoute ? <Outlet /> : <Layout />}
     </AppProvider>
   );

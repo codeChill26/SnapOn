@@ -39,10 +39,11 @@ interface BankSelectModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedBank: string;
-  onSelectBank: (bankName: string) => void;
+  onSelectBank?: (bankName: string) => void;
+  onSelect?: (bank: BankItem | any) => void;
 }
 
-export function BankSelectModal({ isOpen, onClose, selectedBank, onSelectBank }: BankSelectModalProps) {
+export function BankSelectModal({ isOpen, onClose, selectedBank, onSelectBank, onSelect }: BankSelectModalProps) {
   const [search, setSearch] = useState('');
 
   const filteredBanks = VIETNAM_BANKS.filter(
@@ -109,12 +110,14 @@ export function BankSelectModal({ isOpen, onClose, selectedBank, onSelectBank }:
                   <p>Không tìm thấy ngân hàng nào phù hợp</p>
                   <button
                     onClick={() => {
-                      if (search.trim()) {
-                        onSelectBank(search.trim());
+                      const trimmed = search.trim();
+                      if (trimmed) {
+                        if (onSelectBank) onSelectBank(trimmed);
+                        if (onSelect) onSelect({ id: 'custom', shortName: trimmed, name: trimmed, code: trimmed, logoBg: 'bg-gray-700', logoColor: 'text-white', badge: 'BANK' });
                         onClose();
                       }
                     }}
-                    className="mt-3 text-xs text-blue-600 font-semibold underline"
+                    className="mt-3 text-xs text-blue-600 font-semibold underline cursor-pointer"
                   >
                     Dùng tên "{search.trim()}"
                   </button>
@@ -129,7 +132,8 @@ export function BankSelectModal({ isOpen, onClose, selectedBank, onSelectBank }:
                     <button
                       key={bank.id}
                       onClick={() => {
-                        onSelectBank(bank.shortName);
+                        if (onSelectBank) onSelectBank(bank.shortName);
+                        if (onSelect) onSelect(bank);
                         onClose();
                       }}
                       className={`w-full flex items-center gap-3.5 p-3 rounded-2xl transition text-left ${

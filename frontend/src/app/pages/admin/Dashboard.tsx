@@ -9,62 +9,7 @@ import {
   ResponsiveContainer, Legend,
 } from 'recharts';
 import { Card } from '../../components/ui/card';
-import api from '../../../services/api';
-
-interface AdminStats {
-  users: {
-    total: number;
-    newThisMonth: number;
-    newThisWeek: number;
-    verified: number;
-  };
-  tasks: {
-    total: number;
-    open: number;
-    inProgress: number;
-    completed: number;
-    cancelled: number;
-    recruitment: number;
-    serviceOffer: number;
-    newThisMonth: number;
-    newThisWeek: number;
-  };
-  applications: {
-    total: number;
-    pending: number;
-    accepted: number;
-    rejected: number;
-    withdrawn: number;
-  };
-  assignments: {
-    total: number;
-    completed: number;
-    cancelled: number;
-    inProgress: number;
-    assigned: number;
-  };
-  escrow: {
-    totalVolume: number;
-    releasedVolume: number;
-    holdingVolume: number;
-    refundedVolume: number;
-  };
-  wallet: {
-    totalBalance: number;
-    walletCount: number;
-  };
-  tasksByCategory: { name: string; slug: string; count: number }[];
-  tasksByDay: { date: string; count: number; completed: number }[];
-  topUsers: {
-    id: string;
-    name: string;
-    avatarUrl: string;
-    email: string;
-    joinedAt: string;
-    postCount: number;
-    completedCount: number;
-  }[];
-}
+import { adminService, AdminStats } from '../../../services/adminService';
 
 const formatCurrency = (value: number) => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -87,9 +32,9 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/admin/stats');
-      if (res.data.success) {
-        setStats(res.data.data);
+      const data = await adminService.getStats();
+      if (data) {
+        setStats(data);
         setLastUpdated(new Date());
       }
     } catch (err: any) {

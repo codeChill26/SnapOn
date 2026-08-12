@@ -2,42 +2,79 @@ import { useState, useEffect } from 'react';
 import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface CountdownTimerProps {
-  expiresAt: number;
+  expiresAt?: number | string | null;
   size?: 'sm' | 'md' | 'lg';
   onExpire?: () => void;
 }
 
 export function CountdownTimer({ expiresAt, size = 'md', onExpire }: CountdownTimerProps) {
-  const [remaining, setRemaining] = useState(Math.max(0, expiresAt - Date.now()));
+  const targetTime = typeof expiresAt === 'string' ? new Date(expiresAt).getTime() : (expiresAt || 0);
+
+  const [remaining, setRemaining] = useState(() => {
+    if (!targetTime || isNaN(targetTime)) return 0;
+    return Math.max(0, targetTime - Date.now());
+  });
 
   useEffect(() => {
-    if (remaining <= 0) {
+    if (!targetTime || isNaN(targetTime)) return;
+    const r = Math.max(0, targetTime - Date.now());
+    setRemaining(r);
+    if (r <= 0) {
       onExpire?.();
       return;
     }
+
     const id = setInterval(() => {
-      const r = Math.max(0, expiresAt - Date.now());
-      setRemaining(r);
-      if (r <= 0) {
+      const rem = Math.max(0, targetTime - Date.now());
+      setRemaining(rem);
+      if (rem <= 0) {
         clearInterval(id);
         onExpire?.();
       }
     }, 1000);
-    return () => clearInterval(id);
-  }, [expiresAt, onExpire]);
 
-  const mins = Math.floor(remaining / 60000);
-  const secs = Math.floor((remaining % 60000) / 1000);
-  const progress = Math.max(0, remaining / (10 * 60 * 1000));
+    return () => clearInterval(id);
+  }, [targetTime, onExpire]);
+
+  if (!targetTime || isNaN(targetTime)) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-gray-400 font-medium">
+        <Clock className="w-3 h-3" />
+        <span>Linh hoạt</span>
+      </div>
+    );
+  }
   const isExpired = remaining <= 0;
-  const isUrgent = remaining < 60000 && remaining > 0;
+  const isUrgent = remaining > 0 && remaining < 2 * 3600 * 1000; // Under 2 hours
+
+  const days = Math.floor(remaining / (24 * 3600 * 1000));
+  const hours = Math.floor((remaining % (24 * 3600 * 1000)) / (3600 * 1000));
+  const mins = Math.floor((remaining % (3600 * 1000)) / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+
+  // Formatted display text
+  let formattedTime = '';
+  if (isExpired) {
+    formattedTime = 'Hết hạn';
+  } else if (days > 30) {
+    formattedTime = 'Không thời hạn';
+  } else if (days > 1) {
+    formattedTime = `${days} ngày nữa`;
+  } else if (days === 1) {
+    formattedTime = `1 ngày ${hours}h`;
+  } else if (hours > 0) {
+    formattedTime = `${hours}h ${mins}m`;
+  } else {
+    formattedTime = `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
 
   if (size === 'sm') {
     return (
-      <div className={`flex items-center gap-1 text-xs ${isExpired ? 'text-gray-400' : isUrgent ? 'text-red-500' : 'text-orange-500'}`}
-        style={{ fontWeight: 600 }}>
+      <div className={`inline-flex items-center gap-1 text-xs font-semibold ${
+        isExpired ? 'text-gray-400' : isUrgent ? 'text-red-500 font-bold' : 'text-gray-500'
+      }`}>
         <Clock className="w-3 h-3" />
-        {isExpired ? 'Hết hạn' : `${mins}:${secs.toString().padStart(2, '0')}`}
+        <span>{formattedTime}</span>
       </div>
     );
   }
@@ -47,55 +84,35 @@ export function CountdownTimer({ expiresAt, size = 'md', onExpire }: CountdownTi
       <div className="flex flex-col items-center">
         {isExpired ? (
           <div className="flex flex-col items-center gap-2">
-            <CheckCircle2 className="w-12 h-12 text-green-500" />
-            <span className="text-green-600" style={{ fontWeight: 700, fontSize: '1.1rem' }}>Đã đóng ứng tuyển</span>
+            <CheckCircle2 className="w-10 h-10 text-gray-400" />
+            <span className="text-gray-500 font-bold text-base">Đã đóng nhận hồ sơ</span>
           </div>
         ) : (
-          <>
-            <div className={`flex items-baseline gap-1 ${isUrgent ? 'text-red-500' : 'text-orange-500'}`}>
-              <span style={{ fontWeight: 800, fontSize: '3.5rem', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {mins.toString().padStart(2, '0')}
-              </span>
-              <span style={{ fontWeight: 800, fontSize: '2.5rem' }}>:</span>
-              <span style={{ fontWeight: 800, fontSize: '3.5rem', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {secs.toString().padStart(2, '0')}
+          <div className="flex flex-col items-center">
+            <div className={`flex items-baseline gap-2 ${isUrgent ? 'text-red-500' : 'text-orange-600'}`}>
+              <Clock className="w-6 h-6" />
+              <span className="font-extrabold text-2xl md:text-3xl tracking-tight">
+                {formattedTime}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <div className={`w-2 h-2 rounded-full animate-pulse ${isUrgent ? 'bg-red-500' : 'bg-orange-400'}`} />
-              <span className={`text-sm ${isUrgent ? 'text-red-500' : 'text-gray-500'}`} style={{ fontWeight: isUrgent ? 600 : 400 }}>
-                {isUrgent ? 'Sắp hết hạn!' : 'Còn thời gian ứng tuyển'}
-              </span>
-            </div>
-            {/* Progress bar */}
-            <div className="w-full max-w-xs mt-3 bg-gray-200 rounded-full h-2 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ${isUrgent ? 'bg-red-500' : 'bg-orange-400'}`}
-                style={{ width: `${Math.min(100, progress * 100)}%` }}
-              />
-            </div>
-          </>
+            <p className="text-xs text-gray-400 mt-1 font-medium">Thời hạn nhận hồ sơ ứng tuyển</p>
+          </div>
         )}
       </div>
     );
   }
 
-  // md (default)
+  // Size md
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-      isExpired ? 'bg-gray-100 text-gray-500' :
-      isUrgent ? 'bg-red-50 text-red-600' :
-      'bg-orange-50 text-orange-600'
-    }`} style={{ fontWeight: 600 }}>
-      {isExpired ? (
-        <><AlertCircle className="w-4 h-4" /> Hết hạn</>
-      ) : (
-        <>
-          <div className={`w-2 h-2 rounded-full animate-pulse ${isUrgent ? 'bg-red-500' : 'bg-orange-400'}`} />
-          <Clock className="w-4 h-4" />
-          {mins}:{secs.toString().padStart(2, '0')} còn lại
-        </>
-      )}
+    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+      isExpired
+        ? 'bg-gray-100 text-gray-500'
+        : isUrgent
+        ? 'bg-red-50 text-red-600 border border-red-200 animate-pulse'
+        : 'bg-orange-50 text-orange-600 border border-orange-200'
+    }`}>
+      <Clock className="w-3.5 h-3.5" />
+      <span>{formattedTime}</span>
     </div>
   );
 }
