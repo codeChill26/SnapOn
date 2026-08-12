@@ -7,6 +7,7 @@ import { applicationService } from '../../services/applicationService';
 import { walletService } from '../../services/walletService';
 import { categoryService } from '../../services/categoryService';
 import { Task, Category, User, TaskApplication, TaskStatus } from '../../types';
+import api from '../../services/api';
 
 export interface Applicant {
   id?: string;
@@ -230,7 +231,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.role) {
-          return parsed.role === 'tasker' || parsed.role === 'worker' ? 'worker' : parsed.role === 'admin' || parsed.role === 'ADMIN' ? 'admin' : 'hirer';
+          const r = String(parsed.role).toLowerCase();
+          return r === 'tasker' || r === 'worker' ? 'worker' : r === 'admin' ? 'admin' : 'hirer';
         }
       }
     } catch {}
@@ -462,11 +464,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         setDbUser(user);
         localStorage.setItem('appUser', JSON.stringify(user));
-        const dbRole = user.role;
+        const dbRole = user.role ? String(user.role).toLowerCase() : '';
         const savedMode = localStorage.getItem('userRoleMode') as 'hirer' | 'worker' | 'admin' | null;
         let mappedRole: 'hirer' | 'worker' | 'admin' =
-          dbRole === 'tasker' || dbRole === 'worker' ? 'worker' : dbRole === 'admin' || dbRole === 'ADMIN' ? 'admin' : 'hirer';
-        if ((dbRole === 'USER' || !dbRole) && savedMode) {
+          dbRole === 'tasker' || dbRole === 'worker' ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
+        if (savedMode && dbRole !== 'admin') {
           mappedRole = savedMode;
         }
         _setUserRole(mappedRole);

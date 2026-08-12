@@ -122,14 +122,16 @@ export default function JobDetail() {
   // Lightbox keyboard listener
   useEffect(() => {
     if (!lightboxOpen) return;
+    const taskImages = task?.images || [];
+    if (taskImages.length === 0) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightboxOpen(false);
-      if (!task?.images || task.images.length === 0) return;
       if (e.key === 'ArrowRight') {
-        setActiveImageIndex(prev => (prev + 1) % task.images.length);
+        setActiveImageIndex(prev => (prev + 1) % taskImages.length);
       }
       if (e.key === 'ArrowLeft') {
-        setActiveImageIndex(prev => (prev - 1 + task.images.length) % task.images.length);
+        setActiveImageIndex(prev => (prev - 1 + taskImages.length) % taskImages.length);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
