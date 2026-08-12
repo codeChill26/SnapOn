@@ -15,6 +15,9 @@ export interface Job {
   price: number;         // Final/accepted price (updated when matched)
   priceMin: number;      // Minimum budget set by hirer
   priceMax: number;      // Maximum budget set by hirer
+  workMode?: string;
+  taskType?: string;
+  postType?: string;
   location: { lat: number; lng: number; address: string };
   postedAt: number;
   expiresAt: number;
@@ -180,7 +183,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Load tasks on mount
   const fetchJobs = useCallback(async () => {
     try {
-      const res = await api.get('/tasks');
+      const res = await api.get('/tasks?status=OPEN&limit=50');
       const data = res.data;
       if (data.success && Array.isArray(data.data)) {
         // Map tasks to frontend format
@@ -194,6 +197,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           price: parseFloat(task.final_price || task.budget_min || 0),
           priceMin: parseFloat(task.budget_min || 0),
           priceMax: parseFloat(task.budget_max || 0),
+          workMode: task.work_mode || task.workMode || 'REMOTE',
+          taskType: task.task_type || task.taskType || 'ONLINE',
+          postType: task.post_type || task.postType || 'RECRUITMENT',
           location: task.locations && task.locations[0] ? {
             lat: parseFloat(task.locations[0].latitude || 10.7769),
             lng: parseFloat(task.locations[0].longitude || 106.7009),
@@ -473,7 +479,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         headline: dbUser?.headline || '',
         skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
         coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
-        role: 'hirer' as const
+        role: 'hirer' as const,
+        dbUser: dbUser || null,
       }
     : userRole === 'admin'
     ? {
@@ -485,7 +492,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         headline: dbUser?.headline || '',
         skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
         coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
-        role: 'admin' as const
+        role: 'admin' as const,
+        dbUser: dbUser || null,
       }
     : {
         id: dbUser?.id || 'worker',
@@ -497,7 +505,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         headline: dbUser?.headline || '',
         skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
         coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
-        role: 'worker' as const
+        role: 'worker' as const,
+        dbUser: dbUser || null,
       };
 
   const logout = useCallback(async () => {
@@ -941,14 +950,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           budget_min: fields.priceMin,
           budget_max: fields.priceMax,
         });
-        return res.data?.success || true;
+        if (res.data?.success) {
+          await fetchJobs();
+          return true;
+        }
+        await fetchJobs();
+        return false;
       } catch (err) {
         console.error('Error updating task on backend:', err);
+        await fetchJobs();
         return false;
       }
     }
     return true;
-  }, []);
+  }, [fetchJobs]);
 
   return (
     <AppContext.Provider value={{

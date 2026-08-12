@@ -156,7 +156,7 @@ async function validateTaskInput(body, currentTask, finalCategoryId) {
     const parsedStartDate = new Date(merged.start_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (parsedStartDate < today) {
+    if (!currentTask && parsedStartDate < today) {
       return { isValid: false, message: 'Start date cannot be in the past.', status: 400 };
     }
   }
