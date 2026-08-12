@@ -197,33 +197,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           if (Array.isArray(myTasks)) {
             for (const t of myTasks) {
               if (!t || !t.id) continue;
-              try {
-                const appsRes = await api.get(`/tasks/${t.id}/applications`).catch(() => null);
-                const appsList = appsRes?.data?.data || [];
-                if (Array.isArray(appsList)) {
-                  appsList.forEach((app: any) => {
-                    const notifId = `hirer-app-${app.id}`;
-                    const isRead = readIds.has(notifId);
-                    const appliedDate = app.created_at ? new Date(app.created_at) : new Date();
-                    const timeStr = appliedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + appliedDate.toLocaleDateString('vi-VN');
-                    const bidPriceFmt = parseFloat(app.bid_price || app.bidPrice || 0).toLocaleString('vi-VN') + 'đ';
-
-                    if (!notifs.some(n => n.id === notifId)) {
-                      notifs.push({
-                        id: notifId,
-                        title: '📩 Có ứng viên nộp đơn ứng tuyển!',
-                        message: `${app.tasker_name || app.name || 'Người làm'} vừa nộp đơn ứng tuyển cho bài đăng "${t.title}" với giá thầu ${bidPriceFmt}.`,
-                        time: timeStr,
-                        type: 'job',
-                        isUnread: !isRead,
-                        link: `/job/${t.id}`
-                      });
-                    }
-                  });
-                }
-              } catch (err) {
-                // ignore
-              }
 
               // Also check if task object in AppContext has applicants loaded
               if (Array.isArray(t.applicants) && t.applicants.length > 0) {
@@ -269,7 +242,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
     loadRealNotifications();
 
-    const interval = setInterval(loadRealNotifications, 5000);
+    const interval = setInterval(loadRealNotifications, 30000);
     window.addEventListener('notification-updated', loadRealNotifications);
 
     return () => {
