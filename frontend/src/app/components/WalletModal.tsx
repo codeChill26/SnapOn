@@ -30,9 +30,10 @@ const fmtShort = (n: number) => {
 interface WalletModalProps {
   open: boolean;
   onClose: () => void;
-  balance: number;
-  isWorker: boolean;
-  onTopUp: (amount: number) => void;
+  balance?: number;
+  isWorker?: boolean;
+  mode?: 'worker' | 'hirer' | string;
+  onTopUp?: (amount: number) => void;
 }
 
 // Floating particle for success
@@ -55,8 +56,12 @@ function Particle({ delay, isWorker }: { delay: number; isWorker: boolean }) {
   );
 }
 
-export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: WalletModalProps) {
-  const { fetchProfile } = useApp();
+export function WalletModal({ open, onClose, balance, isWorker, mode: propMode, onTopUp }: WalletModalProps) {
+  const { fetchProfile, currentUser, hirerWallet, workerWallet, topUpWallet } = useApp();
+  const effectiveIsWorker = isWorker !== undefined ? isWorker : (propMode === 'worker' || currentUser?.role === 'worker');
+  const effectiveBalance = balance !== undefined ? balance : (effectiveIsWorker ? workerWallet : hirerWallet);
+  const effectiveOnTopUp = onTopUp || ((amount: number) => topUpWallet(effectiveIsWorker ? 'worker' : 'hirer', amount));
+
   const [step, setStep] = useState<Step>('select');
   const [mode, setMode] = useState<'topup' | 'withdraw'>('topup');
   const [selected, setSelected] = useState<number | null>(null);
@@ -67,7 +72,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
   const [orderCode, setOrderCode] = useState<number | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [initialBalance, setInitialBalance] = useState(balance);
+  const [initialBalance, setInitialBalance] = useState(effectiveBalance);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [bankName, setBankName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
@@ -111,7 +116,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       setProgress(0);
       setCheckoutUrl('');
       setErrorMsg('');
-      setInitialBalance(balance);
+      setInitialBalance(effectiveBalance);
       setOrderCode(null);
 
       const savedBank = localStorage.getItem('userBankName') || '';
@@ -119,7 +124,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       setBankName(savedBank);
       setBankAccountNumber(savedAcc);
     }
-  }, [open, balance]);
+  }, [open, effectiveBalance]);
 
   const handlePresetSelect = (amount: number) => {
     setSelected(amount);
@@ -141,10 +146,10 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
 
   // Track balance changes to automatically transition to success step
   useEffect(() => {
-    if (step === 'waiting_payment' && balance > initialBalance) {
+    if (step === 'waiting_payment' && effectiveBalance > initialBalance) {
       setStep('success');
     }
-  }, [balance, initialBalance, step]);
+  }, [effectiveBalance, initialBalance, step]);
 
   const handlePayOSTopUp = async () => {
     if (!selected) return;
@@ -162,7 +167,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       if (data.success && data.data?.checkoutUrl) {
         setCheckoutUrl(data.data.checkoutUrl);
         setOrderCode(data.data.orderCode);
-        setInitialBalance(balance); // mark balance at entry
+        setInitialBalance(effectiveBalance); // mark balance at entry
         
         // Open the payment page in a new window/tab
         window.open(data.data.checkoutUrl, '_blank');
@@ -232,7 +237,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
   // Apply top-up when entering success step (for mock QR flow)
   useEffect(() => {
     if (step === 'success' && selected && checkoutUrl === '') {
-      onTopUp(selected);
+      effectiveOnTopUp(selected);
     }
   }, [step, selected, checkoutUrl]);
 
@@ -242,7 +247,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
     if (amt > 2000000) { setErrorMsg('Số tiền rút mỗi lần tối đa là 2.000.000₫.'); return; }
     if (!bankName.trim()) { setErrorMsg('Vui lòng nhập tên ngân hàng.'); return; }
     if (!bankAccountNumber.trim()) { setErrorMsg('Vui lòng nhập số tài khoản.'); return; }
-    if (amt > balance) { setErrorMsg('Số dư không đủ để rút.'); return; }
+    if (amt > effectiveBalance) { setErrorMsg('Số dư không đủ để rút.'); return; }
 
     try {
       setWithdrawLoading(true);
@@ -269,49 +274,50 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
     }
   };
 
-  const accentGradient = isWorker
+  const accentGradient = effectiveIsWorker
     ? 'from-blue-600 via-indigo-600 to-violet-600'
     : 'from-orange-500 via-amber-500 to-yellow-500';
-  const accentGradientSubtle = isWorker
+  const accentGradientSubtle = effectiveIsWorker
     ? 'from-blue-50 to-indigo-50'
     : 'from-orange-50 to-amber-50';
-  const accentColor = isWorker ? '#3b82f6' : '#f97316';
-  const accentText = isWorker ? 'text-blue-600' : 'text-orange-600';
-  const accentBg = isWorker ? 'bg-blue-500' : 'bg-orange-500';
-  const accentBgLight = isWorker ? 'bg-blue-50' : 'bg-orange-50';
-  const accentBorder = isWorker ? 'border-blue-300' : 'border-orange-300';
-  const accentRing = isWorker ? 'ring-blue-200' : 'ring-orange-200';
-
-  if (!open) return null;
+  const accentColor = effectiveIsWorker ? '#3b82f6' : '#f97316';
+  const accentText = effectiveIsWorker ? 'text-blue-600' : 'text-orange-600';
+  const accentBg = effectiveIsWorker ? 'bg-blue-500' : 'bg-orange-500';
+  const accentBgLight = effectiveIsWorker ? 'bg-blue-50' : 'bg-orange-50';
+  const accentBorder = effectiveIsWorker ? 'border-blue-300' : 'border-orange-300';
+  const accentRing = effectiveIsWorker ? 'ring-blue-200' : 'ring-orange-200';
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-md"
-          />
+    <>
+      <AnimatePresence>
+        {open && (
+          <div key="wallet-modal-wrapper" className="fixed inset-0 z-[9999] flex items-center justify-center">
+            {/* Backdrop */}
+            <motion.div
+              key="wallet-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              className="fixed inset-0 bg-black/60 backdrop-blur-md"
+            />
 
-          {/* Modal */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 30 }}
-            transition={{ type: 'spring', duration: 0.45, bounce: 0.15 }}
-            className="fixed inset-0 z-[10000] flex items-center justify-center px-4"
-            onClick={(e) => e.target === e.currentTarget && onClose()}
-          >
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[420px] overflow-hidden relative">
+            {/* Modal */}
+            <motion.div
+              key="wallet-modal-dialog"
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: 'spring', duration: 0.45, bounce: 0.15 }}
+              className="relative z-[10000] flex items-center justify-center px-4 w-full"
+              onClick={(e) => e.target === e.currentTarget && onClose()}
+            >
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[420px] overflow-hidden relative">
 
-              {/* Centered Success Modal Popup Overlay */}
-              <AnimatePresence>
-                {withdrawSuccess && (
-                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-5">
+                {/* Centered Success Modal Popup Overlay */}
+                <AnimatePresence>
+                  {withdrawSuccess && (
+                    <div key="withdraw-success-overlay" className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-5">
                     <motion.div
                       initial={{ opacity: 0, scale: 0.85, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -396,13 +402,13 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                     <div>
                       <p className="text-white/60 text-xs mb-1" style={{ fontWeight: 500 }}>Số dư khả dụng</p>
                       <motion.p
-                        key={balance}
+                        key={effectiveBalance}
                         initial={{ scale: 1.05 }}
                         animate={{ scale: 1 }}
                         className="text-white"
                         style={{ fontWeight: 800, fontSize: '1.75rem', letterSpacing: '-0.02em' }}
                       >
-                        {fmt(balance)}
+                        {fmt(effectiveBalance)}
                       </motion.p>
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
@@ -411,7 +417,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                         <span className="text-white/80 text-[10px]" style={{ fontWeight: 600 }}>Hoạt động</span>
                       </div>
                       <span className="text-white/40 text-[10px]">
-                        {isWorker ? '💼 Người làm' : '🏠 Người thuê'}
+                        {effectiveIsWorker ? '💼 Người làm' : '🏠 Người thuê'}
                       </span>
                     </div>
                   </div>
@@ -528,7 +534,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                               onChange={handleCustomAmountChange}
                               placeholder="Nhập số tiền (ví dụ: 100000)..."
                               className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 bg-gray-50/80 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
-                                isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
+                                effectiveIsWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'
                               }`}
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
@@ -561,7 +567,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                                   <span className="text-gray-500">Số dư sau nạp</span>
                                   <div className="flex items-center gap-1.5">
                                     <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />
-                                    <span className="text-gray-900" style={{ fontWeight: 800 }}>{fmt(balance + selected)}</span>
+                                    <span className="text-gray-900" style={{ fontWeight: 800 }}>{fmt(effectiveBalance + selected)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -635,7 +641,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                         </div>
 
                         <p className="text-xs text-gray-400 mb-3">
-                          Số dư khả dụng: <span style={{ fontWeight: 700 }} className="text-gray-800">{fmt(balance)}</span>
+                          Số dư khả dụng: <span style={{ fontWeight: 700 }} className="text-gray-800">{fmt(effectiveBalance)}</span>
                         </p>
 
                         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 text-[11px] text-amber-800 space-y-1">
@@ -704,7 +710,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                                 placeholder="Nhập số tiền..."
                                 className={`w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-gray-100 text-gray-800 text-sm font-bold focus:bg-white focus:outline-none transition-all ${
                                   hasPendingWithdraw ? 'bg-gray-100 cursor-not-allowed opacity-60' : 'bg-gray-50/80'
-                                } ${isWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'}`}
+                                } ${effectiveIsWorker ? 'focus:border-blue-500' : 'focus:border-orange-500'}`}
                               />
                               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">₫</span>
                             </div>
@@ -766,7 +772,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
                       className={`w-12 h-12 border-4 border-gray-100 rounded-full mb-4 ${
-                        isWorker ? 'border-t-blue-500' : 'border-t-orange-500'
+                        effectiveIsWorker ? 'border-t-blue-500' : 'border-t-orange-500'
                       }`}
                     />
                     <p className="text-gray-800 text-sm font-semibold">Đang kết nối cổng thanh toán PayOS...</p>
@@ -867,10 +873,10 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
 
                       <div className="relative bg-white rounded-2xl p-1 border border-gray-100 shadow-lg">
                         {/* Corner accents */}
-                        <div className={`absolute top-0 left-0 w-6 h-6 border-t-[3px] border-l-[3px] rounded-tl-2xl ${isWorker ? 'border-blue-500' : 'border-orange-500'}`} />
-                        <div className={`absolute top-0 right-0 w-6 h-6 border-t-[3px] border-r-[3px] rounded-tr-2xl ${isWorker ? 'border-blue-500' : 'border-orange-500'}`} />
-                        <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-[3px] border-l-[3px] rounded-bl-2xl ${isWorker ? 'border-blue-500' : 'border-orange-500'}`} />
-                        <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-[3px] border-r-[3px] rounded-br-2xl ${isWorker ? 'border-blue-500' : 'border-orange-500'}`} />
+                        <div className={`absolute top-0 left-0 w-6 h-6 border-t-[3px] border-l-[3px] rounded-tl-2xl ${effectiveIsWorker ? 'border-blue-500' : 'border-orange-500'}`} />
+                        <div className={`absolute top-0 right-0 w-6 h-6 border-t-[3px] border-r-[3px] rounded-tr-2xl ${effectiveIsWorker ? 'border-blue-500' : 'border-orange-500'}`} />
+                        <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-[3px] border-l-[3px] rounded-bl-2xl ${effectiveIsWorker ? 'border-blue-500' : 'border-orange-500'}`} />
+                        <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-[3px] border-r-[3px] rounded-br-2xl ${effectiveIsWorker ? 'border-blue-500' : 'border-orange-500'}`} />
 
                         <div className="p-4">
                           <QRCodeSVG
@@ -914,7 +920,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                             animate={{ rotate: 360 }}
                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                             className={`w-3.5 h-3.5 border-2 border-gray-200 rounded-full ${
-                              isWorker ? 'border-t-blue-500' : 'border-t-orange-500'
+                              effectiveIsWorker ? 'border-t-blue-500' : 'border-t-orange-500'
                             }`}
                           />
                           <span className="text-gray-500" style={{ fontWeight: 500 }}>Đang xử lý thanh toán...</span>
@@ -954,7 +960,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                     {/* Confetti particles */}
                     <div className="absolute inset-0 flex items-end justify-center pointer-events-none">
                       {Array.from({ length: 20 }).map((_, i) => (
-                        <Particle key={i} delay={i * 0.05} isWorker={isWorker} />
+                        <Particle key={i} delay={i * 0.05} isWorker={effectiveIsWorker} />
                       ))}
                     </div>
 
@@ -1009,7 +1015,7 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
                         <span className="text-gray-400">Số dư mới</span>
                         <div className="flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="text-gray-900" style={{ fontWeight: 800 }}>{fmt(balance)}</span>
+                          <span className="text-gray-900" style={{ fontWeight: 800 }}>{fmt(effectiveBalance)}</span>
                         </div>
                       </div>
                       <div className="w-full h-px bg-gray-200/60" />
@@ -1038,15 +1044,16 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
               </AnimatePresence>
             </div>
           </motion.div>
-        </>
+        </div>
       )}
-
-      <BankSelectModal
-        isOpen={bankModalOpen}
-        onClose={() => setBankModalOpen(false)}
-        selectedBank={bankName}
-        onSelectBank={(selected) => setBankName(selected)}
-      />
     </AnimatePresence>
+
+    <BankSelectModal
+      isOpen={bankModalOpen}
+      onClose={() => setBankModalOpen(false)}
+      selectedBank={bankName}
+      onSelectBank={(selected) => setBankName(selected)}
+    />
+  </>
   );
 }

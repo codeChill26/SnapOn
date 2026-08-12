@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://snapon-debug.onrender.com/api';
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE,
@@ -20,7 +20,10 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('firebaseToken');
+      const isAuthEndpoint = error.config?.url?.includes('/auth/');
+      if (!isAuthEndpoint) {
+        console.warn('Unauthorized 401 from backend. Token might be expired.');
+      }
     }
     return Promise.reject(error);
   }

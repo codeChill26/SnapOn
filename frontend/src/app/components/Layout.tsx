@@ -71,9 +71,9 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
         // 1. Fetch wallet transactions (withdrawals status: PENDING, SUCCESS, FAILED)
         try {
-          const txRes = await api.get('/wallet/transactions');
-          const txData = txRes.data;
-          const items = txData.data || txData.transactions || [];
+          const txRes = await api.get('/wallet/transactions').catch(() => null);
+          const txData = txRes?.data;
+          const items = txData?.data || txData?.transactions || [];
           if (Array.isArray(items)) {
             items.forEach((tx: any) => {
               const amtStr = parseFloat(tx.amount || 0).toLocaleString('vi-VN') + 'đ';
@@ -133,9 +133,9 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
         // 2. Fetch user applications (worker job applications status: ACCEPTED, REJECTED)
         try {
-          const appRes = await api.get('/applications/my-applications');
-          const appData = appRes.data;
-          const apps = appData.data || appData.applications || [];
+          const appRes = await api.get('/applications/my-applications').catch(() => null);
+          const appData = appRes?.data;
+          const apps = appData?.data || appData?.applications || [];
           if (Array.isArray(apps)) {
             apps.forEach((app: any) => {
               const createdDate = new Date(app.created_at || Date.now());
@@ -417,7 +417,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
         ? 'bg-gradient-to-r from-blue-700 to-indigo-700 border-blue-600'
         : 'bg-gradient-to-r from-white via-orange-50 to-amber-50 border-orange-100'
         }`}>
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 h-16 flex items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-2 flex-shrink-0">
             <SnapOnLogo size="md" dark={isWorker} />
           </Link>
@@ -691,7 +691,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       {/* Worker on-job sticky banner */}
       {isWorker && workerStatus === 'on_job' && currentJob && (
         <div className="bg-green-600 text-white py-2.5 px-4 sticky top-16 z-40 shadow-md">
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse flex-shrink-0" />
               <span className="text-sm" style={{ fontWeight: 600 }}>
@@ -711,10 +711,11 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       )}
 
       {/* Main content with page transitions */}
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex-1 w-full overflow-x-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
+            className="w-full"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}

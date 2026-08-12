@@ -1,1296 +1,765 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import {
-  ChevronLeft, MapPin, Clock, Users, Star, Sparkles, CheckCircle2, CheckCheck,
-  Bot, Award, MessageCircle, PartyPopper, Briefcase, Send, Lock, AlertCircle,
-  ChevronDown, ChevronUp, User, ShieldCheck, TrendingDown, TrendingUp, Zap,
-  Target, BarChart3, FlameKindling, ExternalLink, X, Edit3, Trash2, Save
+  ChevronLeft, MapPin, Clock, Users, Star, Sparkles, CheckCircle2,
+  Bot, MessageCircle, Briefcase, Send, Lock, AlertCircle,
+  ShieldCheck, ArrowRight, Zap, Target, Edit3, Trash2, Check,
+  ChevronRight, X, Maximize2, Image as ImageIcon, Phone, Hash,
+  Calendar, GraduationCap, Award, UserCheck, Layers, BadgeCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp, haversineDistance, scoreApplicants } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
+import { taskService } from '../../services/taskService';
+import { applicationService } from '../../services/applicationService';
+import { profileService } from '../../services/profileService';
+import { Task, TaskApplication, PublicProfile } from '../../types';
 import { CountdownTimer } from '../components/CountdownTimer';
-import { MapPicker } from '../components/MapPicker';
-import { UserProfileModal, type HirerProfileData, type WorkerProfileData } from '../components/UserProfileModal';
+import { UserProfileModal } from '../components/UserProfileModal';
 
-import api from '../../services/api';
-
-function fmt(n: number) { return n.toLocaleString('vi-VN') + '₫'; }
-function pct(v: number)  { return Math.round(v * 100) + '%'; }
-
-function NotFound() {
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-      <div className="text-5xl mb-4">🔍</div>
-      <p className="text-gray-500">Không tìm thấy công việc này.</p>
-      <Link to="/" className="mt-4 inline-block text-orange-500 hover:underline">← Về trang chủ</Link>
-    </div>
-  );
+function fmt(n: number) {
+  return n.toLocaleString('vi-VN') + '₫';
 }
 
-// ─── Score bar component ──────────────────────────────────────
-function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500 w-20 flex-shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <motion.div initial={{ width: 0 }} animate={{ width: `${value * 100}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-          className="h-full rounded-full" style={{ background: color }} />
-      </div>
-      <span className="text-xs w-8 text-right" style={{ fontWeight: 600, color }}>{pct(value)}</span>
-    </div>
-  );
-}
+const CATEGORY_STYLES: Record<string, { bg: string; text: string; gradient: string; bannerBg: string; icon: string }> = {
+  errands: { bg: 'bg-orange-50', text: 'text-orange-600', gradient: 'from-orange-500 to-amber-500', bannerBg: 'from-orange-500/20 via-amber-500/10 to-orange-500/5', icon: '🏃' },
+  content: { bg: 'bg-pink-50', text: 'text-pink-600', gradient: 'from-pink-500 to-rose-500', bannerBg: 'from-pink-500/20 via-rose-500/10 to-pink-500/5', icon: '✍️' },
+  design: { bg: 'bg-purple-50', text: 'text-purple-600', gradient: 'from-purple-500 to-indigo-500', bannerBg: 'from-purple-500/20 via-indigo-500/10 to-purple-500/5', icon: '🎨' },
+  tech: { bg: 'bg-cyan-50', text: 'text-cyan-600', gradient: 'from-cyan-500 to-blue-500', bannerBg: 'from-cyan-500/20 via-blue-500/10 to-cyan-500/5', icon: '💻' },
+  carrying: { bg: 'bg-indigo-50', text: 'text-indigo-600', gradient: 'from-indigo-500 to-purple-500', bannerBg: 'from-indigo-500/20 via-purple-500/10 to-indigo-500/5', icon: '📦' },
+  photography: { bg: 'bg-rose-50', text: 'text-rose-600', gradient: 'from-rose-500 to-pink-500', bannerBg: 'from-rose-500/20 via-pink-500/10 to-rose-500/5', icon: '📸' },
+  research: { bg: 'bg-teal-50', text: 'text-teal-600', gradient: 'from-teal-500 to-emerald-500', bannerBg: 'from-teal-500/20 via-emerald-500/10 to-teal-500/5', icon: '🔍' },
+  manager: { bg: 'bg-amber-50', text: 'text-amber-600', gradient: 'from-amber-500 to-yellow-500', bannerBg: 'from-amber-500/20 via-yellow-500/10 to-amber-500/5', icon: '📋' },
+  entertainment: { bg: 'bg-fuchsia-50', text: 'text-fuchsia-600', gradient: 'from-fuchsia-500 to-pink-500', bannerBg: 'from-fuchsia-500/20 via-pink-500/10 to-fuchsia-500/5', icon: '🎭' },
+  study: { bg: 'bg-blue-50', text: 'text-blue-600', gradient: 'from-blue-500 to-indigo-500', bannerBg: 'from-blue-500/20 via-indigo-500/10 to-blue-500/5', icon: '📚' },
+  others: { bg: 'bg-slate-50', text: 'text-slate-600', gradient: 'from-slate-500 to-zinc-500', bannerBg: 'from-slate-500/20 via-zinc-500/10 to-slate-500/5', icon: '⚡' },
+};
 
-// ═════════════════════════════════════════════════════════════
-//  WORKER VIEW
-// ═════════════════════════════════════════════════════════════
-function WorkerJobDetailView() {
+const EXPERIENCE_MAP: Record<string, string> = {
+  NO_EXPERIENCE: 'Không yêu cầu',
+  LESS_THAN_1_YEAR: 'Dưới 1 năm',
+  FROM_1_TO_2_YEARS: '1 - 2 năm',
+  FROM_2_TO_3_YEARS: '2 - 3 năm',
+  MORE_THAN_3_YEARS: 'Trên 3 năm',
+};
+
+const EDUCATION_MAP: Record<string, string> = {
+  NONE: 'Không yêu cầu',
+  HIGH_SCHOOL: 'Tốt nghiệp THPT',
+  VOCATIONAL: 'Trung cấp / Nghề',
+  COLLEGE: 'Cao đẳng',
+  UNIVERSITY: 'Đại học / Cao học',
+};
+
+const GENDER_MAP: Record<string, string> = {
+  ANY: 'Không yêu cầu',
+  MALE: 'Nam',
+  FEMALE: 'Nữ',
+};
+
+export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { jobs, applyToJob, workerStatus, workerCurrentJobId, currentUser } = useApp();
+  const { currentUser, firebaseUser } = useApp();
+
+  const [task, setTask] = useState<Task | null>(null);
+  const [applications, setApplications] = useState<TaskApplication[]>([]);
+  const [myApplication, setMyApplication] = useState<TaskApplication | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Image gallery & Lightbox state
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Apply form state
+  const [bidPrice, setBidPrice] = useState<number>(0);
   const [note, setNote] = useState('');
-  const [showApplyForm, setShowApplyForm] = useState(false);
-  const [applied, setApplied] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [bidPrice, setBidPrice] = useState(0);
-  const [showHirerProfile, setShowHirerProfile] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState('');
+  const [applySuccess, setApplySuccess] = useState(false);
 
-  const job = jobs.find(j => j.id === id);
+  // Profile modal
+  const [selectedProfile, setSelectedProfile] = useState<any>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
+  const isPoster = Boolean(currentUser?.id && task?.posterId === currentUser.id);
+
+  const loadTaskDetails = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const taskData = await taskService.getTaskById(id);
+      setTask(taskData);
+      setActiveImageIndex(0);
+      setBidPrice(Math.round((taskData.budgetMin + taskData.budgetMax) / 2 / 10000) * 10000);
+
+      // 🔒 ONLY fetch application list if current user is the poster
+      if (currentUser.id && taskData.posterId === currentUser.id) {
+        try {
+          const apps = await applicationService.getApplicationsByTask(id);
+          setApplications(apps);
+        } catch {}
+      } else if (firebaseUser) {
+        // If worker/visitor, only fetch their own application
+        try {
+          const myApp = await applicationService.getMyApplicationForTask(id);
+          setMyApplication(myApp);
+        } catch {}
+      }
+    } catch (err: any) {
+      console.error('Error loading task detail:', err);
+      setError(err.response?.data?.message || 'Không tìm thấy công việc.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id, currentUser.id, firebaseUser]);
 
   useEffect(() => {
-    if (job) setBidPrice(Math.round((job.priceMin + job.priceMax) / 2 / 10000) * 10000);
-  }, [job?.id]);
+    loadTaskDetails();
+  }, [loadTaskDetails]);
 
+  // Lightbox keyboard listener
   useEffect(() => {
-    if (!id || !job) return;
-    const token = localStorage.getItem('firebaseToken');
-    if (!token) return;
-
-    api.get(`/tasks/${id}/my-application`)
-      .then(res => {
-        if (res.data?.success && res.data.data) {
-          const app = res.data.data;
-          setApplied(true);
-          if (job && !job.applicants.some(a => a.workerId === currentUser.id)) {
-            job.applicants.push({
-              id: app.id,
-              workerId: app.tasker_id,
-              name: currentUser.name || 'Tôi',
-              avatar: currentUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
-              lat: 10.7769,
-              lng: 106.7009,
-              distance: 0,
-              rating: 5.0,
-              completedJobs: 0,
-              skills: [],
-              appliedAt: new Date(app.created_at).getTime(),
-              note: app.message || '',
-              bidPrice: parseFloat(app.bid_price || 0)
-            });
-          }
-        }
-      })
-      .catch(() => {});
-  }, [id, job, currentUser.id]);
-
-  if (!job) return <NotFound />;
-
-  const alreadyApplied = job.applicants.some(a => a.workerId === currentUser.id);
-  const myApplication  = job.applicants.find(a => a.workerId === currentUser.id);
-  const isMatched      = job.status === 'matched' && job.aiMatchId === currentUser.id;
-  const isCompleted    = job.status === 'completed';
-  const isOnThisJob    = workerCurrentJobId === job.id && workerStatus === 'on_job';
-  const canApply       = job.status === 'active' && job.expiresAt > Date.now() && !alreadyApplied && !applied && workerStatus === 'available';
-  const workerBusy     = workerStatus === 'on_job' && workerCurrentJobId !== job.id;
-  const distance       = haversineDistance(10.7769, 106.7009, job.location.lat, job.location.lng);
-
-  // Competitiveness hint based on bid
-  const bidRatio = (bidPrice - job.priceMin) / (job.priceMax - job.priceMin || 1);
-  const competitiveness = bidRatio < 0.3 ? { label: 'Rất cạnh tranh 🔥', color: 'text-green-600', bg: 'bg-green-50' }
-    : bidRatio < 0.6 ? { label: 'Cạnh tranh tốt ✅', color: 'text-blue-600', bg: 'bg-blue-50' }
-    : { label: 'Trung bình', color: 'text-amber-600', bg: 'bg-amber-50' };
+    if (!lightboxOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (!task?.images || task.images.length === 0) return;
+      if (e.key === 'ArrowRight') {
+        setActiveImageIndex(prev => (prev + 1) % task.images.length);
+      }
+      if (e.key === 'ArrowLeft') {
+        setActiveImageIndex(prev => (prev - 1 + task.images.length) % task.images.length);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, task?.images]);
 
   const handleApply = async () => {
-    const workerWithLoc = {
-      id: currentUser.id,
-      name: currentUser.name,
-      avatar: currentUser.avatar,
-      lat: 10.7769,
-      lng: 106.7009,
-      skills: (currentUser as any).skills || [],
-      rating: parseFloat((currentUser as any).rating) || 0,
-      completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
-      bio: (currentUser as any).bio || '',
-    };
-    const res = await applyToJob(job.id, workerWithLoc, note || 'Tôi sẵn sàng làm ngay!', bidPrice);
-    if (res.success) {
-      setApplied(true);
-      setShowApplyForm(false);
-    } else {
-      alert(res.message || 'Gửi đơn ứng tuyển thất bại.');
+    if (!id || !task) return;
+    if (!firebaseUser) {
+      navigate('/login');
+      return;
+    }
+
+    setIsApplying(true);
+    setApplyError('');
+    try {
+      const app = await applicationService.createApplication(id, {
+        bid_price: bidPrice,
+        estimated_time: '1-2 ngày',
+        message: note,
+      });
+      setMyApplication(app);
+      setApplySuccess(true);
+      await loadTaskDetails();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Không thể gửi đơn ứng tuyển. Vui lòng thử lại sau.';
+      setApplyError(msg);
+    } finally {
+      setIsApplying(false);
     }
   };
 
+  const handleWithdraw = async () => {
+    if (!myApplication?.id) return;
+    try {
+      await applicationService.withdrawApplication(myApplication.id);
+      setMyApplication(null);
+      await loadTaskDetails();
+    } catch (err) {
+      console.error('Error withdrawing application:', err);
+    }
+  };
+
+  const handleManualMatch = async (appId: string) => {
+    if (!id) return;
+    try {
+      await applicationService.manualMatch(id, appId);
+      await loadTaskDetails();
+    } catch (err) {
+      console.error('Error manual matching:', err);
+    }
+  };
+
+  const handleAutoMatch = async () => {
+    if (!id) return;
+    try {
+      await applicationService.autoMatch(id);
+      await loadTaskDetails();
+    } catch (err) {
+      console.error('Error auto matching:', err);
+    }
+  };
+
+  const handleCloseRecruitment = async () => {
+    if (!id) return;
+    try {
+      await taskService.closeRecruitment(id);
+      await loadTaskDetails();
+    } catch (err) {
+      console.error('Error closing recruitment:', err);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!id) return;
+    if (window.confirm('Bạn có chắc chắn muốn xóa công việc này?')) {
+      try {
+        await taskService.deleteTask(id);
+        navigate(-1);
+      } catch (err) {
+        console.error('Error deleting task:', err);
+      }
+    }
+  };
+
+  const openUserProfile = async (userId: string, type: 'hirer' | 'worker') => {
+    try {
+      const pub = await profileService.getPublicProfile(userId);
+      setSelectedProfile({
+        type,
+        id: pub.id,
+        name: pub.fullName,
+        avatar: pub.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + pub.id,
+        rating: pub.ratingAverage,
+        reviewCount: pub.reviewCount,
+        memberSince: new Date(pub.joinedAt).toLocaleDateString('vi-VN'),
+        jobsPosted: pub.postedJobsCount,
+        jobsCompleted: pub.completedJobsCount,
+        completedJobs: pub.completedJobsCount,
+        skills: pub.skills,
+        bio: pub.bio,
+        area: 'TP. Hồ Chí Minh',
+        verified: pub.isVerified,
+      });
+      setProfileModalOpen(true);
+    } catch (err) {
+      console.error('Error opening user profile:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-gray-500 text-sm font-medium">Đang tải chi tiết công việc...</p>
+      </div>
+    );
+  }
+
+  if (error || !task) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <div className="text-5xl mb-4">🔍</div>
+        <h2 className="text-gray-900 font-bold text-lg mb-2">Không tìm thấy công việc</h2>
+        <p className="text-gray-500 text-sm mb-6">{error || 'Công việc này không tồn tại hoặc đã bị xóa.'}</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-block bg-orange-500 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-orange-600 transition"
+        >
+          ← Quay lại
+        </button>
+      </div>
+    );
+  }
+
+  const images = Array.isArray(task.images) ? task.images.filter(Boolean) : [];
+  const hasImages = images.length > 0;
+  const catSlug = task.field?.slug || task.categoryId || 'others';
+  const catStyle = CATEGORY_STYLES[catSlug] || CATEGORY_STYLES.others;
+
+  const unitLabel =
+    task.salaryUnit === 'PER_HOUR' ? '/giờ' :
+    task.salaryUnit === 'PER_DAY' ? '/ngày' :
+    task.salaryUnit === 'PER_MONTH' ? '/tháng' : '/công việc';
+
+  const workModeLabel =
+    task.workMode === 'REMOTE' ? '🌐 Online / Từ xa' :
+    task.workMode === 'ONSITE' ? '📍 Làm việc tại chỗ' : '🤝 Linh hoạt / Thỏa thuận';
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-28 md:pb-10">
-      {/* Back */}
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition">
-          <ChevronLeft className="w-5 h-5" />
+    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-8 pb-24">
+      {/* Top Breadcrumb Header */}
+      <div className="flex items-center justify-between mb-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-orange-500 transition px-3.5 py-2 rounded-2xl bg-white border border-gray-200 shadow-sm cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" /> Quay lại
         </button>
-        <div className="flex-1">
-          <p className="text-gray-400 text-xs mb-0.5">Chi tiết công việc</p>
-          <h1 className="text-gray-900" style={{ fontWeight: 700, fontSize: '1.1rem' }}>{job.title}</h1>
-        </div>
-        <span className={`text-xs px-3 py-1.5 rounded-full border ${
-          job.status === 'active'    ? 'bg-green-50 text-green-600 border-green-200' :
-          job.status === 'matched'   ? 'bg-blue-50 text-blue-600 border-blue-200' :
-          job.status === 'completed' ? 'bg-purple-50 text-purple-600 border-purple-200' :
-          'bg-gray-50 text-gray-500 border-gray-200'
-        }`} style={{ fontWeight: 600 }}>
-          {job.status === 'active' ? '🟢 Đang tuyển' : job.status === 'matched' ? '✅ Đã khớp' : job.status === 'completed' ? '🏆 Xong' : '⏸ Hết hạn'}
-        </span>
-      </div>
 
-      {/* Status banners */}
-      <AnimatePresence>
-        {(isMatched || isOnThisJob) && !isCompleted && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-green-50 border border-green-200 rounded-2xl p-5 mb-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center flex-shrink-0">
-              <CheckCheck className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <p className="text-green-700" style={{ fontWeight: 700 }}>🎉 Bạn đã được chọn!</p>
-              <p className="text-green-600 text-sm mt-0.5">Thù lao xác nhận: <strong>{fmt(job.price)}</strong>. Chờ người thuê xác nhận hoàn thành.</p>
-            </div>
-          </motion.div>
-        )}
-        {isCompleted && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-purple-50 border border-purple-200 rounded-2xl p-5 mb-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
-              <PartyPopper className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <p className="text-purple-700" style={{ fontWeight: 700 }}>Hoàn thành! 🎉</p>
-              <p className="text-purple-600 text-sm mt-0.5"><strong>{fmt(job.price)}</strong> đã được xử lý. Bạn có thể nhận việc mới!</p>
-            </div>
-          </motion.div>
-        )}
-        {(applied || alreadyApplied) && !isMatched && !isOnThisJob && !isCompleted && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Send className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <p className="text-blue-700 text-sm" style={{ fontWeight: 700 }}>Đã gửi đơn — Giá chào: <span className="text-blue-500">{fmt(myApplication?.bidPrice ?? bidPrice)}</span></p>
-              <p className="text-blue-500 text-xs mt-0.5">Đang chờ người thuê chốt phiên. AI sẽ tự matching khi họ sẵn sàng.</p>
-            </div>
-            <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 1.2, repeat: Infinity }}
-              className="w-2.5 h-2.5 rounded-full bg-blue-400 flex-shrink-0" />
-          </motion.div>
-        )}
-        {workerBusy && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 flex items-center gap-3">
-            <Lock className="w-5 h-5 text-amber-500 flex-shrink-0" />
-            <p className="text-amber-700 text-sm" style={{ fontWeight: 600 }}>Bạn đang bận. Hoàn thành việc hiện tại trước khi ứng tuyển mới.</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Countdown */}
-      {job.status === 'active' && (
-        <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-5 mb-4 text-center shadow-md">
-          <p className="text-orange-100 text-xs mb-2" style={{ fontWeight: 500 }}>⚡ Thời gian còn lại nhận đơn</p>
-          <CountdownTimer expiresAt={job.expiresAt} size="lg" />
-        </div>
-      )}
-
-      {/* Job card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
-        <div className="flex items-start gap-4 mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center text-3xl flex-shrink-0">{job.categoryIcon}</div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-gray-900" style={{ fontWeight: 700 }}>{job.title}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <img src={job.hirerAvatar} alt="" className="w-5 h-5 rounded-full" />
-              <span className="text-gray-500 text-sm">{job.hirerName}</span>
-              <span className="text-gray-300">·</span>
-              <span className="text-gray-400 text-xs">{new Date(job.postedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-gray-600 text-sm leading-relaxed mb-4">{job.description}</p>
-
-        {/* Price range — PUBLIC to worker */}
-        <div className="bg-gradient-to-r from-green-50 to-orange-50 border border-orange-100 rounded-xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600" style={{ fontWeight: 600 }}>💰 Khoảng giá thầu</span>
-            <span className="text-xs text-gray-400">Đặt giá thấp hơn để có lợi thế</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-center">
-              <div className="text-green-600 text-sm" style={{ fontWeight: 700 }}>{fmt(job.priceMin)}</div>
-              <div className="text-gray-400 text-xs">Tối thiểu</div>
-            </div>
-            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-green-400 to-orange-500 rounded-full w-full" />
-            </div>
-            <div className="text-center">
-              <div className="text-orange-600 text-sm" style={{ fontWeight: 700 }}>{fmt(job.priceMax)}</div>
-              <div className="text-gray-400 text-xs">Tối đa</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-50 rounded-xl p-3 text-center">
-            <div className="text-blue-600" style={{ fontWeight: 800 }}>{job.duration}h</div>
-            <div className="text-gray-400 text-xs">Thời gian</div>
-          </div>
-          <div className="bg-orange-50 rounded-xl p-3 text-center">
-            <div className="text-orange-600" style={{ fontWeight: 800 }}>{distance.toFixed(1)}km</div>
-            <div className="text-gray-400 text-xs">Từ bạn</div>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-3 text-center">
-            <div className="text-gray-600" style={{ fontWeight: 800 }}>{job.applicants.length}</div>
-            <div className="text-gray-400 text-xs">Đã apply</div>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-2 bg-gray-50 rounded-xl p-3 mt-3">
-          <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-          <span className="text-sm text-gray-600">{job.location.address}</span>
-        </div>
-      </div>
-
-      {/* Map (collapsible) */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-4">
-        <button onClick={() => setShowMap(!showMap)} className="w-full flex items-center justify-between px-5 py-4">
-          <span className="text-gray-700 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
-            <MapPin className="w-4 h-4 text-orange-500" /> Xem vị trí trên bản đồ
-          </span>
-          {showMap ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-        <AnimatePresence>
-          {showMap && (
-            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden px-4 pb-4">
-              <MapPicker value={job.location} onChange={() => {}} readonly height="240px" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Hirer info */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 mb-6">
-        <h3 className="text-gray-700 text-sm mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-          <User className="w-4 h-4 text-gray-400" /> Người đăng việc
-        </h3>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowHirerProfile(true)} className="relative flex-shrink-0 group">
-            <img src={job.hirerAvatar} alt={job.hirerName} className="w-12 h-12 rounded-xl border border-gray-100 bg-gray-50 group-hover:opacity-90 transition" />
-          </button>
-          <div className="flex-1">
-            <button onClick={() => setShowHirerProfile(true)} className="text-left">
-              <p className="text-gray-900 hover:text-orange-600 transition" style={{ fontWeight: 700 }}>{job.hirerName}</p>
-            </button>
-            <div className="flex items-center gap-0.5 mt-0.5">
-              {[1,2,3,4,5].map(s => <Star key={s} className="w-3 h-3 text-yellow-400" fill="currentColor" />)}
-              <span className="text-gray-400 text-xs ml-1">5.0 · 8 đánh giá</span>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2.5 py-1 rounded-full" style={{ fontWeight: 600 }}>
-              <ShieldCheck className="w-3.5 h-3.5" /> Đã xác minh
-            </div>
+        {isPoster && (
+          <div className="flex items-center gap-2">
+            {task.status === 'OPEN' && (
+              <button
+                onClick={handleCloseRecruitment}
+                className="text-xs font-bold px-3.5 py-2 rounded-2xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition shadow-sm cursor-pointer"
+              >
+                Đóng nhận hồ sơ
+              </button>
+            )}
             <button
-              onClick={() => setShowHirerProfile(true)}
-              className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 transition"
-              style={{ fontWeight: 600 }}
+              onClick={handleDeleteTask}
+              className="text-xs font-bold px-3.5 py-2 rounded-2xl border border-red-200 text-red-600 bg-white hover:bg-red-50 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
-              Xem hồ sơ →
+              <Trash2 className="w-3.5 h-3.5" /> Xóa bài đăng
             </button>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Hirer profile modal */}
-      <UserProfileModal
-        isOpen={showHirerProfile}
-        onClose={() => setShowHirerProfile(false)}
-        profile={{
-          type: 'hirer',
-          name: job.hirerName,
-          avatar: job.hirerAvatar,
-          rating: 5.0,
-          reviewCount: 8,
-          memberSince: 'Tháng 1, 2025',
-          jobsPosted: 12,
-          jobsCompleted: 10,
-          area: 'Quận 1, TP.HCM',
-          totalSpent: 3200000,
-          verified: true,
-          recentReviews: [
-            { name: 'Nguyễn Văn An', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NVA2', rating: 5, text: 'Chủ nhà rất thân thiện, mô tả công việc rõ ràng. Trả tiền ngay khi xong.', date: '20/02/2026' },
-            { name: 'Phan Thị Lan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PTL2', rating: 4, text: 'Thanh toán nhanh chóng, đúng như cam kết. Sẽ làm việc lại.', date: '15/02/2026' },
-            { name: 'Võ Thành Phong', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=VTP2', rating: 5, text: 'Hỗ trợ rất nhiệt tình, cung cấp đầy đủ dụng cụ cần thiết.', date: '12/02/2026' },
-          ],
-        } as HirerProfileData}
-      />
-
-      {/* ── Apply section ── */}
-      {canApply && (
-        <AnimatePresence mode="wait">
-          {!showApplyForm ? (
-            <motion.button key="apply-btn" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.97 }}
-              onClick={() => setShowApplyForm(true)}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 hover:from-blue-700 hover:to-indigo-700 transition"
-              style={{ fontWeight: 700, fontSize: '1rem' }}>
-              <Briefcase className="w-5 h-5" />
-              Ứng tuyển & Đặt giá
-            </motion.button>
-          ) : (
-            <motion.div key="apply-form" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
-              <p className="text-blue-700 mb-4" style={{ fontWeight: 700 }}>💬 Đặt giá của bạn</p>
-
-              {/* Bid slider */}
-              <div className="bg-white rounded-xl p-4 mb-4 border border-blue-100">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-600" style={{ fontWeight: 600 }}>Giá chào của bạn</span>
-                  <motion.span key={bidPrice} initial={{ scale: 1.2 }} animate={{ scale: 1 }}
-                    className="text-blue-600" style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-                    {fmt(bidPrice)}
-                  </motion.span>
-                </div>
-
-                <input type="range"
-                  min={job.priceMin} max={job.priceMax}
-                  step={10000} value={bidPrice}
-                  onChange={e => setBidPrice(Number(e.target.value))}
-                  className="w-full accent-blue-600 mb-2"
-                  style={{ cursor: 'pointer' }}
-                />
-
-                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-                  <div className="flex flex-col items-center">
-                    <span className="text-green-600" style={{ fontWeight: 600 }}>{fmt(job.priceMin)}</span>
-                    <span>Tối thiểu</span>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* ── MAIN COLUMN (8 cols) ── */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-200/80 shadow-sm overflow-hidden">
+            {/* Visual Header: Photography Carousel OR Fallback Illustrated Banner */}
+            {hasImages ? (
+              <div className="mb-6">
+                <div className="relative w-full h-64 sm:h-80 rounded-2xl overflow-hidden bg-gray-950 border border-gray-100 group">
+                  <img
+                    src={images[activeImageIndex]}
+                    alt={`Ảnh công việc ${activeImageIndex + 1}`}
+                    onClick={() => setLightboxOpen(true)}
+                    className="w-full h-full object-contain cursor-zoom-in transition-transform duration-300 group-hover:scale-[1.02]"
+                  />
+                  <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full pointer-events-none">
+                    {activeImageIndex + 1} / {images.length}
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-orange-500" style={{ fontWeight: 600 }}>{fmt(job.priceMax)}</span>
-                    <span>Tối đa</span>
-                  </div>
+                  <button
+                    onClick={() => setLightboxOpen(true)}
+                    className="absolute bottom-3 right-3 bg-white/90 hover:bg-white text-gray-800 p-2 rounded-xl shadow-lg transition opacity-0 group-hover:opacity-100"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => setActiveImageIndex(prev => (prev - 1 + images.length) % images.length)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-2 rounded-full shadow-md transition"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setActiveImageIndex(prev => (prev + 1) % images.length)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-2 rounded-full shadow-md transition"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
                 </div>
-
-                {/* Competitiveness meter */}
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${competitiveness.bg}`}>
-                  <FlameKindling className={`w-4 h-4 flex-shrink-0 ${competitiveness.color}`} />
-                  <div className="flex-1">
-                    <p className={`text-xs ${competitiveness.color}`} style={{ fontWeight: 600 }}>{competitiveness.label}</p>
-                    <p className="text-gray-500 text-xs">AI: giá thấp hơn → điểm cao hơn 35%</p>
+                {images.length > 1 && (
+                  <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar">
+                    {images.map((img, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveImageIndex(idx)}
+                        className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 border-2 transition ${
+                          activeImageIndex === idx ? 'border-orange-500 shadow-md scale-95' : 'border-gray-200 opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
                   </div>
+                )}
+              </div>
+            ) : (
+              /* Illustrated Category Motif Banner when no uploaded images */
+              <div className={`mb-6 w-full h-44 rounded-2xl bg-gradient-to-br ${catStyle.bannerBg} flex flex-col items-center justify-center relative overflow-hidden border border-orange-100`}>
+                <div className="w-20 h-20 rounded-3xl bg-white/90 backdrop-blur-md shadow-lg border border-white flex items-center justify-center text-4xl mb-2">
+                  <span>{task.categoryIcon || catStyle.icon}</span>
                 </div>
+                <span className="text-xs font-extrabold uppercase tracking-widest text-orange-600">
+                  {task.categoryName || task.field?.name || 'SnapOn Task'}
+                </span>
               </div>
+            )}
 
-              <textarea value={note} onChange={e => setNote(e.target.value)}
-                placeholder="Lời giới thiệu ngắn (không bắt buộc)..." rows={2}
-                className="w-full bg-white border border-blue-200 rounded-xl px-4 py-3 text-sm text-gray-700 resize-none outline-none focus:ring-2 focus:ring-blue-300 mb-3" />
-
-              <div className="flex gap-2">
-                <button onClick={() => setShowApplyForm(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 transition" style={{ fontWeight: 500 }}>
-                  Hủy
-                </button>
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={handleApply}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm flex items-center justify-center gap-2 hover:bg-blue-700 transition"
-                  style={{ fontWeight: 700 }}>
-                  <Send className="w-4 h-4" /> Gửi đơn — {fmt(bidPrice)}
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-
-      {/* Expired / already filled */}
-      {job.status === 'expired' && !alreadyApplied && !applied && (
-        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 text-center">
-          <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500 text-sm" style={{ fontWeight: 600 }}>Việc này đã hết hạn</p>
-          <Link to="/worker" className="mt-3 inline-block text-blue-500 text-sm">← Tìm việc khác</Link>
-        </div>
-      )}
-      {job.status === 'matched' && !alreadyApplied && !applied && !isMatched && (
-        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 text-center">
-          <CheckCircle2 className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-          <p className="text-gray-500 text-sm" style={{ fontWeight: 600 }}>Việc này đã có người nhận</p>
-          <Link to="/worker" className="mt-3 inline-block text-blue-500 text-sm">← Tìm việc khác</Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  HIRER VIEW
-// ═════════════════════════════════════════════════════════════
-function HirerJobDetailView() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { jobs, matchJob, closeBidding, completeJob, deleteJob, updateJob, hirerWallet } = useApp();
-  const [manualPicked, setManualPicked] = useState(false);
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
-  const [showMap, setShowMap] = useState(false);
-  const [completed, setCompleted] = useState(false);
-  const [pulse, setPulse] = useState(false);
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [showAlgoDetails, setShowAlgoDetails] = useState(false);
-  const [profileWorkerId, setProfileWorkerId] = useState<string | null>(null);
-  const [walletError, setWalletError] = useState<string | null>(null);
-
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editPriceMin, setEditPriceMin] = useState(0);
-  const [editPriceMax, setEditPriceMax] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  const job = jobs.find(j => j.id === id);
-
-  useEffect(() => {
-    if (job) {
-      setEditTitle(job.title || '');
-      setEditDesc(job.description || '');
-      setEditPriceMin(job.priceMin || 0);
-      setEditPriceMax(job.priceMax || 0);
-    }
-  }, [job]);
-
-  useEffect(() => {
-    if (!id || !job) return;
-    const token = localStorage.getItem('firebaseToken');
-    if (!token) return;
-
-    api.get(`/tasks/${id}/applications`)
-      .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const mappedApps = res.data.data.map((app: any) => ({
-            id: app.id,
-            workerId: app.tasker_id,
-            name: app.tasker_name || 'Tasker',
-            avatar: app.tasker_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.tasker_id}`,
-            lat: parseFloat(app.latitude || 10.7769),
-            lng: parseFloat(app.longitude || 106.7009),
-            distance: parseFloat(app.distance || 0),
-            rating: parseFloat(app.average_rating || 5.0),
-            completedJobs: parseInt(app.completed_jobs || 0),
-            skills: app.skills || [],
-            appliedAt: new Date(app.created_at).getTime(),
-            note: app.message || '',
-            bidPrice: parseFloat(app.bid_price || 0)
-          }));
-
-          job.applicants = mappedApps;
-          if (job.status === 'matched' && mappedApps.length > 0 && !job.aiMatchId) {
-            job.aiMatchId = mappedApps[0]?.workerId;
-          }
-        }
-      })
-      .catch(() => {});
-  }, [id, job]);
-
-  const handleConfirmDelete = async () => {
-    if (!job) return;
-    setIsDeleting(true);
-    const success = await deleteJob(job.id);
-    setIsDeleting(false);
-    if (success) {
-      navigate('/profile', { replace: true });
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    if (!job) return;
-    setIsSavingEdit(true);
-    await updateJob(job.id, {
-      title: editTitle,
-      description: editDesc,
-      priceMin: editPriceMin,
-      priceMax: editPriceMax,
-    });
-    setIsSavingEdit(false);
-    setShowEditModal(false);
-  };
-
-  useEffect(() => {
-    if (!job) return;
-    setPulse(true);
-    const t = setTimeout(() => setPulse(false), 500);
-    return () => clearTimeout(t);
-  }, [job?.applicants.length]);
-
-  if (!job) return <NotFound />;
-
-  const isActive    = job.status === 'active' && job.expiresAt > Date.now();
-  const isMatched   = job.status === 'matched';
-  const isCompleted = job.status === 'completed';
-
-  const aiWinner = job.applicants.find(a => a.workerId === job.aiMatchId);
-  const allMarkers = job.applicants.map(a => ({
-    lat: a.lat, lng: a.lng, label: a.name,
-    color: a.workerId === job.aiMatchId ? 'green' : 'blue',
-  }));
-
-  const handleManualMatch = (workerId: string) => {
-    const applicant = job.applicants.find(a => a.workerId === workerId);
-    const cost = applicant?.bidPrice ?? job.price;
-    if (hirerWallet < cost) {
-      setWalletError(`Số dư ví không đủ! Cần ${fmt(cost)} nhưng ví chỉ còn ${fmt(hirerWallet)}.`);
-      return;
-    }
-    setWalletError(null);
-    setSelectedWorkerId(workerId);
-    setManualPicked(true);
-    matchJob(job.id, workerId);
-  };
-
-  const handleCloseBidding = () => {
-    // Pre-check: estimate lowest bid
-    const lowestBid = Math.min(...job.applicants.map(a => a.bidPrice));
-    if (hirerWallet < lowestBid) {
-      setWalletError(`Số dư ví không đủ! Cần ít nhất ${fmt(lowestBid)} nhưng ví chỉ còn ${fmt(hirerWallet)}.`);
-      return;
-    }
-    setWalletError(null);
-    setClosing(true);
-    setTimeout(() => {
-      closeBidding(job.id);
-      setClosing(false);
-      setShowCloseConfirm(false);
-    }, 1800);
-  };
-
-  const handleComplete = () => {
-    completeJob(job.id);
-    setCompleted(true);
-  };
-
-  // Preview the scoring for the current applicants (before closing)
-  const previewScored = job.applicants.length >= 2 ? scoreApplicants(job) : null;
-
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-6 pb-24 md:pb-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1">
-          <span className="text-xs text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full" style={{ fontWeight: 600 }}>🏠 Quản lý</span>
-          <h1 className="text-gray-900 mt-0.5" style={{ fontWeight: 700, fontSize: '1.1rem' }}>{job.title}</h1>
-        </div>
-        <span className={`px-3 py-1.5 rounded-full text-xs border ${
-          job.status === 'active'    ? 'bg-green-50 text-green-600 border-green-200' :
-          job.status === 'matched'   ? 'bg-blue-50 text-blue-600 border-blue-200' :
-          job.status === 'completed' ? 'bg-purple-50 text-purple-600 border-purple-200' :
-          'bg-gray-100 text-gray-500'
-        }`} style={{ fontWeight: 600 }}>
-          {job.status === 'active' ? '🟢 Đang tuyển' : job.status === 'matched' ? '✅ Đã khớp' : job.status === 'completed' ? '🏆 Hoàn thành' : '⏸ Hết hạn'}
-        </span>
-      </div>
-
-      {/* Wallet Error Alert Banner */}
-      {walletError && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3 shadow-sm animate-pulse">
-          <div className="flex items-center gap-2.5 text-sm text-red-700 font-semibold">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <span>{walletError}</span>
-          </div>
-          <Link
-            to="/profile"
-            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex-shrink-0 shadow-sm"
-          >
-            💳 Nạp tiền ngay
-          </Link>
-        </div>
-      )}
-
-      {/* Countdown */}
-      {job.status === 'active' && (
-        <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl p-5 mb-4 text-center shadow-lg">
-          <p className="text-orange-100 text-xs mb-2" style={{ fontWeight: 500 }}>⚡ Thời gian nhận đơn còn lại</p>
-          <CountdownTimer expiresAt={job.expiresAt} size="lg" />
-          <div className="flex items-center justify-center gap-2 mt-3 text-orange-200 text-xs">
-            <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 1, repeat: Infinity }}
-              className="w-1.5 h-1.5 bg-green-300 rounded-full" />
-            AI đang tìm kiếm người gần nhất
-          </div>
-        </div>
-      )}
-
-      {/* Edit & Delete Action Bar for Hirer */}
-      {job.status === 'active' && (
-        <div className="mb-4">
-          {job.applicants.length === 0 ? (
-            <div className="bg-orange-50/60 border border-orange-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-              <div className="flex items-center gap-2 text-xs text-orange-800">
-                <span className="text-base flex-shrink-0">💡</span>
-                <span>Chưa có ứng viên. Bạn có thể chỉnh sửa yêu cầu công việc hoặc hủy bài đăng này.</span>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-                <button
-                  onClick={() => setShowEditModal(true)}
-                  className="px-3.5 py-2 rounded-xl text-xs bg-white border border-orange-300 text-orange-700 hover:bg-orange-100 transition font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-3.5 py-2 rounded-xl text-xs bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Hủy bài
-                </button>
-              </div>
+            {/* Badges row */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${catStyle.bg} ${catStyle.text}`}>
+                {task.categoryName || task.field?.name || 'Việc vặt'}
+              </span>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                task.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                task.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                task.status === 'COMPLETED' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {task.status === 'OPEN' ? '🟢 Đang mở tuyển' :
+                 task.status === 'IN_PROGRESS' ? '🔵 Đang thực hiện' :
+                 task.status === 'COMPLETED' ? '🟣 Đã hoàn thành' : 'Đã đóng'}
+              </span>
+              <span className="text-xs font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                {workModeLabel}
+              </span>
+              {task.postType === 'SERVICE_OFFER' ? (
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  Thợ tự do
+                </span>
+              ) : (
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  Tuyển người làm
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800 leading-relaxed font-semibold">
-                Công việc đã có <strong className="text-amber-900">{job.applicants.length} ứng viên</strong> nộp đơn. Để bảo vệ quyền lợi ứng viên, bạn không thể chỉnh sửa hoặc hủy bài đăng này.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Status banners */}
-      <AnimatePresence>
-        {(manualPicked || (isMatched && !completed)) && !isCompleted && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-green-50 border border-green-200 rounded-2xl p-5 mb-4">
-            <div className="flex items-center gap-3 mb-3">
-              <CheckCheck className="w-8 h-8 text-green-500" />
+            <h1 className="text-gray-950 font-black text-2xl md:text-3xl leading-tight mb-4">
+              {task.title}
+            </h1>
+
+            {/* Price Banner */}
+            <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 rounded-2xl p-5 border border-orange-200/80 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="text-green-700" style={{ fontWeight: 700 }}>Đã xác nhận!</p>
-                <p className="text-green-600 text-sm">
-                  {job.applicants.find(a => a.workerId === (selectedWorkerId || job.aiMatchId))?.name} đang trên đường.
-                  Giá chốt: <strong>{fmt(job.price)}</strong>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Mức thù lao {unitLabel}</p>
+                <p className="text-orange-600 font-black text-2xl md:text-3xl">
+                  {fmt(task.budgetMin)} – {fmt(task.budgetMax)}
                 </p>
               </div>
-            </div>
-            <button onClick={handleComplete}
-              className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm transition flex items-center justify-center gap-2"
-              style={{ fontWeight: 600 }}>
-              <CheckCircle2 className="w-5 h-5" /> Xác nhận hoàn thành & Thanh toán
-            </button>
-          </motion.div>
-        )}
-        {(completed || isCompleted) && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-purple-50 border border-purple-200 rounded-3xl p-5 mb-5 shadow-sm">
-            <div className="text-center mb-4">
-              <PartyPopper className="w-10 h-10 text-purple-500 mx-auto mb-2 animate-bounce" />
-              <h3 className="text-purple-900 font-extrabold text-lg">Công việc đã hoàn thành! 🎉</h3>
-              <p className="text-purple-600 text-xs mt-0.5">
-                Đã thanh toán <strong className="text-purple-900">{fmt(job.price)}</strong> cho người thực hiện. Cảm ơn bạn đã sử dụng SnapOn!
-              </p>
-            </div>
-
-            {/* Worker Profile Card for viewing profile */}
-            {(() => {
-              const matchedApplicant = job.applicants.find(a => a.workerId === (selectedWorkerId || job.aiMatchId))
-                || job.applicants[0]
-                || (job as any).assignedWorker;
-
-              const workerId = matchedApplicant?.workerId || matchedApplicant?.id || job.aiMatchId || 'completed-worker';
-              const workerInfo = {
-                workerId: workerId,
-                name: matchedApplicant?.name || aiWinner?.name || 'hai ho',
-                avatar: matchedApplicant?.avatar || matchedApplicant?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(matchedApplicant?.name || workerId)}`,
-                rating: matchedApplicant?.rating || 5.0,
-                completedJobs: matchedApplicant?.completedJobs || 12,
-              };
-
-              return (
-                <>
-                  <div
-                    onClick={() => setProfileWorkerId(workerId)}
-                    className="bg-white hover:bg-purple-50/60 transition cursor-pointer rounded-2xl border border-purple-100 p-4 shadow-sm flex items-center gap-4 group"
-                  >
-                    <img
-                      src={workerInfo.avatar}
-                      alt={workerInfo.name}
-                      className="w-14 h-14 rounded-full border-2 border-purple-300 object-cover flex-shrink-0 bg-purple-50 group-hover:scale-105 transition-transform"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-purple-600 transition-colors">
-                          {workerInfo.name}
-                        </h4>
-                        <span className="text-[11px] bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full font-bold flex-shrink-0">
-                          ✓ Đã hoàn thành
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 font-medium">
-                        <span className="flex items-center gap-1 text-amber-500 font-bold">
-                          ⭐ {((workerInfo as any).rating || 5.0).toFixed(1)}
-                        </span>
-                        <span>•</span>
-                        <span>{(workerInfo as any).completedJobs || 12} công việc hoàn thành</span>
-                      </div>
-                      <p className="text-[11px] text-purple-600 font-semibold mt-1 flex items-center gap-1">
-                        👤 Nhấp để xem hồ sơ cá nhân →
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Dedicated modal for completed worker if not in applicants array */}
-                  {!job.applicants.some(a => a.workerId === workerId) && (
-                    <UserProfileModal
-                      isOpen={profileWorkerId === workerId}
-                      onClose={() => setProfileWorkerId(null)}
-                      profile={{
-                        type: 'worker',
-                        id: workerId,
-                        name: workerInfo.name,
-                        avatar: workerInfo.avatar,
-                        rating: workerInfo.rating || 5.0,
-                        reviewCount: 15,
-                        completedJobs: workerInfo.completedJobs || 12,
-                        skills: ['Nhiệt tình', 'Chuyên nghiệp', 'Online 24/7'],
-                        bio: `Người làm việc uy tín trên SnapOn với ${(workerInfo as any).completedJobs || 12} công việc đã hoàn thành thành công.`,
-                        responseTime: '< 5 phút',
-                        satisfactionRate: 99,
-                        priceMin: job.priceMin,
-                        priceMax: job.priceMax,
-                        area: 'Toàn quốc',
-                        verified: true,
-                        recentReviews: [
-                          { name: 'Nguyễn Thanh Tâm', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=r1`, rating: 5, text: 'Làm việc nhanh, cẩn thận, đúng hạn!', date: '20/02/2026' },
-                          { name: 'Phạm Hồng Nhung', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=r2`, rating: 5, text: 'Thái độ tuyệt vời, hoàn thành xuất sắc yêu cầu.', date: '15/02/2026' },
-                        ],
-                      } as WorkerProfileData}
-                    />
-                  )}
-                </>
-              );
-            })()}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Job summary */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 mb-4">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-2xl flex-shrink-0">{job.categoryIcon}</div>
-          <div className="flex-1">
-            <p className="text-gray-900" style={{ fontWeight: 600 }}>{job.title}</p>
-            <p className="text-gray-400 text-xs">Đăng {new Date(job.postedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
-          </div>
-        </div>
-        <p className="text-gray-600 text-sm leading-relaxed mb-4">{job.description}</p>
-
-        {/* Price range */}
-        <div className="bg-gradient-to-r from-green-50 to-orange-50 border border-orange-100 rounded-xl p-4 mb-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-700" style={{ fontWeight: 600 }}>💰 Khoảng giá đã đặt</span>
-            {isMatched && <span className="text-sm text-green-600" style={{ fontWeight: 700 }}>Chốt: {fmt(job.price)}</span>}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-center">
-              <div className="text-green-600 text-sm" style={{ fontWeight: 700 }}>{fmt(job.priceMin)}</div>
-              <div className="text-xs text-gray-400">Tối thiểu</div>
-            </div>
-            <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-green-400 to-orange-500 rounded-full w-full" />
-            </div>
-            <div className="text-center">
-              <div className="text-orange-600 text-sm" style={{ fontWeight: 700 }}>{fmt(job.priceMax)}</div>
-              <div className="text-xs text-gray-400">Tối đa</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-50 rounded-xl p-3 text-center">
-            <div className="text-blue-600" style={{ fontWeight: 700 }}>{job.duration}h</div>
-            <div className="text-xs text-gray-400">Thời gian</div>
-          </div>
-          <div className={`bg-green-50 rounded-xl p-3 text-center transition-transform ${pulse ? 'scale-105' : ''}`}>
-            <div className="text-green-600" style={{ fontWeight: 700 }}>{job.applicants.length}</div>
-            <div className="text-xs text-gray-400">Ứng viên</div>
-          </div>
-          <div className="bg-orange-50 rounded-xl p-3 text-center">
-            <div className="text-orange-600 text-xs" style={{ fontWeight: 700 }}>{fmt(job.priceMin)}–{fmt(job.priceMax).replace('₫', '')}₫</div>
-            <div className="text-xs text-gray-400">Khoảng giá</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 mt-3 bg-blue-50 border border-blue-100 rounded-xl p-3 text-blue-700">
-          <span className="text-base">🌐</span>
-          <span className="text-xs font-semibold">Hình thức: Làm việc từ xa (Online toàn quốc)</span>
-        </div>
-      </div>
-
-      {/* ── CLOSE BIDDING BUTTON ── */}
-      {isActive && job.applicants.length > 0 && !manualPicked && (
-        <AnimatePresence>
-          {!showCloseConfirm ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
-              <button onClick={() => setShowCloseConfirm(true)}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition"
-                style={{ fontWeight: 700, fontSize: '1rem' }}>
-                <Target className="w-5 h-5" />
-                Chốt phiên — Để AI tự chọn người tốt nhất
-              </button>
-              <p className="text-center text-xs text-gray-400 mt-2">
-                AI phân tích: 45% khoảng cách + 35% giá thầu + 20% đánh giá
-              </p>
-            </motion.div>
-          ) : (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-purple-50 border-2 border-purple-300 rounded-2xl p-5 mb-4">
-              {!closing ? (
-                <>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Bot className="w-6 h-6 text-purple-600" />
-                    <p className="text-purple-700" style={{ fontWeight: 700 }}>Xác nhận chốt phiên?</p>
-                  </div>
-                  <p className="text-purple-600 text-sm mb-4">
-                    AI sẽ chấm điểm <strong>{job.applicants.length} ứng viên</strong> theo thuật toán và tự động chọn người tốt nhất. Bạn vẫn có thể xem lý do sau.
-                  </p>
-                  {/* Preview scores */}
-                  {previewScored && (
-                    <div className="bg-white rounded-xl p-3 mb-4 space-y-2">
-                      <p className="text-xs text-gray-500 mb-2" style={{ fontWeight: 600 }}>👁️ Xem trước điểm AI:</p>
-                      {previewScored.slice(0, 3).map((a, i) => (
-                        <div key={a.workerId} className={`flex items-center gap-2 py-2 px-2 rounded-lg ${i === 0 ? 'bg-green-50' : ''}`}>
-                          <span className={`text-xs w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${i === 0 ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`} style={{ fontWeight: 700 }}>
-                            {i + 1}
-                          </span>
-                          <img src={a.avatar} className="w-7 h-7 rounded-full flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-900 truncate" style={{ fontWeight: 600 }}>{a.name}</span>
-                              {i === 0 && <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ fontWeight: 600 }}>🏆 Winner</span>}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                              <span>📍 {a.distance}km</span>
-                              <span>💰 {fmt(a.bidPrice)}</span>
-                              <span>⭐ {a.rating}</span>
-                            </div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className={`text-sm ${i === 0 ? 'text-green-600' : 'text-gray-500'}`} style={{ fontWeight: 800 }}>
-                              {pct(a.aiScore ?? 0)}
-                            </div>
-                            <div className="text-xs text-gray-400">điểm</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button onClick={() => setShowCloseConfirm(false)}
-                      className="flex-1 py-3 rounded-xl border border-purple-200 text-purple-600 text-sm hover:bg-purple-50 transition" style={{ fontWeight: 500 }}>
-                      Chưa vội
-                    </button>
-                    <button onClick={handleCloseBidding}
-                      className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm flex items-center justify-center gap-2 transition" style={{ fontWeight: 700 }}>
-                      <Zap className="w-4 h-4" fill="currentColor" /> Chốt ngay!
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-4">
-                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full mx-auto mb-3" />
-                  <p className="text-purple-700" style={{ fontWeight: 700 }}>AI đang phân tích...</p>
-                  <p className="text-purple-500 text-sm mt-1">Chấm điểm khoảng cách · giá thầu · đánh giá</p>
+              {task.applicationDeadline && task.status === 'OPEN' && (
+                <div className="sm:text-right">
+                  <p className="text-xs font-medium text-gray-500 mb-1">Thời hạn nhận đơn</p>
+                  <CountdownTimer expiresAt={task.applicationDeadline} size="md" />
                 </div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
+            </div>
 
-      {/* Applicant list — HIRER ONLY (bids visible) */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-gray-900 flex items-center gap-2" style={{ fontWeight: 700 }}>
-            <Users className="w-5 h-5 text-orange-500" />
-            Danh sách ứng viên
-            <span className="text-sm text-gray-400 ml-1" style={{ fontWeight: 400 }}>({job.applicants.length})</span>
-          </h2>
-          {job.applicants.length >= 2 && isActive && (
-            <button onClick={() => setShowAlgoDetails(!showAlgoDetails)}
-              className="flex items-center gap-1 text-xs text-purple-500 hover:text-purple-700 transition">
-              <BarChart3 className="w-3.5 h-3.5" />
-              {showAlgoDetails ? 'Ẩn điểm AI' : 'Xem điểm AI'}
-            </button>
-          )}
-        </div>
-
-        {isActive && job.applicants.length === 0 && (
-          <div className="text-center py-10">
-            <div className="text-4xl mb-3">⏳</div>
-            <p className="text-gray-400 text-sm">Chưa có ứng viên. AI đang tìm kiếm...</p>
-          </div>
-        )}
-
-        {/* Wallet error banner */}
-        {walletError && (
-          <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-            <p className="text-red-600 text-xs" style={{ fontWeight: 600 }}>{walletError}</p>
-            <button onClick={() => setWalletError(null)} className="ml-auto text-red-400 hover:text-red-600">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </motion.div>
-        )}
-
-        <div className="space-y-3">
-          {job.applicants.map((applicant, idx) => {
-            const isWinner   = applicant.workerId === job.aiMatchId;
-            const isSelected = applicant.workerId === selectedWorkerId;
-            const scored     = previewScored?.find(s => s.workerId === applicant.workerId);
-            const rank       = previewScored ? previewScored.findIndex(s => s.workerId === applicant.workerId) : idx;
-
-            return (
-              <motion.div key={applicant.workerId}
-                initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.07 }}
-                className={`rounded-xl border p-4 transition-all ${
-                  isSelected ? 'border-green-400 bg-green-50' :
-                  ((isMatched || isCompleted) && isWinner) ? 'border-blue-400 bg-blue-50' :
-                  rank === 0 && showAlgoDetails ? 'border-purple-300 bg-purple-50/30' :
-                  'border-gray-100 bg-white'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="relative flex-shrink-0">
-                    <img src={applicant.avatar} alt={applicant.name}
-                      className={`w-11 h-11 rounded-full border-2 ${
-                        ((isMatched || isCompleted) && isWinner) ? 'border-blue-400' :
-                        rank === 0 && showAlgoDetails ? 'border-purple-400' : 'border-gray-200'
-                      } bg-gray-100`}
-                    />
-                    <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-white border border-white ${
-                      rank === 0 && showAlgoDetails ? 'bg-purple-500' : 'bg-gray-600'
-                    }`} style={{ fontSize: '9px', fontWeight: 700 }}>
-                      {rank + 1}
-                    </div>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-gray-900 text-sm" style={{ fontWeight: 700 }}>{applicant.name}</span>
-                      {((isMatched || isCompleted) && isWinner) && (
-                        <span className="flex items-center gap-1 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full" style={{ fontWeight: 600 }}>
-                          <CheckCheck className="w-3 h-3" /> {isCompleted ? 'Đã hoàn thành việc' : 'Được chọn'}
-                        </span>
-                      )}
-                      {rank === 0 && showAlgoDetails && !isMatched && (
-                        <span className="flex items-center gap-1 text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full" style={{ fontWeight: 600 }}>
-                          <Bot className="w-3 h-3" /> AI dự đoán #1
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-1 flex-wrap">
-                      <span className="flex items-center gap-1 text-yellow-500">
-                        <Star className="w-3 h-3" fill="currentColor" />
-                        <span style={{ fontWeight: 600 }}>{applicant.rating}</span>
-                      </span>
-                      <span className="flex items-center gap-1"><Award className="w-3 h-3" />{applicant.completedJobs} việc</span>
-                      <span className="text-blue-500" style={{ fontWeight: 600 }}>📍 {applicant.distance} km</span>
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(applicant.appliedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-
-                    {/* BID PRICE — only visible to hirer */}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ${
-                        rank === 0 && showAlgoDetails ? 'bg-green-100 text-green-700' : 'bg-orange-50 text-orange-600'
-                      }`} style={{ fontWeight: 700 }}>
-                        <TrendingDown className="w-3 h-3" />
-                        Giá chào: {fmt(applicant.bidPrice)}
-                        {applicant.bidPrice === job.priceMin && (
-                          <span className="text-green-600 ml-0.5">↓ Thấp nhất</span>
-                        )}
-                      </div>
-
-                      {/* Bid visual within range */}
-                      <div className="flex items-center gap-1 flex-1 min-w-[80px]">
-                        <TrendingDown className="w-3 h-3 text-green-400 flex-shrink-0" />
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-orange-400 rounded-full"
-                            style={{ width: `${Math.max(5, ((applicant.bidPrice - job.priceMin) / (job.priceMax - job.priceMin || 1)) * 100)}%` }} />
-                        </div>
-                        <TrendingUp className="w-3 h-3 text-orange-400 flex-shrink-0" />
-                      </div>
-                    </div>
-
-                    {applicant.note && (
-                      <p className="text-gray-500 text-xs mt-1.5 italic bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        "{applicant.note}"
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {applicant.skills.map(s => (
-                        <span key={s} className="text-xs bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded-full">{s}</span>
-                      ))}
-                    </div>
-
-                    {/* AI Score breakdown (shown when "Xem điểm AI") */}
-                    {showAlgoDetails && applicant.aiBreakdown && (
-                      <div className="mt-2 bg-white rounded-lg p-2.5 border border-purple-100 space-y-1.5">
-                        <ScoreBar label="📍 Khoảng cách" value={applicant.aiBreakdown.distScore}   color="#8b5cf6" />
-                        <ScoreBar label="💰 Giá thầu"    value={applicant.aiBreakdown.priceScore}  color="#f97316" />
-                        <ScoreBar label="⭐ Đánh giá"    value={applicant.aiBreakdown.ratingScore} color="#eab308" />
-                        <div className="flex items-center justify-between pt-1 border-t border-purple-50 mt-1">
-                          <span className="text-xs text-purple-600" style={{ fontWeight: 700 }}>Tổng điểm AI</span>
-                          <span className="text-purple-600" style={{ fontWeight: 800 }}>{pct(applicant.aiScore ?? 0)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex flex-col gap-1.5 flex-shrink-0">
-                    {!manualPicked && isActive && (
-                      <button onClick={() => handleManualMatch(applicant.workerId)}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-orange-500 hover:bg-orange-600 text-white transition" style={{ fontWeight: 600 }}>
-                        Chọn ngay
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setProfileWorkerId(applicant.workerId)}
-                      className="px-3 py-1.5 rounded-lg text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 transition flex items-center justify-center gap-1"
-                      style={{ fontWeight: 600 }}
-                    >
-                      <User className="w-3 h-3" /> Hồ sơ
-                    </button>
-                  </div>
+            {/* ── GRID SUMMARY (LIKE MOBILE APP) ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+              <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-1.5 text-orange-500 text-xs font-bold mb-1">
+                  <Calendar className="w-4 h-4" />
+                  <span>Hạn nhận hồ sơ</span>
                 </div>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        {/* Worker profile modals */}
-        {job.applicants.map(applicant => (
-          <UserProfileModal
-            key={applicant.workerId}
-            isOpen={profileWorkerId === applicant.workerId}
-            onClose={() => setProfileWorkerId(null)}
-            profile={{
-              type: 'worker',
-              id: applicant.workerId,
-              name: applicant.name,
-              avatar: applicant.avatar,
-              rating: applicant.rating,
-              reviewCount: Math.max(3, Math.floor(applicant.completedJobs * 0.6)),
-              completedJobs: applicant.completedJobs,
-              skills: applicant.skills,
-              bio: `Có ${applicant.completedJobs} việc đã hoàn thành với đánh giá ${applicant.rating}/5. Luôn đúng giờ và tận tâm với công việc được giao.`,
-              responseTime: '< 5 phút',
-              satisfactionRate: 98,
-              distance: applicant.distance,
-              bidPrice: applicant.bidPrice,
-              priceMin: job.priceMin,
-              priceMax: job.priceMax,
-              area: 'TP.HCM',
-              verified: true,
-              recentReviews: [
-                { name: 'Nguyễn Thanh Tâm', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${applicant.workerId}a`, rating: 5, text: 'Làm việc nhanh, cẩn thận, đúng giờ. Chắc chắn thuê lại!', date: '20/02/2026' },
-                { name: 'Phạm Hồng Nhung', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${applicant.workerId}b`, rating: 4, text: 'Thái độ tốt, hoàn thành đúng yêu cầu đặt ra.', date: '15/02/2026' },
-                { name: 'Trần Văn Khoa',   avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${applicant.workerId}c`, rating: 5, text: 'Xuất sắc! Vượt mong đợi. Highly recommended!', date: '10/02/2026' },
-              ],
-            } as WorkerProfileData}
-          />
-        ))}
-
-        {/* Confirm complete for matched state */}
-        {isMatched && !manualPicked && !completed && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="bg-blue-50 rounded-xl p-4 flex items-center gap-3 mb-3">
-              <CheckCircle2 className="w-8 h-8 text-blue-500 flex-shrink-0" />
-              <div>
-                <p className="text-blue-700 text-sm" style={{ fontWeight: 700 }}>
-                  {aiWinner?.name} đang thực hiện
+                <p className="font-extrabold text-gray-900 text-xs truncate">
+                  {task.applicationDeadline ? new Date(task.applicationDeadline).toLocaleDateString('vi-VN') : 'Không thời hạn'}
                 </p>
-                <p className="text-blue-500 text-xs">Giá chốt: <strong>{fmt(job.price)}</strong></p>
+              </div>
+
+              <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-1.5 text-blue-500 text-xs font-bold mb-1">
+                  <MapPin className="w-4 h-4" />
+                  <span>Hình thức</span>
+                </div>
+                <p className="font-extrabold text-gray-900 text-xs truncate">
+                  {task.workMode === 'REMOTE' ? 'Online' : task.workMode === 'ONSITE' ? 'Tại chỗ' : 'Linh hoạt'}
+                </p>
+              </div>
+
+              <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-1.5 text-purple-500 text-xs font-bold mb-1">
+                  <Users className="w-4 h-4" />
+                  <span>Số lượng tuyển</span>
+                </div>
+                <p className="font-extrabold text-gray-900 text-xs truncate">
+                  {task.peopleNeeded || 1} người
+                </p>
               </div>
             </div>
-            <button onClick={handleComplete}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm transition flex items-center justify-center gap-2"
-              style={{ fontWeight: 600 }}>
-              <CheckCircle2 className="w-5 h-5" /> Xác nhận hoàn thành — Thanh toán
-            </button>
-            {walletError && (
-              <p className="text-red-500 text-xs mt-2">{walletError}</p>
+
+            {/* Description */}
+            <div className="mb-6">
+              <h3 className="text-gray-900 font-extrabold text-base mb-2">Mô tả công việc chi tiết</h3>
+              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line bg-gray-50/60 p-4 rounded-2xl border border-gray-100">
+                {task.description}
+              </p>
+            </div>
+
+            {/* ── REQUIREMENTS SECTION (LIKE MOBILE APP) ── */}
+            <div className="mb-6">
+              <h3 className="text-gray-900 font-extrabold text-base mb-3 flex items-center gap-2">
+                <Award className="w-4 h-4 text-orange-500" />
+                <span>{task.postType === 'SERVICE_OFFER' ? 'Thông tin kỹ năng & kinh nghiệm' : 'Yêu cầu đối với ứng viên'}</span>
+              </h3>
+
+              <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 overflow-hidden bg-white text-xs">
+                <div className="flex items-center justify-between p-3.5 bg-gray-50/40">
+                  <span className="text-gray-500 font-medium">Kinh nghiệm yêu cầu</span>
+                  <span className="font-bold text-gray-900">{EXPERIENCE_MAP[task.experienceLevel || ''] || 'Không yêu cầu'}</span>
+                </div>
+                <div className="flex items-center justify-between p-3.5">
+                  <span className="text-gray-500 font-medium">Trình độ học vấn</span>
+                  <span className="font-bold text-gray-900">{EDUCATION_MAP[task.educationLevel || ''] || 'Không yêu cầu'}</span>
+                </div>
+                {task.postType !== 'SERVICE_OFFER' && (
+                  <>
+                    <div className="flex items-center justify-between p-3.5 bg-gray-50/40">
+                      <span className="text-gray-500 font-medium">Giới tính</span>
+                      <span className="font-bold text-gray-900">{GENDER_MAP[task.genderRequirement || ''] || 'Không yêu cầu'}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3.5">
+                      <span className="text-gray-500 font-medium">Độ tuổi</span>
+                      <span className="font-bold text-gray-900">
+                        {task.minAge && task.maxAge ? `${task.minAge} – ${task.maxAge} tuổi` : 'Không yêu cầu'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Hashtags */}
+            {task.hashtags && task.hashtags.length > 0 && (
+              <div className="mb-6 flex flex-wrap gap-2 items-center">
+                <Hash className="w-4 h-4 text-gray-400" />
+                {task.hashtags.map((tag, i) => (
+                  <span key={i} className="text-xs bg-orange-50 text-orange-600 font-bold px-3 py-1 rounded-xl">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
             )}
+
+            {/* Location & Contact Meta */}
+            <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500">
+              {task.locations && task.locations[0] && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                  <span>{task.locations[0].address}</span>
+                </div>
+              )}
+              {task.contactPhone && (
+                <div className="flex items-center gap-2 text-gray-700 font-bold">
+                  <Phone className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <span>Liên hệ: {task.contactPhone}</span>
+                </div>
+              )}
+            </div>
           </div>
-        )}
+
+          {/* 🔒 STRICT PRIVACY: Only the HIRER / POSTER sees the full applicant list */}
+          {isPoster && (
+            <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-gray-900 font-extrabold text-lg flex items-center gap-2">
+                  <Users className="w-5 h-5 text-orange-500" />
+                  <span>Danh sách ứng viên ({applications.length})</span>
+                </h3>
+
+                {task.status === 'OPEN' && applications.length > 0 && (
+                  <button
+                    onClick={handleAutoMatch}
+                    className="inline-flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-md hover:shadow-lg transition cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" /> AI Auto-Match
+                  </button>
+                )}
+              </div>
+
+              {applications.length > 0 ? (
+                <div className="space-y-3">
+                  {applications.map((app) => (
+                    <div
+                      key={app.id}
+                      className="p-4 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openUserProfile(app.taskerId, 'worker')}
+                          className="hover:opacity-80 transition flex-shrink-0"
+                        >
+                          <img
+                            src={app.taskerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.taskerId}`}
+                            alt=""
+                            className="w-12 h-12 rounded-xl bg-white border border-gray-200"
+                          />
+                        </button>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-gray-900">{app.taskerName}</span>
+                            <span className="text-xs font-bold text-yellow-500 flex items-center gap-0.5">
+                              <Star className="w-3 h-3 fill-current" /> {app.taskerRating || 5.0}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5 font-medium">{app.message || 'Sẵn sàng nhận việc!'}</p>
+                          <p className="text-xs font-bold text-orange-600 mt-1">Đề xuất: {fmt(app.bidPrice)}</p>
+                        </div>
+                      </div>
+
+                      {task.status === 'OPEN' && (
+                        <button
+                          onClick={() => handleManualMatch(app.id)}
+                          className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow whitespace-nowrap self-end sm:self-center"
+                        >
+                          Chọn thợ này ✅
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-xs text-center py-6">Chưa có ai ứng tuyển. Hãy chờ một chút nhé!</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── SIDEBAR COLUMN (4 cols) ── */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Hirer Profile Card */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm text-center">
+            <button
+              onClick={() => task.posterId && openUserProfile(task.posterId, 'hirer')}
+              className="group w-full"
+            >
+              <div className="relative inline-block mx-auto mb-3">
+                <img
+                  src={task.poster?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${task.posterName || 'Hirer'}`}
+                  alt=""
+                  className="w-20 h-20 rounded-3xl mx-auto bg-orange-100 border-2 border-white shadow-md group-hover:scale-105 transition"
+                />
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center border-2 border-white text-white">
+                  <BadgeCheck className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <h4 className="font-extrabold text-gray-900 text-lg group-hover:text-orange-600 transition">
+                {task.posterName || 'Người tuyển dụng'}
+              </h4>
+              <p className="text-xs text-gray-400 mt-0.5">Người đăng bài tuyển dụng</p>
+            </button>
+          </div>
+
+          {/* Action Box for Non-Poster / Worker */}
+          {!isPoster && (
+            <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm">
+              <h3 className="font-extrabold text-gray-900 text-base mb-4">Nộp hồ sơ ứng tuyển</h3>
+
+              {myApplication ? (
+                <div className="text-center py-4 space-y-3">
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                    <Check className="w-6 h-6" />
+                  </div>
+                  <p className="font-bold text-sm text-gray-900">Bạn đã gửi đơn ứng tuyển</p>
+                  <p className="text-xs text-gray-500 font-medium">Giá đề xuất: <strong className="text-orange-600">{fmt(myApplication.bidPrice)}</strong></p>
+                  <button
+                    onClick={handleWithdraw}
+                    className="text-xs text-red-500 font-bold hover:underline cursor-pointer"
+                  >
+                    Rút lại đơn ứng tuyển
+                  </button>
+                </div>
+              ) : task.status === 'OPEN' ? (
+                <div className="space-y-4">
+                  {applyError && <p className="text-xs text-red-500 font-medium">{applyError}</p>}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Mức thù lao mong muốn (VNĐ)</label>
+                    <input
+                      type="number"
+                      step={10000}
+                      value={bidPrice}
+                      onChange={e => setBidPrice(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-900 outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Tin nhắn giới thiệu</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Nêu ngắn gọn kinh nghiệm và thời gian bạn có thể hoàn thành..."
+                      value={note}
+                      onChange={e => setNote(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs outline-none focus:border-orange-500 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleApply}
+                    disabled={isApplying}
+                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition shadow text-sm cursor-pointer"
+                  >
+                    {isApplying ? 'Đang gửi...' : 'Gửi đơn ứng tuyển ngay 🚀'}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-gray-400 text-xs text-center py-4">Công việc này đã đóng nhận hồ sơ.</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* AI Algorithm Explanation */}
-      {job.applicants.length > 0 && (
-        <div className="mt-4 bg-gradient-to-r from-gray-50 to-purple-50 border border-purple-100 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Bot className="w-4 h-4 text-purple-500" />
-            <span className="text-purple-700 text-xs" style={{ fontWeight: 700 }}>Thuật toán AI Matching</span>
-          </div>
-          <p className="text-gray-500 text-xs leading-relaxed">
-            Điểm = <strong className="text-purple-600">45%</strong> × (1 − khoảng cách chuẩn hóa) + <strong className="text-orange-500">35%</strong> × (1 − giá thầu chuẩn hóa) + <strong className="text-yellow-600">20%</strong> × đánh giá chuẩn hóa.
-            Người có điểm cao nhất được chọn khi bạn nhấn "Chốt phiên".
-          </p>
-        </div>
+      {/* ── LIGHTBOX MODAL ── */}
+      <AnimatePresence>
+        {lightboxOpen && hasImages && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between p-4"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <div className="flex items-center justify-between text-white p-2" onClick={e => e.stopPropagation()}>
+              <span className="text-sm font-bold bg-white/20 px-3 py-1 rounded-full">
+                Ảnh {activeImageIndex + 1} / {images.length}
+              </span>
+              <button
+                onClick={() => setLightboxOpen(false)}
+                className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center relative p-2" onClick={e => e.stopPropagation()}>
+              <img
+                src={images[activeImageIndex]}
+                alt=""
+                className="max-h-[80vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+              />
+              {images.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIndex(prev => (prev - 1 + images.length) % images.length);
+                    }}
+                    className="absolute left-4 bg-white/20 hover:bg-white/40 text-white p-3 rounded-full transition"
+                  >
+                    <ChevronLeft className="w-7 h-7" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIndex(prev => (prev + 1) % images.length);
+                    }}
+                    className="absolute right-4 bg-white/20 hover:bg-white/40 text-white p-3 rounded-full transition"
+                  >
+                    <ChevronRight className="w-7 h-7" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {images.length > 1 && (
+              <div className="flex items-center justify-center gap-2 p-2 overflow-x-auto" onClick={e => e.stopPropagation()}>
+                {images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveImageIndex(idx)}
+                    className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition ${
+                      activeImageIndex === idx ? 'border-orange-500 scale-105' : 'border-white/30 opacity-60'
+                    }`}
+                  >
+                    <img src={img} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* User Profile Modal */}
+      {selectedProfile && (
+        <UserProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          profile={selectedProfile}
+        />
       )}
-
-      {/* ── Delete Confirmation Modal ── */}
-      <AnimatePresence>
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 text-center relative overflow-hidden"
-            >
-              <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
-                <Trash2 className="w-7 h-7 text-red-500" />
-              </div>
-              <h3 className="text-gray-900 font-bold text-base mb-1">Xác nhận hủy bài đăng?</h3>
-              <p className="text-gray-500 text-xs leading-relaxed mb-5">
-                Bài đăng "{job.title}" sẽ bị xóa khỏi hệ thống. Thao tác này không thể hoàn tác.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={isDeleting}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition cursor-pointer"
-                >
-                  Quay lại
-                </button>
-                <button
-                  onClick={handleConfirmDelete}
-                  disabled={isDeleting}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  {isDeleting ? 'Đang xóa...' : 'Hủy bài đăng'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Edit Task Modal ── */}
-      <AnimatePresence>
-        {showEditModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 relative overflow-hidden text-gray-800"
-            >
-              <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <Edit3 className="w-5 h-5 text-orange-500" />
-                  <h3 className="font-bold text-base text-gray-900">Chỉnh sửa bài đăng</h3>
-                </div>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-1 text-gray-400 hover:bg-gray-100 rounded-full transition cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4 text-left">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Tên công việc</label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mô tả công việc</label>
-                  <textarea
-                    rows={3}
-                    value={editDesc}
-                    onChange={(e) => setEditDesc(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300 resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Giá tối thiểu (VNĐ)</label>
-                    <input
-                      type="number"
-                      value={editPriceMin}
-                      onChange={(e) => setEditPriceMin(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Giá tối đa (VNĐ)</label>
-                    <input
-                      type="number"
-                      value={editPriceMax}
-                      onChange={(e) => setEditPriceMax(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-300"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 flex gap-2">
-                  <button
-                    onClick={() => setShowEditModal(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition cursor-pointer"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    onClick={handleSaveEdit}
-                    disabled={isSavingEdit || !editTitle.trim() || !editDesc.trim()}
-                    className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Save className="w-4 h-4" />
-                    {isSavingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  ENTRY
-// ═════════════════════════════════════════════════════════════
-export default function JobDetail() {
-  const { currentUser } = useApp();
-  return currentUser.role === 'worker' ? <WorkerJobDetailView /> : <HirerJobDetailView />;
 }

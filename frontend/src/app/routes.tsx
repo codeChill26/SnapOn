@@ -11,6 +11,7 @@ import { AdminRoot } from './pages/admin/AdminRoot';
 import Dashboard from './pages/admin/Dashboard';
 import JobsManagement from './pages/admin/JobsManagement';
 import UsersManagement from './pages/admin/UsersManagement';
+import WithdrawalsManagement from './pages/admin/WithdrawalsManagement';
 
 function RedirectHome() {
   return <Navigate to="/" replace />;
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
           { index: true, Component: Dashboard },
           { path: 'jobs', Component: JobsManagement },
           { path: 'users', Component: UsersManagement },
+          { path: 'withdrawals', Component: WithdrawalsManagement },
         ],
       },
     ],

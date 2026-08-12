@@ -9,6 +9,7 @@ import { useApp, CATEGORIES, haversineDistance, type Worker } from '../context/A
 import { JobCard } from '../components/JobCard';
 import { MapPicker } from '../components/MapPicker';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { useScrollRestore } from '../hooks/useScrollRestore';
 
 // ── Nominatim reverse geocode ──────────────────────────
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -109,6 +110,7 @@ function LocationSearchBox({ onSelect }: { onSelect: (loc: { lat: number; lng: n
 // ── Main Component ─────────────────────────────────────
 export default function WorkerDashboard() {
   const { jobs, applyToJob, workerStatus, workerCurrentJobId, currentUser, setUserRole } = useApp();
+  useScrollRestore('/worker', jobs.length > 0);
 
   useEffect(() => {
     if (currentUser.role !== 'worker') {
@@ -244,7 +246,7 @@ export default function WorkerDashboard() {
   const applyingJob = applyingJobId ? jobs.find(j => j.id === applyingJobId) : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 pb-28 md:pb-10">
+    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-6 pb-28 md:pb-10">
 
       {/* Toast notification */}
       <AnimatePresence>
@@ -578,7 +580,7 @@ export default function WorkerDashboard() {
 
       {/* ── JOB LIST ── */}
       {sortedJobs.length > 0 ? (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {sortedJobs.map(({ job, distance }, i) => (
             <motion.div
               key={job.id}

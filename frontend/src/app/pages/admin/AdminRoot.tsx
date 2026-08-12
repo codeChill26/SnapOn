@@ -1,6 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router';
-import { LayoutDashboard, Briefcase, Users, LogOut } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, Briefcase, Users, Landmark, LogOut } from 'lucide-react';
 
 export function AdminRoot() {
   const location = useLocation();
@@ -9,6 +8,7 @@ export function AdminRoot() {
     { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/admin/jobs', label: 'Quản lý Jobs', icon: Briefcase },
     { path: '/admin/users', label: 'Quản lý Users', icon: Users },
+    { path: '/admin/withdrawals', label: 'Duyệt Rút Tiền', icon: Landmark },
   ];
 
   const isActive = (path: string) => {
@@ -25,12 +25,12 @@ export function AdminRoot() {
         {/* Logo */}
         <div className="p-4 border-b border-white/10 h-16 flex items-center">
           <div className="flex items-center gap-3 min-w-max">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-lg">A</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+              <span className="text-white font-black text-lg">S</span>
             </div>
             <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 overflow-hidden whitespace-nowrap">
-              <h1 className="text-white font-bold text-xl">Admin Panel</h1>
-              <p className="text-purple-300 text-xs">SnapOn</p>
+              <h1 className="text-white font-bold text-xl">SnapOn Admin</h1>
+              <p className="text-purple-300 text-xs">Quản trị hệ thống</p>
             </div>
           </div>
         </div>
@@ -48,13 +48,13 @@ export function AdminRoot() {
                   flex items-center gap-3 px-3 py-3 rounded-xl transition-all
                   ${
                     active
-                      ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30'
-                      : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30 font-bold'
+                      : 'text-gray-300 hover:bg-white/5 hover:text-white font-medium'
                   }
                 `}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 overflow-hidden whitespace-nowrap">
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 overflow-hidden whitespace-nowrap">
                   {item.label}
                 </span>
               </Link>

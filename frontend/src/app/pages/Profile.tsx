@@ -1,1260 +1,895 @@
-import { useState, useRef, useEffect } from 'react';
-import {
-  Star, Award, MapPin, Edit3, CheckCircle2, Clock, TrendingUp,
-  Briefcase, ChevronRight, Shield, Phone, Mail, Camera,
-  ThumbsUp, Zap, Users, BarChart2, Settings, Bell,
-  Lock, ChevronDown, ChevronUp, MessageCircle, Search,
-  Filter, SlidersHorizontal, Check, X, Plus, Trash2,
-  DollarSign, CalendarDays, BadgeCheck, CornerDownRight,
-  SmilePlus, Meh, Frown, TrendingDown, Package, Landmark, CreditCard,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router';
-import { useApp, CATEGORIES } from '../context/AppContext';
+import {
+  UserCircle, Mail, Phone, MapPin, Camera, Star, Briefcase,
+  ChevronRight, Edit3, LogOut, Sparkles, Plus, X,
+  BadgeCheck, Landmark, RefreshCw, Wallet, Check,
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { useApp, Job } from '../context/AppContext';
+import { authService } from '../../services/authService';
+import { profileService } from '../../services/profileService';
+import { applicationService } from '../../services/applicationService';
+import { PublicProfile, Task, ProfileReview, TaskApplication } from '../../types';
+import { JobCard } from '../components/JobCard';
+import { WalletModal } from '../components/WalletModal';
 import { BankSelectModal } from '../components/BankSelectModal';
 
-// ─── Helper ──────────────────────────────────────────────────
 function fmt(n: number) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.0', '') + 'tr';
-  if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
-  return String(n);
+  return n.toLocaleString('vi-VN') + '₫';
 }
 
-function Stars({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' | 'lg' }) {
-  const sz = size === 'lg' ? 'w-5 h-5' : size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5';
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map(i => (
-        <Star key={i} className={`${sz} ${i <= Math.round(rating) ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" />
-      ))}
-    </div>
-  );
-}
+const DEFAULT_COVER = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920';
 
-// ─── Inline editable field ────────────────────────────────────
-function EditableField({
-  label, value, icon, onSave, type = 'text', onClickCustom
-}: {
-  label: string; value: string; icon: React.ReactNode;
-  onSave: (v: string) => void; type?: string; onClickCustom?: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
+function mapTaskToJob(task: Task): Job {
+  const isExpired = task.applicationDeadline ? new Date(task.applicationDeadline).getTime() < Date.now() : false;
+  const status: Job['status'] =
+    task.status === 'COMPLETED' ? 'completed' :
+    task.status === 'IN_PROGRESS' || task.status === 'ACCEPTED' ? 'matched' :
+    task.status === 'CANCELLED' || isExpired ? 'expired' : 'active';
 
-  const handleEdit = () => {
-    if (onClickCustom) {
-      onClickCustom();
-      return;
-    }
-    setDraft(value); setEditing(true); setTimeout(() => inputRef.current?.focus(), 50);
+  const loc = task.locations && task.locations.length > 0 ? task.locations[0] : null;
+
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    category: task.field?.slug || task.categoryId || 'others',
+    categoryIcon: task.categoryIcon || '⚡',
+    duration: 60,
+    price: task.budgetMin,
+    priceMin: task.budgetMin,
+    priceMax: task.budgetMax,
+    location: {
+      lat: loc?.lat ?? 10.7769,
+      lng: loc?.lng ?? 106.7009,
+      address: loc?.address ?? 'TP. Hồ Chí Minh',
+    },
+    postedAt: task.createdAt ? new Date(task.createdAt).getTime() : Date.now(),
+    expiresAt: task.applicationDeadline ? new Date(task.applicationDeadline).getTime() : Date.now() + 86400000,
+    status,
+    hirerName: task.posterName || task.poster?.fullName || 'Người dùng',
+    hirerAvatar: task.poster?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${task.posterId || 'Hirer'}`,
+    hirerId: task.posterId,
+    applicants: [],
+    rawTask: task,
   };
-  const handleSave = () => { onSave(draft); setEditing(false); };
-  const handleCancel = () => { setDraft(value); setEditing(false); };
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3.5 group hover:bg-gray-50/80 transition rounded-xl">
-      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-        {editing ? (
-          <input
-            ref={inputRef}
-            type={type}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }}
-            className="w-full text-sm text-gray-800 border-b-2 border-orange-400 bg-transparent outline-none pb-0.5"
-          />
-        ) : (
-          <p className="text-sm text-gray-700 truncate" style={{ fontWeight: 500 }}>{value}</p>
-        )}
-      </div>
-      {editing ? (
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button onClick={handleSave} className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center"><Check className="w-3.5 h-3.5 text-white" /></button>
-          <button onClick={handleCancel} className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center"><X className="w-3.5 h-3.5 text-gray-600" /></button>
-        </div>
-      ) : (
-        <button onClick={handleEdit} className="opacity-0 group-hover:opacity-100 transition flex-shrink-0">
-          <Edit3 className="w-3.5 h-3.5 text-gray-400 hover:text-orange-500 transition" />
-        </button>
-      )}
-    </div>
-  );
 }
 
-// ─── Rating distribution bar ──────────────────────────────────
-function RatingBar({ star, count, total, active, onClick }: { star: number; count: number; total: number; active: boolean; onClick: () => void }) {
-  const pct = total > 0 ? Math.round(count / total * 100) : 0;
-  return (
-    <button onClick={onClick} className={`flex items-center gap-2 w-full rounded-lg px-2 py-1.5 transition ${active ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}>
-      <span className="text-xs text-gray-500 w-5 text-right" style={{ fontWeight: 600 }}>{star}</span>
-      <Star className="w-3 h-3 text-yellow-400 flex-shrink-0" fill="currentColor" />
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-          className={`h-full rounded-full ${star >= 4 ? 'bg-yellow-400' : star === 3 ? 'bg-orange-400' : 'bg-red-400'}`}
-        />
-      </div>
-      <span className="text-xs text-gray-400 w-8 text-right">{count}</span>
-    </button>
-  );
-}
+export default function Profile() {
+  const {
+    currentUser,
+    firebaseUser,
+    updateProfile,
+    setUserRole,
+    logout,
+    fetchProfile,
+    hirerWallet,
+    workerWallet,
+  } = useApp();
 
-// ─── Feedback card ────────────────────────────────────────────
-interface Review {
-  id: string;
-  name: string;
-  avatar: string;
-  rating: number;
-  comment: string;
-  date: string;
-  jobTitle: string;
-  jobIcon: string;
-  jobCategory: string;
-  price: number;
-  helpful: number;
-  reply?: string;
-  tags?: string[];
-}
+  // Tab: 0 = Overview, 1 = Recruitment Posts, 2 = Service Offers, 3 = Reviews, 4 = Settings
+  const [activeTab, setActiveTab] = useState<0 | 1 | 2 | 3 | 4>(0);
 
-function FeedbackCard({ review, accentColor, onReply }: {
-  review: Review;
-  accentColor: string;
-  onReply: (id: string, text: string) => void;
-}) {
-  const [showReply, setShowReply] = useState(false);
-  const [replyText, setReplyText] = useState(review.reply || '');
-  const [helpful, setHelpful] = useState(review.helpful);
-  const [likedByMe, setLikedByMe] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  // Profile data from backend
+  const [publicData, setPublicData] = useState<PublicProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState<ProfileReview[]>([]);
+  const [recruitmentJobs, setRecruitmentJobs] = useState<Job[]>([]);
+  const [serviceOfferJobs, setServiceOfferJobs] = useState<Job[]>([]);
+  const [myApplications, setMyApplications] = useState<TaskApplication[]>([]);
 
-  const needsTruncate = review.comment.length > 120;
-  const displayText = needsTruncate && !expanded
-    ? review.comment.slice(0, 120) + '...'
-    : review.comment;
-
-  const sentimentIcon = review.rating >= 4 ? <SmilePlus className="w-4 h-4 text-green-500" />
-    : review.rating === 3 ? <Meh className="w-4 h-4 text-orange-400" />
-    : <Frown className="w-4 h-4 text-red-400" />;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow ${
-        review.rating >= 4 ? 'border-gray-100' : review.rating === 3 ? 'border-orange-100' : 'border-red-100'
-      }`}
-    >
-      {/* Left accent stripe */}
-      <div className={`h-1 ${review.rating >= 4 ? 'bg-yellow-400' : review.rating === 3 ? 'bg-orange-400' : 'bg-red-400'}`} />
-
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-start gap-3 mb-3">
-          <img src={review.avatar} alt={review.name} className="w-10 h-10 rounded-full border-2 border-gray-100 bg-gray-50 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-gray-900 text-sm" style={{ fontWeight: 700 }}>{review.name}</span>
-              {sentimentIcon}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Stars rating={review.rating} size="sm" />
-              <span className="text-yellow-600 text-xs" style={{ fontWeight: 700 }}>{review.rating}.0</span>
-              <span className="text-gray-300">·</span>
-              <span className="text-gray-400 text-xs">{review.date}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Job reference */}
-        <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 mb-3">
-          <span className="text-base">{review.jobIcon}</span>
-          <div className="flex-1 min-w-0">
-            <span className="text-xs text-gray-600 truncate block" style={{ fontWeight: 500 }}>{review.jobTitle}</span>
-            <span className="text-xs text-gray-400">{fmt(review.price)}₫</span>
-          </div>
-        </div>
-
-        {/* Comment */}
-        <p className="text-gray-700 text-sm leading-relaxed">
-          "{displayText}"
-          {needsTruncate && (
-            <button onClick={() => setExpanded(!expanded)} className="text-orange-500 ml-1 text-xs" style={{ fontWeight: 600 }}>
-              {expanded ? 'Thu gọn' : 'Đọc thêm'}
-            </button>
-          )}
-        </p>
-
-        {/* Tags */}
-        {review.tags && review.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {review.tags.map(tag => (
-              <span key={tag} className={`text-xs px-2.5 py-0.5 rounded-full border ${
-                review.rating >= 4 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-600 border-gray-200'
-              }`} style={{ fontWeight: 500 }}>
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50">
-          <button
-            onClick={() => { if (!likedByMe) { setHelpful(h => h + 1); setLikedByMe(true); } else { setHelpful(h => h - 1); setLikedByMe(false); } }}
-            className={`flex items-center gap-1.5 text-xs transition ${likedByMe ? 'text-blue-600' : 'text-gray-400 hover:text-blue-500'}`}
-          >
-            <ThumbsUp className={`w-3.5 h-3.5 ${likedByMe ? 'fill-current' : ''}`} />
-            <span style={{ fontWeight: likedByMe ? 600 : 400 }}>Hữu ích ({helpful})</span>
-          </button>
-          <button
-            onClick={() => setShowReply(!showReply)}
-            className={`flex items-center gap-1.5 text-xs transition ${showReply ? 'text-orange-500' : 'text-gray-400 hover:text-orange-500'}`}
-          >
-            <CornerDownRight className="w-3.5 h-3.5" />
-            <span style={{ fontWeight: showReply ? 600 : 400 }}>
-              {review.reply ? 'Sửa phản hồi' : 'Phản hồi'}
-            </span>
-          </button>
-        </div>
-
-        {/* Existing reply display */}
-        {review.reply && !showReply && (
-          <div className="mt-3 ml-3 pl-3 border-l-2 border-orange-200">
-            <p className="text-xs text-gray-500 mb-0.5" style={{ fontWeight: 600 }}>Phản hồi của bạn:</p>
-            <p className="text-sm text-gray-600 italic">"{review.reply}"</p>
-          </div>
-        )}
-
-        {/* Reply input */}
-        <AnimatePresence>
-          {showReply && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-3 ml-3 pl-3 border-l-2 border-orange-200">
-                <textarea
-                  value={replyText}
-                  onChange={e => setReplyText(e.target.value)}
-                  placeholder="Viết phản hồi của bạn..."
-                  rows={2}
-                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 placeholder-gray-400"
-                />
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => setShowReply(false)} className="flex-1 text-xs py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition">Huỷ</button>
-                  <button
-                    onClick={() => { onReply(review.id, replyText); setShowReply(false); }}
-                    disabled={!replyText.trim()}
-                    className="flex-1 text-xs py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition disabled:opacity-50"
-                    style={{ fontWeight: 600 }}
-                  >
-                    Gửi phản hồi
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Full Feedback Panel ──────────────────────────────────────
-function FeedbackPanel({ reviews, accentColor, onReply }: {
-  reviews: Review[];
-  accentColor: string;
-  onReply: (id: string, text: string) => void;
-}) {
-  const [filterStar, setFilterStar] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
-  const [searchQ, setSearchQ] = useState('');
-
-  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
-  const distribution = [5, 4, 3, 2, 1].map(s => ({ star: s, count: reviews.filter(r => r.rating === s).length }));
-
-  const filtered = reviews
-    .filter(r => filterStar === null || r.rating === filterStar)
-    .filter(r => !searchQ || r.name.toLowerCase().includes(searchQ.toLowerCase()) || r.comment.toLowerCase().includes(searchQ.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === 'newest')  return b.id.localeCompare(a.id);
-      if (sortBy === 'oldest')  return a.id.localeCompare(b.id);
-      if (sortBy === 'highest') return b.rating - a.rating;
-      return a.rating - b.rating;
-    });
-
-  const positiveCount = reviews.filter(r => r.rating >= 4).length;
-  const positiveRate  = reviews.length > 0 ? Math.round(positiveCount / reviews.length * 100) : 0;
-
-  return (
-    <div className="space-y-4">
-      {/* Summary card */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-5">
-          <div className="flex gap-6 items-start">
-            {/* Big score */}
-            <div className="text-center flex-shrink-0">
-              <div className="text-gray-900" style={{ fontWeight: 900, fontSize: '3.5rem', lineHeight: 1 }}>{avgRating.toFixed(1)}</div>
-              <Stars rating={Math.round(avgRating)} size="md" />
-              <div className="text-gray-400 text-xs mt-1.5">{reviews.length} đánh giá</div>
-              <div className={`mt-2 text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${positiveRate >= 80 ? 'bg-green-100 text-green-700' : positiveRate >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`} style={{ fontWeight: 600 }}>
-                {positiveRate >= 80 ? <SmilePlus className="w-3 h-3" /> : positiveRate >= 60 ? <Meh className="w-3 h-3" /> : <Frown className="w-3 h-3" />}
-                {positiveRate}% hài lòng
-              </div>
-            </div>
-
-            {/* Distribution bars */}
-            <div className="flex-1 space-y-0.5">
-              {distribution.map(d => (
-                <RatingBar
-                  key={d.star}
-                  star={d.star}
-                  count={d.count}
-                  total={reviews.length}
-                  active={filterStar === d.star}
-                  onClick={() => setFilterStar(filterStar === d.star ? null : d.star)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick stats row */}
-        <div className="grid grid-cols-3 border-t border-gray-50">
-          {[
-            { label: '5★', value: distribution.find(d => d.star === 5)?.count ?? 0, color: 'text-yellow-500' },
-            { label: 'TB', value: avgRating.toFixed(1), color: 'text-gray-700' },
-            { label: 'Hài lòng', value: positiveRate + '%', color: 'text-green-600' },
-          ].map((s, i) => (
-            <div key={i} className={`py-3 text-center ${i < 2 ? 'border-r border-gray-50' : ''}`}>
-              <div className={`${s.color}`} style={{ fontWeight: 800, fontSize: '1.1rem' }}>{s.value}</div>
-              <div className="text-gray-400 text-xs mt-0.5">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Filter + Search bar */}
-      <div className="flex flex-col gap-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            value={searchQ}
-            onChange={e => setSearchQ(e.target.value)}
-            placeholder="Tìm trong đánh giá..."
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white"
-          />
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {/* Star filter chips */}
-          {[null, 5, 4, 3, 2, 1].map(s => (
-            <button
-              key={String(s)}
-              onClick={() => setFilterStar(filterStar === s ? null : s)}
-              className={`flex-shrink-0 flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition ${
-                filterStar === s
-                  ? 'bg-orange-500 text-white border-orange-500'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
-              }`}
-              style={{ fontWeight: filterStar === s ? 600 : 400 }}
-            >
-              {s === null ? 'Tất cả' : <><span>{s}</span><Star className="w-3 h-3" fill="currentColor" /></>}
-              {s !== null && <span className="text-gray-400 ml-0.5">({distribution.find(d => d.star === s)?.count ?? 0})</span>}
-            </button>
-          ))}
-          <div className="w-px h-5 bg-gray-200 flex-shrink-0" />
-          {/* Sort */}
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
-            className="flex-shrink-0 text-xs border border-gray-200 rounded-full px-3 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer"
-          >
-            <option value="newest">Mới nhất</option>
-            <option value="oldest">Cũ nhất</option>
-            <option value="highest">Điểm cao nhất</option>
-            <option value="lowest">Điểm thấp nhất</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Result count */}
-      {(filterStar || searchQ) && (
-        <p className="text-xs text-gray-400">
-          Tìm thấy <strong className="text-gray-700">{filtered.length}</strong> đánh giá
-          {filterStar && <span> · {filterStar}★</span>}
-          {searchQ && <span> · "{searchQ}"</span>}
-          <button onClick={() => { setFilterStar(null); setSearchQ(''); }} className="ml-2 text-orange-500 hover:text-orange-600">Xoá lọc</button>
-        </p>
-      )}
-
-      {/* Cards */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
-          <div className="text-4xl mb-3">🔍</div>
-          <p className="text-gray-400 text-sm">Không tìm thấy đánh giá nào</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(r => (
-            <FeedbackCard key={r.id} review={r} accentColor={accentColor} onReply={onReply} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Toggle switch ────────────────────────────────────────────
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      className={`relative w-10 h-5.5 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-orange-500' : 'bg-gray-200'}`}
-      style={{ height: '22px', width: '40px' }}
-    >
-      <motion.div
-        animate={{ x: value ? 18 : 2 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"
-      />
-    </button>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-// WORKER PROFILE
-// ═════════════════════════════════════════════════════════════
-function WorkerProfile() {
-  const { jobs, currentUser, updateProfile, fetchJobs } = useApp();
-  const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'feedback' | 'settings'>('profile');
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
-
-  // Editable fields
-  const [name,    setName]    = useState(currentUser.name || '');
-  const [phone,   setPhone]   = useState(currentUser.phone || '');
-  const [email,   setEmail]   = useState(currentUser.email || '');
-  const [area,    setArea]    = useState('Quận 1, TP.HCM');
-  const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
-  const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
+  // Modals
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [bankModalOpen, setBankModalOpen] = useState(false);
-  const [bio,     setBio]     = useState((currentUser as any).bio || '');
+  const [editingProfile, setEditingProfile] = useState(false);
 
-  const handleSaveBankName = async (val: string) => {
-    setBankName(val);
-    localStorage.setItem('userBankName', val.trim());
-    await updateProfile({ bankName: val.trim() } as any).catch(() => {});
-  };
+  // Form states for profile editing
+  const [fullName, setFullName] = useState(currentUser.name || '');
+  const [headline, setHeadline] = useState(currentUser.headline || '');
+  const [bio, setBio] = useState(currentUser.bio || '');
+  const [phone, setPhone] = useState(currentUser.phone || '');
+  const [skills, setSkills] = useState<string[]>(currentUser.skills || []);
+  const [newSkillInput, setNewSkillInput] = useState('');
+  const [bankName, setBankName] = useState(currentUser.bankName || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(currentUser.bankAccountNumber || '');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSaveBankAccountNumber = async (val: string) => {
-    setBankAccountNumber(val);
-    localStorage.setItem('userBankAccountNumber', val.trim());
-    await updateProfile({ bankAccountNumber: val.trim() } as any).catch(() => {});
-  };
-  const [editBio, setEditBio] = useState(false);
-  const [draftBio, setDraftBio] = useState(bio);
-  const [skills,  setSkills]  = useState<string[]>([]);
-  const [newSkill, setNewSkill] = useState('');
-  const [addingSkill, setAddingSkill] = useState(false);
+  // File upload refs
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  // Sync state when currentUser updates
   useEffect(() => {
-    setName(currentUser.name || '');
-    setPhone(currentUser.phone || '');
-    setEmail(currentUser.email || '');
+    setFullName(currentUser.name || '');
+    setHeadline(currentUser.headline || '');
     setBio(currentUser.bio || '');
+    setPhone(currentUser.phone || '');
     setSkills(currentUser.skills || []);
-    if ((currentUser as any).bankName) {
-      setBankName((currentUser as any).bankName);
-      localStorage.setItem('userBankName', (currentUser as any).bankName);
-    }
-    if ((currentUser as any).bankAccountNumber) {
-      setBankAccountNumber((currentUser as any).bankAccountNumber);
-      localStorage.setItem('userBankAccountNumber', (currentUser as any).bankAccountNumber);
-    }
+    setBankName(currentUser.bankName || '');
+    setBankAccountNumber(currentUser.bankAccountNumber || '');
   }, [currentUser]);
 
-  const handleSaveBio = async () => {
-    setBio(draftBio);
-    setEditBio(false);
-    await updateProfile({ bio: draftBio });
+  // Load public profile, reviews, applications, and posts directly from API
+  const loadProfileData = async () => {
+    if (!currentUser.id) return;
+    setLoading(true);
+    try {
+      const [pubRes, revRes, recruitRes, serviceRes, appRes] = await Promise.all([
+        profileService.getPublicProfile(currentUser.id).catch(() => null),
+        profileService.getPublicReviews(currentUser.id, 1, 20).catch(() => ({ data: [] })),
+        profileService.getPublicPosts(currentUser.id, 'RECRUITMENT', 1, 20).catch(() => ({ data: [] })),
+        profileService.getPublicPosts(currentUser.id, 'SERVICE_OFFER', 1, 20).catch(() => ({ data: [] })),
+        applicationService.getMyApplications().catch(() => []),
+      ]);
+
+      if (pubRes) setPublicData(pubRes);
+      if (revRes && revRes.data) setReviews(revRes.data);
+      if (Array.isArray(revRes)) setReviews(revRes);
+      if (Array.isArray(appRes)) setMyApplications(appRes);
+
+      if (recruitRes && recruitRes.data) {
+        setRecruitmentJobs(recruitRes.data.map((t: Task) => mapTaskToJob(t)));
+      }
+      if (serviceRes && serviceRes.data) {
+        setServiceOfferJobs(serviceRes.data.map((t: Task) => mapTaskToJob(t)));
+      }
+    } catch (err) {
+      console.error('Error loading profile data:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRemoveSkill = async (skillToRemove: string) => {
-    const updated = skills.filter(sk => sk !== skillToRemove);
-    setSkills(updated);
-    await updateProfile({ skills: updated });
+  useEffect(() => {
+    loadProfileData();
+  }, [currentUser.id]);
+
+  // Handle avatar upload
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        if (typeof reader.result === 'string') {
+          const updated = await authService.uploadAvatar(reader.result);
+          if (updated) {
+            await fetchProfile();
+            await loadProfileData();
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error uploading avatar:', err);
+    } finally {
+      setIsUploadingPhoto(false);
+      if (avatarFileRef.current) avatarFileRef.current.value = '';
+    }
   };
 
-  const handleAddSkill = async (skillToAdd: string) => {
-    if (!skillToAdd.trim()) return;
-    const updated = [...skills, skillToAdd.trim()];
-    setSkills(updated);
-    setNewSkill('');
-    setAddingSkill(false);
-    await updateProfile({ skills: updated });
+  // Handle cover upload
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        if (typeof reader.result === 'string') {
+          const updated = await authService.uploadCover(reader.result);
+          if (updated) {
+            await fetchProfile();
+            await loadProfileData();
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error uploading cover:', err);
+    } finally {
+      setIsUploadingPhoto(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
+    }
   };
 
-  const handleSavePhone = async (val: string) => {
-    setPhone(val);
-    await updateProfile({ phone: val });
+  // Handle save profile
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      const ok = await updateProfile({
+        fullName,
+        headline,
+        bio,
+        phone,
+        skills,
+        bankName,
+        bankAccountNumber,
+      });
+      if (ok) {
+        setSaveSuccess(true);
+        setEditingProfile(false);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        await fetchProfile();
+        await loadProfileData();
+      }
+    } catch (err) {
+      console.error('Error saving profile:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Settings toggles
-  const [notifNewJob,   setNotifNewJob]   = useState(true);
-  const [notifMatched,  setNotifMatched]  = useState(true);
-  const [notifPromo,    setNotifPromo]    = useState(false);
-  const [publicProfile, setPublicProfile] = useState(true);
-  const [available,     setAvailable]     = useState(true);
-
-  // Feedback data
-  const [workerReviews, setWorkerReviews] = useState<Review[]>([
-    { id: 'r1', name: 'Nguyễn Thanh Tâm', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NTT', rating: 5, comment: 'Bạn Minh làm việc rất nhanh, cẩn thận, đúng giờ. Nhà được dọn sạch hơn cả mong đợi. Chắc chắn sẽ thuê lại lần sau!', date: '20/02/2026', jobTitle: 'Lau dọn căn hộ 60m²', jobIcon: '🧹', jobCategory: 'cleaning', price: 200000, helpful: 3, tags: ['Đúng giờ', 'Cẩn thận', 'Thân thiện'], reply: 'Cảm ơn bạn nhiều! Rất vui được giúp đỡ 😊' },
-    { id: 'r2', name: 'Phạm Hồng Nhung', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PHN', rating: 4, comment: 'Thái độ tốt, làm việc đúng yêu cầu. Có một số chỗ cần nhắc thêm nhưng nhìn chung hài lòng.', date: '18/02/2026', jobTitle: 'Mua sắm hộ siêu thị', jobIcon: '🛒', jobCategory: 'shopping', price: 130000, helpful: 1, tags: ['Thân thiện', 'Đáng tin'] },
-    { id: 'r3', name: 'Trần Văn Khoa', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TVK', rating: 5, comment: 'Xuất sắc, vượt mong đợi hoàn toàn. Bạn làm việc nhanh và rất chuyên nghiệp. Highly recommended!', date: '14/02/2026', jobTitle: 'Tỉa cây sân vườn', jobIcon: '🌿', jobCategory: 'gardening', price: 250000, helpful: 5, tags: ['Chuyên nghiệp', 'Nhanh chóng', 'Đáng tin'] },
-    { id: 'r4', name: 'Lê Thị Mai', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=LTM', rating: 3, comment: 'Làm được việc nhưng đến hơi muộn 15 phút. Chất lượng công việc ổn, có thể cải thiện hơn về giờ giấc.', date: '10/02/2026', jobTitle: 'Giao hàng trong ngày', jobIcon: '🚗', jobCategory: 'delivery', price: 80000, helpful: 0, tags: ['Đúng yêu cầu'] },
-    { id: 'r5', name: 'Hoàng Văn Tuấn', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=HVT', rating: 5, comment: 'Rất hài lòng! Bạn làm sạch sẽ tỉ mỉ từng góc phòng, mang đầy đủ dụng cụ, không cần phải giám sát nhiều.', date: '05/02/2026', jobTitle: 'Vệ sinh phòng trọ', jobIcon: '🧹', jobCategory: 'cleaning', price: 150000, helpful: 4, tags: ['Tỉ mỉ', 'Tự giác', 'Chuyên nghiệp'] },
-  ]);
-
-  const handleReply = (id: string, text: string) => {
-    setWorkerReviews(prev => prev.map(r => r.id === id ? { ...r, reply: text } : r));
+  const handleAddSkill = () => {
+    const s = newSkillInput.trim();
+    if (s && !skills.includes(s) && skills.length < 15) {
+      setSkills([...skills, s]);
+      setNewSkillInput('');
+    }
   };
 
-  const appliedJobs = jobs.filter(j => 
-    j.applicants.some(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi' || ((currentUser as any).dbUser?.id && a.workerId === (currentUser as any).dbUser.id)) ||
-    j.aiMatchId === currentUser.id ||
-    (j as any).assignedWorker?.id === currentUser.id
-  );
-  const wonJobs = appliedJobs.filter(j => {
-    const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
-    return j.aiMatchId === currentUser.id || app?.status === 'ACCEPTED' || j.status === 'completed' || j.status === 'matched';
-  });
-  const completedJobsList = appliedJobs.filter(j => j.status === 'completed');
-  const totalEarned = completedJobsList.reduce((s, j) => {
-    const app = j.applicants.find(a => a.workerId === currentUser.id || a.name === currentUser.name || a.name === 'Tôi');
-    const bid = app?.bidPrice || j.price;
-    return s + Math.round(bid * 0.92);
-  }, 0);
-  const avgRating   = workerReviews.reduce((s, r) => s + r.rating, 0) / (workerReviews.length || 1);
+  const handleRemoveSkill = (skill: string) => {
+    setSkills(skills.filter(s => s !== skill));
+  };
 
-  const TABS = [
-    { key: 'profile',  label: 'Hồ sơ',   icon: '👤' },
-    { key: 'history',  label: 'Lịch sử', icon: '📋' },
-    { key: 'feedback', label: 'Đánh giá', icon: '⭐', badge: workerReviews.length },
-    { key: 'settings', label: 'Cài đặt', icon: '⚙️' },
-  ] as const;
+  const allMyJobs = useMemo(() => {
+    return [...recruitmentJobs, ...serviceOfferJobs];
+  }, [recruitmentJobs, serviceOfferJobs]);
+
+  const isWorker = currentUser.role === 'worker';
+
+  // Computed stats
+  const postedCount = publicData?.postedJobsCount || allMyJobs.length;
+  const completedCount = publicData?.completedJobsCount || allMyJobs.filter(j => j.status === 'completed').length;
+  const ratingAvg = publicData?.ratingAverage || (reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 5.0);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-28 md:pb-10">
+    <div className="min-h-screen pb-28 bg-slate-100/70 font-sans">
+      {/* ── HERO COVER & IDENTITY SECTION (FACEBOOK / LINKEDIN STYLE) ── */}
+      <div className="bg-white border-b border-gray-200/80 shadow-sm w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 pt-4">
+          {/* Cover Photo Container */}
+          <div className="relative w-full h-56 sm:h-72 md:h-88 rounded-3xl overflow-hidden bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 shadow-inner group">
+            <img
+              src={currentUser.coverUrl || publicData?.coverUrl || DEFAULT_COVER}
+              alt="Cover"
+              className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
 
-      {/* ── Hero card ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 rounded-3xl p-6 mb-5 text-white shadow-xl relative overflow-hidden"
-      >
-        <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
-        <div className="absolute -bottom-8 -left-8 w-36 h-36 bg-white/5 rounded-full" />
-
-        <div className="relative flex items-start gap-4">
-          <div className="relative flex-shrink-0">
-            <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'Worker')}`} alt={name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-blue-400 shadow-lg" />
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition">
-              <Camera className="w-3.5 h-3.5 text-blue-600" />
+            {/* Change Cover Button */}
+            <input
+              type="file"
+              ref={coverFileRef}
+              onChange={handleCoverChange}
+              accept="image/*"
+              className="hidden"
+            />
+            <button
+              onClick={() => coverFileRef.current?.click()}
+              disabled={isUploadingPhoto}
+              className="absolute bottom-4 right-4 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-xs font-bold px-3.5 py-2 rounded-xl border border-white/20 transition flex items-center gap-1.5 shadow-md cursor-pointer"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">Chỉnh sửa ảnh bìa</span>
             </button>
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h1 className="text-white" style={{ fontWeight: 800, fontSize: '1.2rem' }}>{name}</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className={`w-2 h-2 rounded-full ${available ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
-                  <span className="text-blue-200 text-xs">{available ? 'Sẵn sàng nhận việc' : 'Tạm nghỉ'}</span>
+          {/* Profile Identity & Action Bar */}
+          <div className="relative px-2 sm:px-6 pb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* Left: Overlapping Avatar + Names */}
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 text-center sm:text-left">
+                {/* Avatar with Camera Button (Only avatar overlaps the cover) */}
+                <div className="relative group -mt-16 sm:-mt-20 flex-shrink-0">
+                  <img
+                    src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.name || 'SnapOn'}`}
+                    alt={currentUser.name}
+                    className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl border-4 border-white shadow-xl bg-orange-100 object-cover"
+                  />
+                  <input
+                    type="file"
+                    ref={avatarFileRef}
+                    onChange={handleAvatarChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => avatarFileRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="absolute bottom-1 right-1 bg-orange-500 hover:bg-orange-600 text-white p-2.5 rounded-2xl border-2 border-white shadow-lg transition cursor-pointer"
+                    title="Đổi ảnh đại diện"
+                  >
+                    <Camera className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Identity Name & Badges (Positioned cleanly below cover on white background) */}
+                <div className="pt-2 sm:pt-3.5">
+                  <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                    <h1 className="text-gray-950 font-black text-2xl sm:text-3xl leading-tight">
+                      {currentUser.name || 'Người dùng SnapOn'}
+                    </h1>
+                    <div className="inline-flex items-center gap-1 text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full text-xs font-bold border border-blue-200" title="Tài khoản đã xác minh">
+                      <BadgeCheck className="w-4 h-4 text-blue-600" />
+                      <span>Xác minh</span>
+                    </div>
+                  </div>
+
+                  <p className="text-gray-600 text-sm font-semibold mt-1">
+                    {currentUser.headline || (isWorker ? '🛠️ Người làm việc tự do' : '💼 Nhà tuyển dụng & Đối tác')}
+                  </p>
+
+                  <div className="flex items-center justify-center sm:justify-start gap-3.5 mt-2 text-xs text-gray-500 font-medium flex-wrap">
+                    <span className="flex items-center gap-1 text-yellow-500 font-bold">
+                      <Star className="w-3.5 h-3.5 fill-current" /> {ratingAvg.toFixed(1)}
+                      <span className="text-gray-400 font-normal">({reviews.length} đánh giá)</span>
+                    </span>
+                    <span>•</span>
+                    <span className="text-gray-500">
+                      Tham gia {publicData?.joinedAt ? new Date(publicData.joinedAt).toLocaleDateString('vi-VN') : '2026'}
+                    </span>
+                    <span>•</span>
+                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      {completedCount} việc hoàn tất
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <div className="bg-white/20 px-3 py-1 rounded-full text-xs border border-white/20 flex items-center gap-1" style={{ fontWeight: 600 }}>
-                  <BadgeCheck className="w-3.5 h-3.5 text-blue-200" /> Đã xác minh
-                </div>
-                <div className="flex items-center gap-1 text-xs bg-white/15 px-2 py-0.5 rounded-full">
-                  <Star className="w-3 h-3 text-yellow-300" fill="currentColor" />
-                  <span className="text-white" style={{ fontWeight: 700 }}>{avgRating.toFixed(1)}</span>
-                </div>
+
+              {/* Right: Action Buttons Toolbar */}
+              <div className="flex items-center justify-center sm:justify-end gap-2.5 flex-wrap pt-2 md:pt-0">
+                <button
+                  onClick={() => setWalletModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 hover:-translate-y-0.5 transition cursor-pointer"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Ví: {fmt(currentUser.role === 'worker' ? workerWallet : hirerWallet)}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const next = currentUser.role === 'worker' ? 'hirer' : 'worker';
+                    setUserRole(next);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold shadow-sm transition cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Chuyển sang: {currentUser.role === 'worker' ? 'Người thuê' : 'Người làm'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab(4);
+                    setEditingProfile(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gray-900 hover:bg-black text-white text-xs font-bold shadow transition cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Chỉnh sửa hồ sơ</span>
+                </button>
               </div>
             </div>
 
-            {/* Skills */}
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {skills.map(s => (
-                <span key={s} className="text-xs bg-white/20 text-white px-2.5 py-0.5 rounded-full border border-white/20">{s}</span>
+            {/* Navigation Tabs Bar (Facebook / LinkedIn Style) */}
+            <div className="flex items-center gap-1 mt-6 border-t border-gray-100 pt-1 overflow-x-auto no-scrollbar">
+              {[
+                { id: 0, label: '📊 Tổng quan', badge: null },
+                { id: 1, label: `💼 Bài tuyển dụng`, badge: recruitmentJobs.length },
+                { id: 2, label: `🛠️ Dịch vụ thợ`, badge: serviceOfferJobs.length },
+                { id: 3, label: `⭐ Đánh giá & Phản hồi`, badge: reviews.length },
+                { id: 4, label: '⚙️ Cài đặt tài khoản', badge: null },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`relative px-4 py-3 text-xs md:text-sm font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === tab.id
+                      ? 'text-orange-600'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {tab.badge !== null && tab.badge > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {tab.badge}
+                    </span>
+                  )}
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="profileTabIndicator"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full"
+                    />
+                  )}
+                </button>
               ))}
             </div>
           </div>
         </div>
-
-        {/* Stats row */}
-        <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
-          {[
-            { v: Math.max(completedJobsList.length, (currentUser as any).completed_jobs || 0), l: 'Việc done' },
-            { v: appliedJobs.length,        l: 'Đã apply' },
-            { v: workerReviews.length,       l: 'Đánh giá' },
-            { v: fmt(totalEarned) + '₫',    l: 'Tổng thu' },
-          ].map((s, i) => (
-            <div key={i} className="text-center">
-              <div className="text-white" style={{ fontWeight: 800, fontSize: '1.1rem' }}>{s.v}</div>
-              <div className="text-blue-200" style={{ fontSize: '0.65rem' }}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* ── Tabs ── */}
-      <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-0.5">
-        {TABS.map(({ key, label, icon, badge }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 flex items-center justify-center gap-1 text-xs py-2 rounded-lg transition-all relative ${
-              activeTab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-            style={{ fontWeight: activeTab === key ? 700 : 400 }}
-          >
-            <span>{icon}</span>
-            <span className="hidden sm:inline">{label}</span>
-            {'badge' in { badge } && badge !== undefined && badge > 0 && (
-              <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-white flex items-center justify-center ${activeTab === key ? 'bg-orange-500' : 'bg-gray-400'}`} style={{ fontSize: '9px', fontWeight: 700 }}>
-                {badge}
-              </span>
-            )}
-          </button>
-        ))}
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.15 }}
-        >
-
-          {/* ── PROFILE TAB ── */}
-          {activeTab === 'profile' && (
-            <div className="space-y-4">
-              {/* Availability toggle */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${available ? 'bg-green-100' : 'bg-gray-100'}`}>
-                    <Briefcase className={`w-5 h-5 ${available ? 'text-green-600' : 'text-gray-400'}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-900" style={{ fontWeight: 600 }}>Trạng thái nhận việc</p>
-                    <p className="text-xs text-gray-400">{available ? 'Đang hiển thị trong kết quả tìm kiếm' : 'Đã ẩn khỏi kết quả'}</p>
-                  </div>
-                </div>
-                <Toggle value={available} onChange={setAvailable} />
+      {/* ── 2-COLUMN MODERN SOCIAL PROFILE LAYOUT ── */}
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 mt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* ── LEFT COLUMN (3-4 COLS - STICKY SIDEBAR) ── */}
+          <div className="lg:col-span-4 xl:col-span-3 space-y-6">
+            {/* Card 1: Giới thiệu & Bio */}
+            <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-gray-950 font-black text-base flex items-center gap-2">
+                  <UserCircle className="w-5 h-5 text-orange-500" />
+                  <span>Giới thiệu</span>
+                </h3>
+                <button
+                  onClick={() => { setActiveTab(4); setEditingProfile(true); }}
+                  className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
+                >
+                  Sửa
+                </button>
               </div>
 
-              {/* Bio */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-gray-900 text-sm" style={{ fontWeight: 700 }}>Giới thiệu bản thân</h3>
-                  {!editBio ? (
-                    <button onClick={() => { setEditBio(true); setDraftBio(bio); }}
-                      className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600" style={{ fontWeight: 500 }}>
-                      <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => setEditBio(false)} className="text-xs text-gray-400">Huỷ</button>
-                      <button onClick={handleSaveBio}
-                        className="text-xs bg-orange-500 text-white px-3 py-1 rounded-full" style={{ fontWeight: 600 }}>
-                        Lưu
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {editBio ? (
-                  <textarea value={draftBio} onChange={e => setDraftBio(e.target.value)} rows={3}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300" />
+              {currentUser.bio ? (
+                <p className="text-gray-700 text-xs leading-relaxed italic bg-orange-50/40 p-3.5 rounded-2xl border border-orange-100 mb-4">
+                  "{currentUser.bio}"
+                </p>
+              ) : (
+                <p className="text-gray-400 text-xs italic mb-4">Chưa có lời giới thiệu bản thân.</p>
+              )}
+
+              {/* Skills tags */}
+              <div>
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Kỹ năng & Chuyên môn</p>
+                {skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {skills.map(s => (
+                      <span key={s} className="px-2.5 py-1 rounded-xl bg-gray-100 text-gray-800 text-xs font-semibold">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
                 ) : (
-                  <p className="text-gray-600 text-sm leading-relaxed">{bio || 'Chưa có giới thiệu bản thân.'}</p>
+                  <p className="text-gray-400 text-xs">Chưa thêm kỹ năng nào.</p>
                 )}
               </div>
+            </div>
 
-              {/* Skills */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-gray-900 text-sm" style={{ fontWeight: 700 }}>Kỹ năng</h3>
-                  <button onClick={() => setAddingSkill(true)} className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600" style={{ fontWeight: 500 }}>
-                    <Plus className="w-3.5 h-3.5" /> Thêm
+            {/* Card 2: Thông tin chi tiết */}
+            <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm space-y-3.5 text-xs text-gray-600">
+              <h3 className="text-gray-950 font-black text-base mb-2">Thông tin tài khoản</h3>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-400">Số điện thoại</p>
+                  <p className="font-bold text-gray-900">{currentUser.phone || 'Chưa cập nhật'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-400">Địa chỉ Email</p>
+                  <p className="font-bold text-gray-900 truncate max-w-[200px]">{currentUser.email || 'Chưa cập nhật'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-400">Khu vực hoạt động</p>
+                  <p className="font-bold text-gray-900">TP. Hồ Chí Minh (Toàn quốc)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Tài khoản Ngân hàng & Rút tiền */}
+            <div className="bg-gradient-to-br from-slate-900 to-gray-900 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Landmark className="w-4 h-4" /> Liên kết ngân hàng
+                </span>
+                <button
+                  onClick={() => setBankModalOpen(true)}
+                  className="text-xs text-orange-300 hover:text-white font-bold underline cursor-pointer"
+                >
+                  Đổi
+                </button>
+              </div>
+
+              {currentUser.bankName && currentUser.bankAccountNumber ? (
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 mb-4">
+                  <p className="text-xs text-gray-300 font-medium">{currentUser.bankName}</p>
+                  <p className="font-mono font-black text-lg tracking-wider text-white mt-0.5">
+                    {currentUser.bankAccountNumber}
+                  </p>
+                  <p className="text-[11px] text-orange-200 mt-1 uppercase">{currentUser.name}</p>
+                </div>
+              ) : (
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-4 text-center">
+                  <p className="text-xs text-gray-400 mb-2">Chưa liên kết tài khoản ngân hàng nhận tiền</p>
+                  <button
+                    onClick={() => setBankModalOpen(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition cursor-pointer"
+                  >
+                    + Liên kết ngay
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {skills.map(s => (
-                    <div key={s} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100 group">
-                      <span className="text-xs" style={{ fontWeight: 500 }}>{s}</span>
-                      <button onClick={() => handleRemoveSkill(s)}
-                        className="opacity-0 group-hover:opacity-100 transition ml-0.5">
-                        <X className="w-3 h-3 text-blue-400 hover:text-red-500 transition" />
-                      </button>
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setWalletModalOpen(true)}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition text-center shadow cursor-pointer"
+                >
+                  Rút / Nạp tiền
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT COLUMN (8-9 COLS - MAIN CONTENT) ── */}
+          <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+            {/* ── TAB 0: TỔNG QUAN / OVERVIEW ── */}
+            {activeTab === 0 && (
+              <div className="space-y-6">
+                {/* 4 KPI Metrics Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                  <div className="bg-white p-4 rounded-3xl border border-gray-200/80 shadow-sm">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">ĐÃ ĐĂNG</p>
+                    <p className="text-2xl font-black text-gray-900">{postedCount}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Tổng bài đăng</p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-3xl border border-gray-200/80 shadow-sm">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">HOÀN TẤT</p>
+                    <p className="text-2xl font-black text-emerald-600">{completedCount}</p>
+                    <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Đã hoàn thành</p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-3xl border border-gray-200/80 shadow-sm">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">ĐÁNH GIÁ</p>
+                    <p className="text-2xl font-black text-yellow-500 flex items-center gap-1">
+                      <Star className="w-5 h-5 fill-current" /> {ratingAvg.toFixed(1)}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{reviews.length} lượt đánh giá</p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-3xl border border-gray-200/80 shadow-sm">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">THÀNH CÔNG</p>
+                    <p className="text-2xl font-black text-blue-600">100%</p>
+                    <p className="text-[11px] text-blue-600 font-semibold mt-0.5">Tỷ lệ tin cậy</p>
+                  </div>
+                </div>
+
+                {/* Recent Tasks Showcase */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-950 font-extrabold text-base flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-orange-500" />
+                      <span>Bài đăng công việc gần đây ({allMyJobs.length})</span>
+                    </h3>
+                    <button
+                      onClick={() => setActiveTab(1)}
+                      className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
+                    >
+                      Xem tất cả →
+                    </button>
+                  </div>
+
+                  {allMyJobs.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                      {allMyJobs.slice(0, 6).map(job => (
+                        <JobCard key={job.id} job={job} isWorker={isWorker} />
+                      ))}
                     </div>
-                  ))}
-                  {addingSkill && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        autoFocus
-                        value={newSkill}
-                        onChange={e => setNewSkill(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && newSkill.trim()) { handleAddSkill(newSkill); }
-                          if (e.key === 'Escape') { setNewSkill(''); setAddingSkill(false); }
-                        }}
-                        placeholder="Kỹ năng mới..."
-                        className="text-xs border border-blue-300 rounded-full px-3 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      />
-                      <button onClick={() => { if (newSkill.trim()) handleAddSkill(newSkill); else setAddingSkill(false); }}
-                        className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Check className="w-3.5 h-3.5 text-white" />
-                      </button>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400 text-xs">
+                      <p>Bạn chưa đăng công việc nào.</p>
+                      <Link to="/post" className="text-orange-500 font-bold hover:underline mt-1 inline-block">
+                        + Đăng việc đầu tiên ngay
+                      </Link>
                     </div>
                   )}
                 </div>
               </div>
+            )}
 
-              {/* Contact info */}
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50">
-                  <p className="text-xs text-gray-500" style={{ fontWeight: 600 }}>THÔNG TIN LIÊN HỆ</p>
+            {/* ── TAB 1: BÀI ĐĂNG TUYỂN DỤNG ── */}
+            {activeTab === 1 && (
+              <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm">
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                  <h3 className="text-gray-950 font-black text-lg">
+                    Bài đăng tuyển dụng ({recruitmentJobs.length})
+                  </h3>
+                  <Link
+                    to="/post"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow"
+                  >
+                    <Plus className="w-4 h-4" /> Đăng việc mới
+                  </Link>
                 </div>
-                <div className="divide-y divide-gray-50">
-                  <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-blue-500" />} />
-                  <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
-                  <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-orange-500" />} />
-                  <EditableField label="Tên ngân hàng" value={bankName || 'Chưa cập nhật'} onSave={handleSaveBankName} icon={<Landmark className="w-4 h-4 text-emerald-500" />} onClickCustom={() => setBankModalOpen(true)} />
-                  <EditableField label="Số tài khoản ngân hàng" value={bankAccountNumber || 'Chưa cập nhật'} onSave={handleSaveBankAccountNumber} icon={<CreditCard className="w-4 h-4 text-indigo-500" />} />
-                </div>
-                <div className="px-4 py-3.5 border-t border-gray-50 flex items-center gap-3 hover:bg-gray-50/80 transition cursor-pointer">
-                  <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <Shield className="w-4 h-4 text-green-600" />
+
+                {recruitmentJobs.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+                    {recruitmentJobs.map(job => (
+                      <JobCard key={job.id} job={job} isWorker={isWorker} />
+                    ))}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-400">Xác minh danh tính</p>
-                    <p className="text-sm text-green-600" style={{ fontWeight: 600 }}>CMND đã xác minh ✅</p>
+                ) : (
+                  <div className="text-center py-12 text-gray-400 text-xs">
+                    Chưa có bài đăng tuyển dụng nào.
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300" />
-                </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── HISTORY TAB ── */}
-          {activeTab === 'history' && (
-            <div className="space-y-3">
-              {/* Summary chips */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { v: appliedJobs.length, l: 'Đã apply', color: 'blue' },
-                  { v: wonJobs.length,     l: 'Được chọn', color: 'green' },
-                  { v: appliedJobs.length - wonJobs.length, l: 'Chưa được', color: 'gray' },
-                ].map((s, i) => (
-                  <div key={i} className={`bg-${s.color}-50 rounded-xl p-3 text-center border border-${s.color}-100`}>
-                    <div className={`text-${s.color}-600`} style={{ fontWeight: 800, fontSize: '1.3rem' }}>{s.v}</div>
-                    <div className={`text-${s.color}-500 text-xs mt-0.5`}>{s.l}</div>
-                  </div>
-                ))}
-              </div>
-
-              {appliedJobs.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-                  <div className="text-4xl mb-3">📋</div>
-                  <p className="text-gray-400 text-sm">Chưa có lịch sử ứng tuyển</p>
-                  <Link to="/worker" className="mt-3 inline-block text-blue-500 text-sm">Tìm việc ngay →</Link>
+            {/* ── TAB 2: DỊCH VỤ CUNG CẤP ── */}
+            {activeTab === 2 && (
+              <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm">
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                  <h3 className="text-gray-950 font-black text-lg">
+                    Dịch vụ thợ cung cấp ({serviceOfferJobs.length})
+                  </h3>
+                  <Link
+                    to="/post"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow"
+                  >
+                    <Plus className="w-4 h-4" /> Đăng dịch vụ mới
+                  </Link>
                 </div>
-              ) : (
-                appliedJobs.map(job => {
-                  const applicant = job.applicants.find(a => a.workerId === currentUser.id);
-                  const isWinner  = job.aiMatchId === currentUser.id || applicant?.status === 'ACCEPTED';
-                  return (
-                    <Link key={job.id} to={`/job/${job.id}`}>
-                      <motion.div
-                        whileHover={{ y: -1 }}
-                        className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition ${
-                          isWinner ? 'border-green-200 shadow-green-50' : 'border-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${isWinner ? 'bg-green-50' : 'bg-gray-50'}`}>
-                            {job.categoryIcon}
+
+                {serviceOfferJobs.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+                    {serviceOfferJobs.map(job => (
+                      <JobCard key={job.id} job={job} isWorker={isWorker} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-400 text-xs">
+                    Chưa có dịch vụ nào được đăng.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── TAB 3: ĐÁNH GIÁ & PHẢN HỒI ── */}
+            {activeTab === 3 && (
+              <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm space-y-6">
+                <h3 className="text-gray-950 font-black text-lg">
+                  Đánh giá từ đối tác ({reviews.length})
+                </h3>
+
+                {/* Big Score Summary */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-6 border border-orange-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Điểm đánh giá trung bình</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-4xl md:text-5xl font-black text-gray-900">{ratingAvg.toFixed(1)}</span>
+                      <div>
+                        <div className="flex items-center text-yellow-400">
+                          {[1, 2, 3, 4, 5].map(s => (
+                            <Star key={s} className="w-4 h-4 fill-current" />
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 font-medium">{reviews.length} đánh giá được xác thực</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reviews List */}
+                {reviews.length > 0 ? (
+                  <div className="space-y-4">
+                    {reviews.map(rev => (
+                      <div key={rev.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50/50 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={rev.reviewerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${rev.reviewerName}`}
+                              alt=""
+                              className="w-9 h-9 rounded-full bg-white border border-gray-200"
+                            />
+                            <div>
+                              <p className="font-bold text-gray-900 text-xs">{rev.reviewerName}</p>
+                              <p className="text-[10px] text-gray-400">{new Date(rev.createdAt).toLocaleDateString('vi-VN')}</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-gray-900 text-sm truncate pr-1" style={{ fontWeight: 600 }}>{job.title}</p>
-                              <span className={`text-xs px-2.5 py-0.5 rounded-full flex-shrink-0 border ${
-                                job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                isWinner                   ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                job.status === 'active'    ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                'bg-gray-50 text-gray-500 border-gray-200'
-                              }`} style={{ fontWeight: 600 }}>
-                                {job.status === 'completed' ? '🏆 Hoàn thành' : isWinner ? '🎖️ Được chọn' : job.status === 'active' ? '⏳ Chờ kết quả' : 'Không được chọn'}
-                              </span>
-                            </div>
-                            <p className="text-gray-400 text-xs mt-0.5 truncate">{job.hirerName}</p>
-                            <div className="flex items-center gap-3 mt-2 flex-wrap">
-                              <span className={`text-sm ${isWinner ? 'text-green-600' : 'text-orange-500'}`} style={{ fontWeight: 700 }}>
-                                {applicant?.bidPrice ? applicant.bidPrice.toLocaleString('vi-VN') + '₫' : job.price.toLocaleString('vi-VN') + '₫'}
-                                <span className="text-xs text-gray-400 ml-1" style={{ fontWeight: 400 }}>giá chào</span>
-                              </span>
-                              {job.status === 'completed' ? (
-                                <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
-                                  💵 Đã nhận: {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫
-                                </span>
-                              ) : isWinner ? (
-                                <span className="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 flex items-center gap-1">
-                                  ⏳ Dự kiến nhận: {Math.round((applicant?.bidPrice || job.price) * 0.92).toLocaleString('vi-VN')}₫ (chờ xác nhận)
-                                </span>
-                              ) : null}
-                              <span className="text-gray-400 text-xs flex items-center gap-1"><Clock className="w-3 h-3" />{job.duration}h</span>
-                            </div>
+                          <div className="flex items-center text-yellow-400 text-xs font-bold">
+                            <Star className="w-3.5 h-3.5 fill-current mr-1" /> {rev.rating}
                           </div>
                         </div>
-                      </motion.div>
-                    </Link>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {/* ── FEEDBACK TAB ── */}
-          {activeTab === 'feedback' && (
-            <FeedbackPanel reviews={workerReviews} accentColor="blue" onReply={handleReply} />
-          )}
-
-          {/* ── SETTINGS TAB ── */}
-          {activeTab === 'settings' && (
-            <div className="space-y-4">
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50">
-                  <p className="text-xs text-gray-500 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <Bell className="w-3.5 h-3.5" /> THÔNG BÁO
-                  </p>
-                </div>
-                {[
-                  { label: 'Việc mới gần bạn', sub: 'Thông báo khi có việc trong bán kính 5km', v: notifNewJob, fn: setNotifNewJob },
-                  { label: 'Được chọn làm việc', sub: 'Thông báo khi người thuê chốt phiên chọn bạn', v: notifMatched, fn: setNotifMatched },
-                  { label: 'Khuyến mãi & ưu đãi', sub: 'Tin tức và chương trình của SnapOn', v: notifPromo, fn: setNotifPromo },
-                ].map((item, i) => (
-                  <div key={i} className={`flex items-center gap-3 px-4 py-3.5 ${i < 2 ? 'border-b border-gray-50' : ''}`}>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900" style={{ fontWeight: 500 }}>{item.label}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{item.sub}</p>
-                    </div>
-                    <Toggle value={item.v} onChange={item.fn} />
+                        <p className="text-gray-700 text-xs leading-relaxed">{rev.comment}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50">
-                  <p className="text-xs text-gray-500 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <Lock className="w-3.5 h-3.5" /> QUYỀN RIÊNG TƯ
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900" style={{ fontWeight: 500 }}>Hồ sơ công khai</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Người thuê có thể xem hồ sơ của bạn</p>
+                ) : (
+                  <div className="text-center py-8 text-gray-400 text-xs">
+                    Chưa có đánh giá nào được gửi tới bạn.
                   </div>
-                  <Toggle value={publicProfile} onChange={setPublicProfile} />
-                </div>
+                )}
               </div>
-
-              <button className="w-full py-3 rounded-xl border border-red-200 text-red-500 text-sm hover:bg-red-50 transition" style={{ fontWeight: 500 }}>
-                Đăng xuất
-              </button>
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
-      <BankSelectModal
-        isOpen={bankModalOpen}
-        onClose={() => setBankModalOpen(false)}
-        selectedBank={bankName}
-        onSelectBank={handleSaveBankName}
-      />
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-// HIRER PROFILE
-// ═════════════════════════════════════════════════════════════
-function HirerProfile() {
-  const { jobs, currentUser, updateProfile, fetchJobs } = useApp();
-  const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'feedback' | 'settings'>('overview');
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
-
-  // Editable fields
-  const [phone,    setPhone]    = useState(currentUser.phone || '');
-  const [email,    setEmail]    = useState(currentUser.email || '');
-  const [area,     setArea]     = useState('Quận 1, Bình Thạnh, TP.HCM');
-  const [bankName, setBankName] = useState(() => localStorage.getItem('userBankName') || '');
-  const [bankAccountNumber, setBankAccountNumber] = useState(() => localStorage.getItem('userBankAccountNumber') || '');
-  const [bankModalOpen, setBankModalOpen] = useState(false);
-
-  const handleSaveBankName = (val: string) => {
-    setBankName(val);
-    localStorage.setItem('userBankName', val.trim());
-  };
-
-  const handleSaveBankAccountNumber = (val: string) => {
-    setBankAccountNumber(val);
-    localStorage.setItem('userBankAccountNumber', val.trim());
-  };
-
-  useEffect(() => {
-    setPhone(currentUser.phone || '');
-    setEmail(currentUser.email || '');
-  }, [currentUser]);
-
-  const handleSavePhone = async (val: string) => {
-    setPhone(val);
-    await updateProfile({ phone: val });
-  };
-
-  // Settings
-  const [notifApply,  setNotifApply]  = useState(true);
-  const [notifRemind, setNotifRemind] = useState(true);
-  const [notifPromo,  setNotifPromo]  = useState(false);
-
-  const myJobs = jobs.filter(j => 
-    (currentUser?.id && j.hirerId === currentUser.id) ||
-    ((currentUser as any)?.dbUser?.id && j.hirerId === (currentUser as any).dbUser.id) ||
-    (currentUser?.name && j.hirerName && (j.hirerName.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(j.hirerName.toLowerCase())))
-  );
-  const activeJobs    = myJobs.filter(j => j.status === 'active');
-  const matchedJobs   = myJobs.filter(j => j.status === 'matched' || j.status === 'completed');
-  const totalSpent    = matchedJobs.reduce((s, j) => s + j.price, 0);
-  const totalApplicants = myJobs.reduce((s, j) => s + j.applicants.length, 0);
-  const successRate   = myJobs.length > 0 ? Math.round(matchedJobs.length / myJobs.length * 100) : 0;
-
-  const [hirerReviews, setHirerReviews] = useState<Review[]>([
-    { id: 'h1', name: 'Nguyễn Văn An', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NguyenVanAn', rating: 5, comment: 'Chủ nhà rất thân thiện, mô tả công việc rõ ràng và chi tiết. Trả tiền ngay sau khi hoàn thành, không cần phải nhắc.', date: '20/02/2026', jobTitle: 'Lau dọn căn hộ 60m²', jobIcon: '🧹', jobCategory: 'cleaning', price: 200000, helpful: 2, tags: ['Thân thiện', 'Thanh toán nhanh', 'Rõ ràng'] },
-    { id: 'h2', name: 'Phan Thị Lan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PhanThiLan', rating: 4, comment: 'Thanh toán nhanh chóng, đúng như cam kết. Mô tả việc khá rõ ràng, có thể thêm hình ảnh để dễ hiểu hơn.', date: '15/02/2026', jobTitle: 'Dọn nhà cuối năm', jobIcon: '🧹', jobCategory: 'cleaning', price: 350000, helpful: 1, tags: ['Thanh toán nhanh', 'Đúng cam kết'] },
-    { id: 'h3', name: 'Võ Thành Phong', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=VoThanhPhong', rating: 5, comment: 'Chủ nhà hỗ trợ rất nhiệt tình, cung cấp đầy đủ dụng cụ. Sẽ tiếp tục làm việc cùng trong tương lai!', date: '12/02/2026', jobTitle: 'Tỉa cây sân vườn', jobIcon: '🌿', jobCategory: 'gardening', price: 250000, helpful: 3, tags: ['Hỗ trợ tốt', 'Chuyên nghiệp', 'Sẽ thuê lại'] },
-    { id: 'h4', name: 'Lê Hoàng Cường', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=LeHoangCuong', rating: 3, comment: 'Yêu cầu hơi nhiều so với mức giá. Có thể điều chỉnh giá cho phù hợp hơn với công việc thực tế.', date: '08/02/2026', jobTitle: 'Sửa vòi nước rò', jobIcon: '🔧', jobCategory: 'repair', price: 180000, helpful: 0, tags: ['Cần cải thiện giá'] },
-  ]);
-
-  const handleReply = (id: string, text: string) => {
-    setHirerReviews(prev => prev.map(r => r.id === id ? { ...r, reply: text } : r));
-  };
-
-  const avgRating = hirerReviews.reduce((s, r) => s + r.rating, 0) / (hirerReviews.length || 1);
-
-  const TABS = [
-    { key: 'overview',  label: 'Tổng quan',  icon: '📊' },
-    { key: 'jobs',      label: 'Việc đăng',  icon: '📝', badge: myJobs.length },
-    { key: 'feedback',  label: 'Đánh giá',   icon: '⭐', badge: hirerReviews.length },
-    { key: 'settings',  label: 'Cài đặt',    icon: '⚙️' },
-  ] as const;
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-28 md:pb-10">
-
-      {/* ── Hero card ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-orange-500 via-orange-600 to-amber-500 rounded-3xl p-6 mb-5 text-white shadow-xl relative overflow-hidden"
-      >
-        <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full" />
-        <div className="absolute -bottom-8 -left-8 w-36 h-36 bg-white/5 rounded-full" />
-
-        <div className="relative flex items-start gap-4">
-          <div className="relative flex-shrink-0">
-            <img src={currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'Hirer')}`} alt={currentUser.name} className="w-20 h-20 rounded-2xl border-2 border-white/30 bg-orange-400 shadow-lg" />
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition">
-              <Camera className="w-3.5 h-3.5 text-orange-600" />
-            </button>
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h1 className="text-white" style={{ fontWeight: 800, fontSize: '1.2rem' }}>{currentUser.name}</h1>
-                <p className="text-orange-100 text-xs mt-0.5">Thành viên từ Tháng 1, 2025</p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <span className="bg-white/20 px-3 py-1 rounded-full text-xs border border-white/20 flex items-center gap-1" style={{ fontWeight: 600 }}>
-                  🏅 Tin cậy
-                </span>
-                <div className="flex items-center gap-1 text-xs bg-white/15 px-2 py-0.5 rounded-full">
-                  <Star className="w-3 h-3 text-yellow-300" fill="currentColor" />
-                  <span className="text-white" style={{ fontWeight: 700 }}>{avgRating.toFixed(1)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 mt-3 text-orange-100 text-sm">
-              <MapPin className="w-3.5 h-3.5" />
-              <span className="text-xs">Quận 1 · Bình Thạnh, TP.HCM</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <div className="relative grid grid-cols-4 gap-2 mt-5 pt-5 border-t border-white/20">
-          {[
-            { v: myJobs.length,     l: 'Đã đăng' },
-            { v: activeJobs.length, l: 'Đang tuyển' },
-            { v: fmt(totalSpent) + '₫', l: 'Đã chi' },
-            { v: totalApplicants,   l: 'Ứng viên' },
-          ].map((s, i) => (
-            <div key={i} className="text-center">
-              <div className="text-white" style={{ fontWeight: 800, fontSize: '1.05rem' }}>{s.v}</div>
-              <div className="text-orange-100" style={{ fontSize: '0.65rem' }}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* ── Tabs ── */}
-      <div className="flex bg-gray-100 rounded-xl p-1 mb-5 gap-0.5">
-        {TABS.map(({ key, label, icon, badge }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 flex items-center justify-center gap-1 text-xs py-2 rounded-lg transition-all relative ${
-              activeTab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-            style={{ fontWeight: activeTab === key ? 700 : 400 }}
-          >
-            <span>{icon}</span>
-            <span className="hidden sm:inline">{label}</span>
-            {'badge' in { badge } && badge !== undefined && badge > 0 && (
-              <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-white flex items-center justify-center ${activeTab === key ? 'bg-orange-500' : 'bg-gray-400'}`} style={{ fontSize: '9px', fontWeight: 700 }}>
-                {badge > 9 ? '9+' : badge}
-              </span>
             )}
-          </button>
-        ))}
+
+            {/* ── TAB 4: CÀI ĐẶT TÀI KHOẢN ── */}
+            {activeTab === 4 && (
+              <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-200/80 shadow-sm space-y-6">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                  <div>
+                    <h3 className="text-gray-950 font-black text-xl">Chỉnh sửa hồ sơ cá nhân</h3>
+                    <p className="text-gray-500 text-xs mt-0.5">Thông tin của bạn sẽ hiển thị công khai trên SnapOn</p>
+                  </div>
+                  {saveSuccess && (
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Đã lưu thành công!
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Họ và tên *</label>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Tiêu đề nghề nghiệp / Chức danh</label>
+                    <input
+                      type="text"
+                      placeholder="VD: Chuyên gia thiết kế đồ họa & Video Editor"
+                      value={headline}
+                      onChange={e => setHeadline(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs font-medium text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Số điện thoại liên hệ</label>
+                    <input
+                      type="tel"
+                      placeholder="0901234567"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Giới thiệu bản thân (Bio)</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Chia sẻ kinh nghiệm làm việc, phong cách làm việc và dịch vụ bạn cung cấp..."
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs text-gray-800 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 resize-none"
+                    />
+                  </div>
+
+                  {/* Skills Tag Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Kỹ năng chuyên môn</label>
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        placeholder="VD: Photoshop, Illustrator, Dịch tiếng Anh"
+                        value={newSkillInput}
+                        onChange={e => setNewSkillInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSkill(); } }}
+                        className="flex-1 px-4 py-2.5 rounded-2xl border border-gray-200 text-xs outline-none focus:border-orange-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSkill}
+                        className="px-4 py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold transition"
+                      >
+                        + Thêm
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {skills.map(s => (
+                        <span key={s} className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 font-bold px-3 py-1 rounded-xl">
+                          {s}
+                          <button type="button" onClick={() => handleRemoveSkill(s)} className="hover:text-red-600">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bank Account */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-gray-700">Tài khoản ngân hàng nhận tiền</label>
+                      <button
+                        type="button"
+                        onClick={() => setBankModalOpen(true)}
+                        className="text-xs font-bold text-orange-600 hover:underline cursor-pointer"
+                      >
+                        {bankName ? 'Đổi ngân hàng' : '+ Chọn ngân hàng'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <input
+                          type="text"
+                          readOnly
+                          placeholder="Tên ngân hàng"
+                          value={bankName}
+                          onClick={() => setBankModalOpen(true)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-xs font-bold cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Số tài khoản ngân hàng"
+                          value={bankAccountNumber}
+                          onChange={e => setBankAccountNumber(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
+                    <button
+                      onClick={logout}
+                      className="text-xs font-bold text-red-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" /> Đăng xuất
+                    </button>
+
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={isSaving}
+                      className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-extrabold px-6 py-3 rounded-2xl shadow-md transition cursor-pointer"
+                    >
+                      {isSaving ? 'Đang lưu...' : 'Lưu thay đổi hồ sơ'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.15 }}
-        >
+      {/* Wallet Modal */}
+      <WalletModal
+        open={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+        mode={currentUser.role === 'worker' ? 'worker' : 'hirer'}
+      />
 
-          {/* ── OVERVIEW TAB ── */}
-          {activeTab === 'overview' && (
-            <div className="space-y-4">
-              {/* KPI grid */}
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { icon: <Briefcase className="w-5 h-5" />, label: 'Đang tuyển', value: activeJobs.length, color: 'orange' },
-                  { icon: <CheckCircle2 className="w-5 h-5" />, label: 'Đã hoàn thành', value: matchedJobs.length, color: 'green' },
-                  { icon: <Users className="w-5 h-5" />, label: 'Tổng ứng viên', value: totalApplicants, color: 'blue' },
-                  { icon: <TrendingUp className="w-5 h-5" />, label: 'Tỷ lệ thành công', value: successRate + '%', color: 'purple' },
-                ].map((s, i) => {
-                  const bg: Record<string, string> = { orange: 'bg-orange-50 text-orange-600', blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600', purple: 'bg-purple-50 text-purple-600' };
-                  return (
-                    <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-2 shadow-sm">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg[s.color]}`}>{s.icon}</div>
-                      <div className="text-gray-900" style={{ fontWeight: 700, fontSize: '1.3rem' }}>{s.value}</div>
-                      <div className="text-gray-400 text-xs">{s.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Category distribution */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-gray-900 mb-4 text-sm" style={{ fontWeight: 700 }}>📊 Loại việc hay đăng</h3>
-                <div className="space-y-2.5">
-                  {CATEGORIES.map(cat => {
-                    const count = myJobs.filter(j => j.category === cat.id).length;
-                    if (count === 0) return null;
-                    const pct = myJobs.length > 0 ? Math.round(count / myJobs.length * 100) : 0;
-                    return (
-                      <div key={cat.id} className="flex items-center gap-3">
-                        <span className="text-lg w-6 flex-shrink-0">{cat.icon}</span>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-600" style={{ fontWeight: 500 }}>{cat.label.split('/')[0].trim()}</span>
-                            <span className="text-xs text-gray-400">{count} việc · {pct}%</span>
-                          </div>
-                          <div className="bg-gray-100 rounded-full h-1.5">
-                            <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
-                              className="bg-orange-400 h-1.5 rounded-full" />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {myJobs.length === 0 && <p className="text-gray-400 text-sm text-center py-4">Chưa có dữ liệu</p>}
-                </div>
-              </div>
-
-              {/* Contact info */}
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50">
-                  <p className="text-xs text-gray-500" style={{ fontWeight: 600 }}>THÔNG TIN TÀI KHOẢN</p>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  <EditableField label="Số điện thoại" value={phone} onSave={handleSavePhone} icon={<Phone className="w-4 h-4 text-orange-500" />} />
-                  <EditableField label="Email" value={email} onSave={setEmail} icon={<Mail className="w-4 h-4 text-purple-500" />} type="email" />
-                  <EditableField label="Khu vực" value={area} onSave={setArea} icon={<MapPin className="w-4 h-4 text-blue-500" />} />
-                  <EditableField label="Tên ngân hàng" value={bankName || 'Chưa cập nhật'} onSave={handleSaveBankName} icon={<Landmark className="w-4 h-4 text-emerald-500" />} onClickCustom={() => setBankModalOpen(true)} />
-                  <EditableField label="Số tài khoản ngân hàng" value={bankAccountNumber || 'Chưa cập nhật'} onSave={handleSaveBankAccountNumber} icon={<CreditCard className="w-4 h-4 text-indigo-500" />} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── JOBS TAB ── */}
-          {activeTab === 'jobs' && (
-            <div className="space-y-3">
-              {myJobs.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-                  <div className="text-4xl mb-3">📝</div>
-                  <p className="text-gray-400 text-sm">Chưa có việc nào được đăng</p>
-                  <Link to="/post" className="mt-3 inline-block text-orange-500 text-sm" style={{ fontWeight: 600 }}>Đăng việc ngay →</Link>
-                </div>
-              ) : (
-                myJobs.map(job => (
-                  <Link key={job.id} to={`/job/${job.id}`}>
-                    <motion.div whileHover={{ y: -1 }}
-                      className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition ${
-                        job.status === 'active' ? 'border-green-100' : job.status === 'matched' ? 'border-blue-100' : job.status === 'completed' ? 'border-purple-100' : 'border-gray-100'
-                      }`}>
-                      <div className="flex items-start gap-3">
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${
-                          job.status === 'active' ? 'bg-green-50' : job.status === 'matched' ? 'bg-blue-50' : job.status === 'completed' ? 'bg-purple-50' : 'bg-gray-50'
-                        }`}>
-                          {job.categoryIcon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-gray-900 text-sm truncate pr-1" style={{ fontWeight: 600 }}>{job.title}</p>
-                            <span className={`text-xs px-2.5 py-0.5 rounded-full flex-shrink-0 border ${
-                              job.status === 'active'    ? 'bg-green-50 text-green-700 border-green-200' :
-                              job.status === 'matched'   ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                              job.status === 'completed' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                              'bg-gray-50 text-gray-500 border-gray-200'
-                            }`} style={{ fontWeight: 600 }}>
-                              {job.status === 'active' ? '🟢 Đang tuyển' : job.status === 'matched' ? '✅ Đã khớp' : job.status === 'completed' ? '🏆 Hoàn thành' : 'Hết hạn'}
-                            </span>
-                          </div>
-                          <p className="text-gray-400 text-xs truncate">{job.location.address}</p>
-                          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                            <span className="text-orange-600 text-xs" style={{ fontWeight: 700 }}>
-                              {job.priceMin.toLocaleString('vi-VN')}₫–{job.priceMax.toLocaleString('vi-VN')}₫
-                            </span>
-                            <span className="flex items-center gap-1 text-gray-400 text-xs">
-                              <Users className="w-3 h-3" /> {job.applicants.length} ứng viên
-                            </span>
-                            <span className="flex items-center gap-1 text-gray-400 text-xs">
-                              <Clock className="w-3 h-3" /> {job.duration}h
-                            </span>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 mt-1" />
-                      </div>
-                    </motion.div>
-                  </Link>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* ── FEEDBACK TAB ── */}
-          {activeTab === 'feedback' && (
-            <FeedbackPanel reviews={hirerReviews} accentColor="orange" onReply={handleReply} />
-          )}
-
-          {/* ── SETTINGS TAB ── */}
-          {activeTab === 'settings' && (
-            <div className="space-y-4">
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50">
-                  <p className="text-xs text-gray-500 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <Bell className="w-3.5 h-3.5" /> THÔNG BÁO
-                  </p>
-                </div>
-                {[
-                  { label: 'Ứng viên mới apply', sub: 'Nhận thông báo khi có người apply vào việc của bạn', v: notifApply, fn: setNotifApply },
-                  { label: 'Nhắc nhở đếm ngược', sub: 'Nhắc khi còn 2 phút trước khi hết hạn nhận đơn', v: notifRemind, fn: setNotifRemind },
-                  { label: 'Khuyến mãi & ưu đãi', sub: 'Tin tức và chương trình của SnapOn', v: notifPromo, fn: setNotifPromo },
-                ].map((item, i) => (
-                  <div key={i} className={`flex items-center gap-3 px-4 py-3.5 ${i < 2 ? 'border-b border-gray-50' : ''}`}>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900" style={{ fontWeight: 500 }}>{item.label}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{item.sub}</p>
-                    </div>
-                    <Toggle value={item.v} onChange={item.fn} />
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50">
-                  <p className="text-xs text-gray-500 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <Settings className="w-3.5 h-3.5" /> TÀI KHOẢN
-                  </p>
-                </div>
-                {[
-                  { icon: <Lock className="w-4 h-4 text-gray-400" />, label: 'Đổi mật khẩu', sub: 'Cập nhật mật khẩu đăng nhập' },
-                  { icon: <Shield className="w-4 h-4 text-gray-400" />, label: 'Xác minh danh tính', sub: 'CMND/CCCD đã được xác minh ✅' },
-                  { icon: <DollarSign className="w-4 h-4 text-gray-400" />, label: 'Phương thức thanh toán', sub: 'Momo, VNPay, Thẻ ngân hàng' },
-                ].map((item, i) => (
-                  <div key={i} className={`flex items-center gap-3 px-4 py-3.5 ${i < 2 ? 'border-b border-gray-50' : ''} hover:bg-gray-50/60 transition cursor-pointer`}>
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">{item.icon}</div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900" style={{ fontWeight: 500 }}>{item.label}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{item.sub}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                  </div>
-                ))}
-              </div>
-
-              <button className="w-full py-3 rounded-xl border border-red-200 text-red-500 text-sm hover:bg-red-50 transition" style={{ fontWeight: 500 }}>
-                Đăng xuất
-              </button>
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+      {/* Bank Select Modal */}
       <BankSelectModal
         isOpen={bankModalOpen}
         onClose={() => setBankModalOpen(false)}
         selectedBank={bankName}
-        onSelectBank={handleSaveBankName}
+        onSelect={(bank) => {
+          setBankName(bank.name);
+          setBankModalOpen(false);
+        }}
       />
     </div>
   );
-}
-
-// ─── Entry point ──────────────────────────────────────────────
-export default function Profile() {
-  const { currentUser } = useApp();
-  return currentUser.role === 'worker' ? <WorkerProfile /> : <HirerProfile />;
 }

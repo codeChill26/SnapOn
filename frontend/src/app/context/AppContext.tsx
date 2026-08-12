@@ -1,33 +1,15 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../../imports/firebase';
-import api from '../../services/api';
-
-
-
-export interface Job {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  categoryIcon: string;
-  duration: number;
-  price: number;         // Final/accepted price (updated when matched)
-  priceMin: number;      // Minimum budget set by hirer
-  priceMax: number;      // Maximum budget set by hirer
-  location: { lat: number; lng: number; address: string };
-  postedAt: number;
-  expiresAt: number;
-  status: 'active' | 'matched' | 'completed' | 'expired';
-  hirerName: string;
-  hirerAvatar: string;
-  hirerId?: string;
-  applicants: Applicant[];
-  aiMatchId?: string;
-}
+import { authService } from '../../services/authService';
+import { taskService } from '../../services/taskService';
+import { applicationService } from '../../services/applicationService';
+import { walletService } from '../../services/walletService';
+import { categoryService } from '../../services/categoryService';
+import { Task, Category, User, TaskApplication, TaskStatus } from '../../types';
 
 export interface Applicant {
-  id?: string;           // Database application ID
+  id?: string;
   workerId: string;
   name: string;
   avatar: string;
@@ -39,9 +21,10 @@ export interface Applicant {
   skills: string[];
   appliedAt: number;
   note: string;
-  bidPrice: number;      // Worker's proposed price (within priceMin..priceMax)
-  aiScore?: number;      // Computed by closeBidding (0–1)
-  aiBreakdown?: {        // Score components for transparency
+  bidPrice: number;
+  status?: string;
+  aiScore?: number;
+  aiBreakdown?: {
     distScore: number;
     priceScore: number;
     ratingScore: number;
@@ -58,6 +41,36 @@ export interface Worker {
   rating: number;
   completedJobs: number;
   bio: string;
+}
+
+export interface Job {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  categoryIcon: string;
+  duration: number;
+  price: number;
+  priceMin: number;
+  priceMax: number;
+  location: { lat: number; lng: number; address: string };
+  postedAt: number;
+  expiresAt: number;
+  status: 'active' | 'matched' | 'completed' | 'expired';
+  hirerName: string;
+  hirerAvatar: string;
+  hirerId?: string;
+  applicants: Applicant[];
+  aiMatchId?: string | null;
+  assignedWorker?: {
+    id: string;
+    workerId: string;
+    name: string;
+    avatar: string;
+    phone?: string;
+    bidPrice?: number | null;
+  } | null;
+  rawTask?: Task;
 }
 
 export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -87,18 +100,8 @@ export const CATEGORIES = [
   { id: 'others', label: 'Others', icon: '⚡' },
 ];
 
-export const MOCK_WORKERS: Worker[] = [];
-
-export const DEMO_WORKER: Worker | null = null;
-
-// ─── AI Matching Algorithm ────────────────────────────────────
-// Weights: Distance 45% (SnapOn = quick & nearby), Price 35% (lower bid = better for hirer), Rating 20%
-const W_DIST   = 0.45;
-const W_PRICE  = 0.35;
-const W_RATING = 0.20;
-
 export function scoreApplicants(job: Job): Applicant[] {
-  if (job.applicants.length === 0) return [];
+  if (!job.applicants || job.applicants.length === 0) return [];
   if (job.applicants.length === 1) {
     return [{
       ...job.applicants[0],
@@ -107,66 +110,94 @@ export function scoreApplicants(job: Job): Applicant[] {
     }];
   }
 
-  const bids    = job.applicants.map(a => a.bidPrice);
-  const dists   = job.applicants.map(a => a.distance);
+  const bids = job.applicants.map(a => a.bidPrice);
+  const dists = job.applicants.map(a => a.distance);
   const ratings = job.applicants.map(a => a.rating);
 
-  const minBid    = Math.min(...bids),    maxBid    = Math.max(...bids);
-  const minDist   = Math.min(...dists),   maxDist   = Math.max(...dists);
+  const minBid = Math.min(...bids), maxBid = Math.max(...bids);
+  const minDist = Math.min(...dists), maxDist = Math.max(...dists);
   const minRating = Math.min(...ratings), maxRating = Math.max(...ratings);
 
-  const bidRange    = maxBid    - minBid    || 1;
-  const distRange   = maxDist   - minDist   || 1;
+  const bidRange = maxBid - minBid || 1;
+  const distRange = maxDist - minDist || 1;
   const ratingRange = maxRating - minRating || 1;
 
   const scored = job.applicants.map(a => {
-    // Lower bid → higher priceScore (hirer pays less = better)
-    const priceScore  = 1 - (a.bidPrice - minBid)    / bidRange;
-    // Closer distance → higher distScore
-    const distScore   = 1 - (a.distance - minDist)   / distRange;
-    // Higher rating → higher ratingScore
+    const priceScore = 1 - (a.bidPrice - minBid) / bidRange;
+    const distScore = 1 - (a.distance - minDist) / distRange;
     const ratingScore = (a.rating - minRating) / ratingRange;
 
-    const aiScore = W_DIST * distScore + W_PRICE * priceScore + W_RATING * ratingScore;
+    const aiScore = 0.45 * distScore + 0.35 * priceScore + 0.20 * ratingScore;
 
     return {
       ...a,
       aiScore: Math.round(aiScore * 1000) / 1000,
       aiBreakdown: {
-        distScore:   Math.round(distScore   * 100) / 100,
-        priceScore:  Math.round(priceScore  * 100) / 100,
+        distScore: Math.round(distScore * 100) / 100,
+        priceScore: Math.round(priceScore * 100) / 100,
         ratingScore: Math.round(ratingScore * 100) / 100,
       },
     };
   });
 
-  // Sort by score desc (winner first)
   return scored.sort((a, b) => (b.aiScore ?? 0) - (a.aiScore ?? 0));
 }
 
-
-
-// ─── Context types ─────────────────────────────────────────────
 interface AppContextType {
   jobs: Job[];
+  categories: Category[];
   workers: Worker[];
-  currentUser: { id: string; name: string; avatar: string; email?: string; phone?: string; bio?: string; headline?: string; skills?: string[]; coverUrl?: string; role: 'hirer' | 'worker' | 'admin' };
+  currentUser: {
+    id: string;
+    name: string;
+    avatar: string;
+    email?: string;
+    phone?: string;
+    bio?: string;
+    headline?: string;
+    skills?: string[];
+    coverUrl?: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+    role: 'hirer' | 'worker' | 'admin';
+  };
   workerStatus: 'available' | 'on_job';
   workerCurrentJobId: string | null;
   hirerWallet: number;
   workerWallet: number;
-  addJob: (job: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>) => Promise<string>;
+  addJob: (job: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'> & {
+    postType?: string;
+    workMode?: string;
+    salaryUnit?: string;
+    employmentType?: string;
+    peopleNeeded?: number | null;
+    contactPhone?: string | null;
+    startDate?: string | null;
+    hashtags?: string[];
+    images?: string[];
+  }) => Promise<string>;
   applyToJob: (jobId: string, worker: Worker, note: string, bidPrice: number) => Promise<{ success: boolean; message?: string }>;
-  matchJob: (jobId: string, workerId: string) => void;
-  closeBidding: (jobId: string) => void;
-  completeJob: (jobId: string) => void;
+  matchJob: (jobId: string, workerId: string) => Promise<void>;
+  closeBidding: (jobId: string) => Promise<void>;
+  completeJob: (jobId: string) => Promise<void>;
   deleteJob: (jobId: string) => Promise<boolean>;
   updateJob: (jobId: string, fields: Partial<Job>) => Promise<boolean>;
   setUserRole: (role: 'hirer' | 'worker' | 'admin') => void;
-  topUpWallet: (role: 'hirer' | 'worker', amount: number) => void;
+  topUpWallet: (role: 'hirer' | 'worker', amount: number) => Promise<void>;
   fetchJobs: () => Promise<void>;
+  fetchCategories: () => Promise<void>;
   fetchProfile: () => Promise<void>;
-  updateProfile: (fields: { fullName?: string; phone?: string; avatarUrl?: string; bio?: string; headline?: string; skills?: string[]; coverUrl?: string }) => Promise<boolean>;
+  updateProfile: (fields: {
+    fullName?: string;
+    phone?: string;
+    avatarUrl?: string;
+    bio?: string;
+    headline?: string;
+    skills?: string[];
+    coverUrl?: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+  }) => Promise<boolean>;
   firebaseUser: any;
   authLoading: boolean;
   logout: () => Promise<void>;
@@ -176,262 +207,11 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [jobs, setJobs] = useState<Job[]>([]);
-
-  // Load tasks on mount
-  const fetchJobs = useCallback(async () => {
-    try {
-      const res = await api.get('/tasks');
-      const data = res.data;
-      if (data.success && Array.isArray(data.data)) {
-        // Map tasks to frontend format
-        const mappedJobs = data.data.map((task: any) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description || '',
-          category: task.category_slug || 'others',
-          categoryIcon: CATEGORIES.find(c => c.id === task.category_slug)?.icon || '⚡',
-          duration: task.duration || 2,
-          price: parseFloat(task.final_price || task.budget_min || 0),
-          priceMin: parseFloat(task.budget_min || 0),
-          priceMax: parseFloat(task.budget_max || 0),
-          location: task.locations && task.locations[0] ? {
-            lat: parseFloat(task.locations[0].latitude || 10.7769),
-            lng: parseFloat(task.locations[0].longitude || 106.7009),
-            address: task.locations[0].address || 'Hồ Chí Minh'
-          } : { lat: 10.7769, lng: 106.7009, address: 'Hồ Chí Minh' },
-          postedAt: new Date(task.created_at || Date.now()).getTime(),
-          expiresAt: (() => {
-            const t = task.application_deadline || task.deadline_end;
-            if (!t) return Date.now() + 24 * 3600 * 1000;
-            const parsed = new Date(t).getTime();
-            return isNaN(parsed) || parsed < Date.now() ? Date.now() + 24 * 3600 * 1000 : parsed;
-          })(),
-          status: task.status === 'OPEN' ? 'active' : task.status === 'IN_PROGRESS' ? 'matched' : task.status === 'COMPLETED' ? 'completed' : 'expired',
-          hirerName: task.poster_name || 'Người dùng',
-          hirerAvatar: task.poster_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser',
-          hirerId: task.poster_id,
-          aiMatchId: task.assigned_worker?.id || null,
-          assignedWorker: task.assigned_worker ? {
-            id: task.assigned_worker.id,
-            workerId: task.assigned_worker.id,
-            name: task.assigned_worker.name,
-            avatar: task.assigned_worker.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assigned_worker.id}`,
-            phone: task.assigned_worker.phone,
-            bidPrice: task.assigned_worker.bid_price
-          } : null,
-          applicants: []
-        }));
-        
-        const currentUserId = (() => {
-          try {
-            const saved = localStorage.getItem('appUser');
-            return saved ? JSON.parse(saved).id : null;
-          } catch {
-            return null;
-          }
-        })();
-
-        const token = localStorage.getItem('firebaseToken');
-        const jobsWithApps = await Promise.all(mappedJobs.map(async (job: any) => {
-          if (token && currentUserId && (job.hirerId === currentUserId || (currentUser as any)?.dbUser?.id && job.hirerId === (currentUser as any).dbUser.id)) {
-            try {
-              const appRes = await api.get(`/tasks/${job.id}/applications`).catch(() => null);
-              if (appRes && appRes.data?.success && Array.isArray(appRes.data.data)) {
-                job.applicants = appRes.data.data.map((app: any) => ({
-                  id: app.id,
-                  workerId: app.tasker_id,
-                  name: app.tasker_name || 'Tasker',
-                  avatar: app.tasker_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
-                  lat: parseFloat(app.latitude || 10.7769),
-                  lng: parseFloat(app.longitude || 106.7009),
-                  distance: parseFloat(app.distance || 0),
-                  rating: parseFloat(app.average_rating || 5.0),
-                  completedJobs: parseInt(app.completed_jobs || 0),
-                  skills: app.skills || [],
-                  appliedAt: new Date(app.created_at).getTime(),
-                  note: app.message || '',
-                  bidPrice: parseFloat(app.bid_price || 0)
-                }));
-                if (job.status === 'matched' && job.applicants.length > 0) {
-                  job.aiMatchId = job.applicants[0]?.workerId;
-                }
-              }
-            } catch (e) {
-              // Expected if not authorized
-            }
-          }
-          return job;
-        }));
-
-        // Fetch own tasks for Hirer / current user
-        if (token) {
-          try {
-            const myTaskRes = await api.get('/tasks/my-tasks').catch(() => null);
-            if (myTaskRes && myTaskRes.data?.success && Array.isArray(myTaskRes.data.data)) {
-              await Promise.all(myTaskRes.data.data.map(async (task: any) => {
-                let existing = jobsWithApps.find((j: any) => j.id === task.id);
-                if (!existing) {
-                  const categoryIcon = CATEGORIES.find(c => c.id === task.category_slug)?.icon || '⚡';
-                  existing = {
-                    id: task.id,
-                    title: task.title,
-                    description: task.description || '',
-                    category: task.category_slug || 'others',
-                    categoryIcon: categoryIcon,
-                    duration: task.duration || 2,
-                    price: parseFloat(task.final_price || task.budget_min || 0),
-                    priceMin: parseFloat(task.budget_min || 0),
-                    priceMax: parseFloat(task.budget_max || 0),
-                    location: task.locations && task.locations[0] ? {
-                      lat: parseFloat(task.locations[0].latitude || 10.7769),
-                      lng: parseFloat(task.locations[0].longitude || 106.7009),
-                      address: task.locations[0].address || 'Hồ Chí Minh'
-                    } : { lat: 10.7769, lng: 106.7009, address: 'Hồ Chí Minh' },
-                    postedAt: new Date(task.created_at || Date.now()).getTime(),
-                    expiresAt: (() => {
-                      const t = task.application_deadline || task.deadline_end;
-                      if (!t) return Date.now() + 24 * 3600 * 1000;
-                      const parsed = new Date(t).getTime();
-                      return isNaN(parsed) || parsed < Date.now() ? Date.now() + 24 * 3600 * 1000 : parsed;
-                    })(),
-                    status: task.status === 'OPEN' ? 'active' : task.status === 'IN_PROGRESS' ? 'matched' : task.status === 'COMPLETED' ? 'completed' : 'expired',
-                    hirerName: task.poster_name || 'Người dùng',
-                    hirerAvatar: task.poster_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser',
-                    hirerId: task.poster_id,
-                    aiMatchId: task.assigned_worker?.id || null,
-                    assignedWorker: task.assigned_worker ? {
-                      id: task.assigned_worker.id,
-                      workerId: task.assigned_worker.id,
-                      name: task.assigned_worker.name,
-                      avatar: task.assigned_worker.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assigned_worker.id}`,
-                      phone: task.assigned_worker.phone,
-                      bidPrice: task.assigned_worker.bid_price
-                    } : null,
-                    applicants: []
-                  };
-                  jobsWithApps.push(existing);
-                }
-
-                // Fetch applicants for this task
-                try {
-                  const appRes = await api.get(`/tasks/${task.id}/applications`).catch(() => null);
-                  if (appRes && appRes.data?.success && Array.isArray(appRes.data.data)) {
-                    existing.applicants = appRes.data.data.map((app: any) => ({
-                      id: app.id,
-                      workerId: app.tasker_id,
-                      name: app.tasker_name || 'Tasker',
-                      avatar: app.tasker_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.tasker_id}`,
-                      lat: parseFloat(app.latitude || 10.7769),
-                      lng: parseFloat(app.longitude || 106.7009),
-                      distance: parseFloat(app.distance || 0),
-                      rating: parseFloat(app.average_rating || 5.0),
-                      completedJobs: parseInt(app.completed_jobs || 0),
-                      skills: app.skills || [],
-                      appliedAt: new Date(app.created_at).getTime(),
-                      note: app.message || '',
-                      bidPrice: parseFloat(app.bid_price || 0)
-                    }));
-                    if (existing.status === 'matched' && existing.applicants.length > 0 && !existing.aiMatchId) {
-                      existing.aiMatchId = existing.applicants[0]?.workerId;
-                    }
-                  }
-                } catch (appErr) {}
-              }));
-            }
-          } catch (myTaskErr) {
-            // Silently ignore
-          }
-        }
-
-        // Fetch own applications for Worker role
-        if (token) {
-          try {
-            const myAppRes = await api.get('/applications/my-applications');
-            const myAppData = myAppRes.data;
-            if (myAppData.success && Array.isArray(myAppData.data)) {
-              myAppData.data.forEach((myApp: any) => {
-                let targetJob = jobsWithApps.find((j: any) => j.id === myApp.task_id);
-                if (!targetJob) {
-                  const categoryIcon = CATEGORIES.find(c => c.id === myApp.category_slug)?.icon || '⚡';
-                  targetJob = {
-                    id: myApp.task_id,
-                    title: myApp.task_title || 'Công việc',
-                    description: myApp.task_description || '',
-                    category: myApp.category_slug || 'others',
-                    categoryIcon: categoryIcon,
-                    duration: myApp.duration || 2,
-                    price: parseFloat(myApp.bid_price || myApp.budget_min || 0),
-                    priceMin: parseFloat(myApp.budget_min || 0),
-                    priceMax: parseFloat(myApp.budget_max || 0),
-                    location: { lat: 10.7769, lng: 106.7009, address: '🌐 Làm việc Online (Toàn quốc)' },
-                    postedAt: new Date(myApp.created_at || Date.now()).getTime(),
-                    expiresAt: Date.now() + 24 * 3600 * 1000,
-                    status: myApp.task_status === 'OPEN' ? 'active' : myApp.task_status === 'IN_PROGRESS' ? 'matched' : myApp.task_status === 'COMPLETED' ? 'completed' : 'expired',
-                    hirerName: myApp.poster_name || 'Người dùng',
-                    hirerAvatar: myApp.poster_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser',
-                    hirerId: myApp.poster_id,
-                    aiMatchId: (myApp.status === 'ACCEPTED' || myApp.assignment_id) ? myApp.tasker_id : null,
-                    assignedWorker: (myApp.status === 'ACCEPTED' || myApp.assignment_id) ? {
-                      id: myApp.tasker_id,
-                      workerId: myApp.tasker_id,
-                      name: myApp.tasker_name || 'Tôi',
-                      avatar: myApp.tasker_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
-                      phone: '',
-                      bidPrice: parseFloat(myApp.bid_price || 0)
-                    } : null,
-                    applicants: []
-                  };
-                  jobsWithApps.push(targetJob);
-                }
-
-                const existingApp = targetJob.applicants.find((a: any) => a.id === myApp.id || a.workerId === myApp.tasker_id || (currentUserId && a.workerId === currentUserId));
-                if (existingApp) {
-                  existingApp.status = myApp.status;
-                } else {
-                  targetJob.applicants.push({
-                    id: myApp.id,
-                    workerId: myApp.tasker_id,
-                    name: myApp.tasker_name || 'Tôi',
-                    avatar: myApp.tasker_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaskerUser',
-                    lat: 10.7769,
-                    lng: 106.7009,
-                    distance: 0,
-                    rating: 5.0,
-                    completedJobs: 0,
-                    skills: [],
-                    appliedAt: new Date(myApp.created_at).getTime(),
-                    note: myApp.message || '',
-                    bidPrice: parseFloat(myApp.bid_price || 0),
-                    status: myApp.status
-                  });
-                }
-
-                if (myApp.status === 'ACCEPTED' || myApp.assignment_id) {
-                  targetJob.aiMatchId = myApp.tasker_id;
-                  if (myApp.task_status === 'IN_PROGRESS') targetJob.status = 'matched';
-                  if (myApp.task_status === 'COMPLETED') targetJob.status = 'completed';
-                }
-              });
-            }
-          } catch (myAppErr) {
-            // Silently ignore
-          }
-        }
-
-        setJobs(jobsWithApps);
-      }
-    } catch (err) {
-      console.error('Error loading jobs:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [dbUser, setDbUser] = useState<any>(() => {
+  const [dbUser, setDbUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('appUser');
       return saved ? JSON.parse(saved) : null;
@@ -450,7 +230,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.role) {
-          return parsed.role === 'tasker' || parsed.role === 'worker' ? 'worker' : parsed.role === 'admin' ? 'admin' : 'hirer';
+          return parsed.role === 'tasker' || parsed.role === 'worker' ? 'worker' : parsed.role === 'admin' || parsed.role === 'ADMIN' ? 'admin' : 'hirer';
         }
       }
     } catch {}
@@ -462,50 +242,199 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [hirerWallet, setHirerWallet] = useState(0);
   const [workerWallet, setWorkerWallet] = useState(0);
 
-  const currentUser = userRole === 'hirer'
-    ? {
-        id: dbUser?.id || 'hirer',
-        name: dbUser?.full_name || dbUser?.fullName || 'Người thuê',
-        avatar: dbUser?.avatar_url || dbUser?.avatarUrl || '',
-        email: dbUser?.email || '',
-        phone: dbUser?.phone || '',
-        bio: dbUser?.bio || '',
-        headline: dbUser?.headline || '',
-        skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
-        coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
-        role: 'hirer' as const
+  const currentUser = {
+    id: dbUser?.id || (userRole === 'admin' ? 'admin' : userRole === 'worker' ? 'worker' : 'hirer'),
+    name: dbUser?.fullName || (userRole === 'admin' ? 'Admin' : userRole === 'worker' ? 'Người làm' : 'Người thuê'),
+    avatar: dbUser?.avatarUrl || '',
+    email: dbUser?.email || '',
+    phone: dbUser?.phone || '',
+    bio: dbUser?.bio || '',
+    headline: dbUser?.headline || '',
+    skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
+    coverUrl: dbUser?.coverUrl || '',
+    bankName: dbUser?.bankName || '',
+    bankAccountNumber: dbUser?.bankAccountNumber || '',
+    role: userRole,
+  };
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const cats = await categoryService.getCategories();
+      setCategories(cats);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  }, []);
+
+  const convertTaskToJob = (task: Task, currentUserId?: string | null): Job => {
+    const categorySlug = task.field?.slug || task.categoryId || 'others';
+    const catMeta = CATEGORIES.find(c => c.id === categorySlug);
+    const loc = task.locations && task.locations[0] ? task.locations[0] : { address: '🌐 Toàn quốc (Online)', lat: 10.7769, lng: 106.7009 };
+
+    let status: Job['status'] = 'active';
+    if (task.status === 'OPEN') status = 'active';
+    else if (task.status === 'IN_PROGRESS') status = 'matched';
+    else if (task.status === 'COMPLETED') status = 'completed';
+    else status = 'expired';
+
+    const expires = task.applicationDeadline || task.deadlineEnd;
+    const expiresAt = expires ? new Date(expires).getTime() : Date.now() + 30 * 24 * 3600 * 1000;
+
+    return {
+      id: task.id,
+      title: task.title,
+      description: task.description || '',
+      category: categorySlug,
+      categoryIcon: catMeta?.icon || task.field?.icon || '⚡',
+      duration: 2,
+      price: task.finalPrice || task.budgetMin || 0,
+      priceMin: task.budgetMin || 0,
+      priceMax: task.budgetMax || 0,
+      location: {
+        lat: loc.lat || 10.7769,
+        lng: loc.lng || 106.7009,
+        address: loc.address || 'Hồ Chí Minh',
+      },
+      postedAt: new Date(task.createdAt).getTime(),
+      expiresAt: isNaN(expiresAt) ? Date.now() + 30 * 24 * 3600 * 1000 : expiresAt,
+      status,
+      hirerName: task.posterName || task.poster?.fullName || 'Người dùng',
+      hirerAvatar: task.poster?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser',
+      hirerId: task.posterId,
+      aiMatchId: task.assignedWorker?.id || null,
+      assignedWorker: task.assignedWorker ? {
+        id: task.assignedWorker.id,
+        workerId: task.assignedWorker.id,
+        name: task.assignedWorker.name,
+        avatar: task.assignedWorker.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignedWorker.id}`,
+        phone: task.assignedWorker.phone,
+        bidPrice: task.assignedWorker.bidPrice,
+      } : null,
+      applicants: [],
+      rawTask: task,
+    };
+  };
+
+  const fetchJobs = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('firebaseToken');
+      const currentUserId = dbUser?.id || null;
+
+      // 1. Fetch public / all tasks
+      const res = await taskService.getTasks({ limit: 50 });
+      const mappedJobs = res.data.map(t => convertTaskToJob(t, currentUserId));
+
+      // 2. If user is logged in, fetch applicants for own posted tasks
+      if (token && currentUserId) {
+        await Promise.all(
+          mappedJobs
+            .filter(j => j.hirerId === currentUserId)
+            .map(async (job) => {
+              try {
+                const apps = await applicationService.getApplicationsByTask(job.id);
+                job.applicants = apps.map((app: TaskApplication) => ({
+                  id: app.id,
+                  workerId: app.taskerId,
+                  name: app.taskerName || 'Người làm',
+                  avatar: app.taskerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.taskerId}`,
+                  lat: 10.7769,
+                  lng: 106.7009,
+                  distance: 0,
+                  rating: app.taskerRating || 5.0,
+                  completedJobs: app.completedJobs || 0,
+                  skills: [],
+                  appliedAt: new Date(app.createdAt).getTime(),
+                  note: app.message || '',
+                  bidPrice: app.bidPrice || 0,
+                  status: app.status,
+                }));
+                if (job.status === 'matched' && job.applicants.length > 0 && !job.aiMatchId) {
+                  job.aiMatchId = job.applicants[0]?.workerId;
+                }
+              } catch {}
+            })
+        );
+
+        // 3. Fetch Worker's own applications
+        try {
+          const myApps = await applicationService.getMyApplications();
+          myApps.forEach((myApp: TaskApplication) => {
+            let targetJob = mappedJobs.find(j => j.id === myApp.taskId);
+            if (!targetJob) {
+              const catMeta = CATEGORIES.find(c => c.id === 'others');
+              targetJob = {
+                id: myApp.taskId,
+                title: myApp.taskTitle || 'Công việc đã ứng tuyển',
+                description: '',
+                category: 'others',
+                categoryIcon: catMeta?.icon || '⚡',
+                duration: 2,
+                price: myApp.bidPrice || 0,
+                priceMin: myApp.bidPrice || 0,
+                priceMax: myApp.bidPrice || 0,
+                location: { lat: 10.7769, lng: 106.7009, address: '🌐 Online' },
+                postedAt: new Date(myApp.createdAt).getTime(),
+                expiresAt: Date.now() + 30 * 24 * 3600 * 1000,
+                status: myApp.taskStatus === 'OPEN' ? 'active' : myApp.taskStatus === 'IN_PROGRESS' ? 'matched' : myApp.taskStatus === 'COMPLETED' ? 'completed' : 'expired',
+                hirerName: 'Người tuyển dụng',
+                hirerAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=HirerUser',
+                hirerId: '',
+                aiMatchId: myApp.status === 'ACCEPTED' ? myApp.taskerId : null,
+                assignedWorker: myApp.status === 'ACCEPTED' ? {
+                  id: myApp.taskerId,
+                  workerId: myApp.taskerId,
+                  name: myApp.taskerName || 'Tôi',
+                  avatar: myApp.taskerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${myApp.taskerId}`,
+                  bidPrice: myApp.bidPrice,
+                } : null,
+                applicants: [],
+              };
+              mappedJobs.push(targetJob);
+            }
+
+            const existingApp = targetJob.applicants.find(a => a.id === myApp.id || a.workerId === myApp.taskerId);
+            if (existingApp) {
+              existingApp.status = myApp.status;
+            } else {
+              targetJob.applicants.push({
+                id: myApp.id,
+                workerId: myApp.taskerId,
+                name: myApp.taskerName || 'Tôi',
+                avatar: myApp.taskerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${myApp.taskerId}`,
+                lat: 10.7769,
+                lng: 106.7009,
+                distance: 0,
+                rating: 5.0,
+                completedJobs: 0,
+                skills: [],
+                appliedAt: new Date(myApp.createdAt).getTime(),
+                note: myApp.message || '',
+                bidPrice: myApp.bidPrice || 0,
+                status: myApp.status,
+              });
+            }
+          });
+        } catch {}
       }
-    : userRole === 'admin'
-    ? {
-        id: dbUser?.id || 'admin',
-        name: dbUser?.full_name || dbUser?.fullName || 'Admin',
-        avatar: dbUser?.avatar_url || dbUser?.avatarUrl || '',
-        email: dbUser?.email || '',
-        bio: dbUser?.bio || '',
-        headline: dbUser?.headline || '',
-        skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
-        coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
-        role: 'admin' as const
-      }
-    : {
-        id: dbUser?.id || 'worker',
-        name: dbUser?.full_name || dbUser?.fullName || 'Người làm',
-        avatar: dbUser?.avatar_url || dbUser?.avatarUrl || '',
-        email: dbUser?.email || '',
-        phone: dbUser?.phone || '',
-        bio: dbUser?.bio || '',
-        headline: dbUser?.headline || '',
-        skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
-        coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
-        role: 'worker' as const
-      };
+
+      setJobs(mappedJobs);
+    } catch (err) {
+      console.error('Error loading jobs in context:', err);
+    }
+  }, [dbUser?.id]);
 
   const logout = useCallback(async () => {
     try {
       if (auth) {
         await signOut(auth);
       }
+      const refreshToken = localStorage.getItem('refreshToken') || undefined;
+      await authService.logout(refreshToken);
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
       localStorage.removeItem('firebaseToken');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('appUser');
       localStorage.removeItem('userRoleMode');
       localStorage.removeItem('wallet');
@@ -514,8 +443,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       _setUserRole('hirer');
       setHirerWallet(0);
       setWorkerWallet(0);
-    } catch (err) {
-      console.error('Logout error:', err);
     }
   }, []);
 
@@ -524,7 +451,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('firebaseToken');
       if (!token) {
         setDbUser(null);
-        // no-op
         const savedMode = localStorage.getItem('userRoleMode') as 'hirer' | 'worker' | 'admin' | null;
         _setUserRole(savedMode || 'hirer');
         setHirerWallet(0);
@@ -532,48 +458,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const res = await api.get('/users/profile').catch((err) => {
-        if (err.response?.status === 401) {
-          console.warn('Unauthorized user token. Logging out...');
-          logout();
-        }
-        throw err;
-      });
-      const data = res.data;
-      const userObj = data.data?.user || data.user;
-      if (data.success && userObj) {
-        setDbUser(userObj);
-        localStorage.setItem('appUser', JSON.stringify(userObj));
-        const dbRole = userObj.role;
+      const user = await authService.getProfile();
+      if (user) {
+        setDbUser(user);
+        localStorage.setItem('appUser', JSON.stringify(user));
+        const dbRole = user.role;
         const savedMode = localStorage.getItem('userRoleMode') as 'hirer' | 'worker' | 'admin' | null;
-        let mappedRole: 'hirer' | 'worker' | 'admin' = (dbRole === 'tasker' || dbRole === 'worker') ? 'worker' : dbRole === 'admin' ? 'admin' : 'hirer';
-        if ((dbRole === 'USER' || !dbRole) && savedMode && (savedMode === 'worker' || savedMode === 'hirer')) {
+        let mappedRole: 'hirer' | 'worker' | 'admin' =
+          dbRole === 'tasker' || dbRole === 'worker' ? 'worker' : dbRole === 'admin' || dbRole === 'ADMIN' ? 'admin' : 'hirer';
+        if ((dbRole === 'USER' || !dbRole) && savedMode) {
           mappedRole = savedMode;
         }
         _setUserRole(mappedRole);
 
-        // Fetch wallet balance from database
+        // Fetch wallet
         try {
-          const walletRes = await api.get('/wallet/me');
-          const walletData = walletRes.data;
-          if (walletData.success && walletData.data) {
-            const balance = parseFloat(walletData.data.available_balance ?? walletData.data.balance ?? 0);
-            setHirerWallet(balance);
-            setWorkerWallet(balance);
+          const wallet = await walletService.getMyWallet();
+          if (wallet) {
+            setHirerWallet(wallet.availableBalance);
+            setWorkerWallet(wallet.availableBalance);
           }
-        } catch (walletErr) {
-          console.error('Error fetching wallet balance:', walletErr);
+        } catch (wErr) {
+          console.warn('Wallet fetch notice:', wErr);
         }
-
-        // Re-fetch jobs with authorized user token
-        await fetchJobs();
       }
-    } catch (err) {
-      console.error('Error fetching user profile:', err);
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.warn('Unauthorized token, logging out.');
+        logout();
+      }
     }
-  }, [logout, fetchJobs]);
+  }, [logout]);
 
-  // Listen to Firebase auth state changes and sync profile/tokens
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
   useEffect(() => {
     if (!auth) {
       setAuthLoading(false);
@@ -588,18 +512,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           const token = await user.getIdToken();
           localStorage.setItem('firebaseToken', token);
-          
-          // Sync or fetch profile with the fresh token
           await fetchProfile();
         } catch (err) {
-          console.error("Error updating token on auth state change:", err);
+          console.error('Error on auth state change:', err);
         }
       } else {
-        // Clear local storage & state if logged out
         localStorage.removeItem('firebaseToken');
         localStorage.removeItem('appUser');
         localStorage.removeItem('userRoleMode');
-        localStorage.removeItem('wallet');
         setDbUser(null);
         _setUserRole('hirer');
         setHirerWallet(0);
@@ -610,22 +530,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [fetchProfile]);
 
-  const updateProfile = useCallback(async (fields: { fullName?: string; phone?: string; avatarUrl?: string; bio?: string; headline?: string; skills?: string[]; coverUrl?: string }) => {
+  const updateProfile = useCallback(async (fields: {
+    fullName?: string;
+    phone?: string;
+    avatarUrl?: string;
+    bio?: string;
+    headline?: string;
+    skills?: string[];
+    coverUrl?: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+  }) => {
     try {
-      const token = localStorage.getItem('firebaseToken');
-      if (!token) return false;
-
-      const res = await api.put('/users/profile', fields);
-      const data = res.data;
-      const userObj = data.data?.user || data.user;
-      if (data.success && userObj) {
-        setDbUser(userObj);
-        localStorage.setItem('appUser', JSON.stringify(userObj));
+      const updated = await authService.updateProfile(fields);
+      if (updated) {
+        setDbUser(updated);
+        localStorage.setItem('appUser', JSON.stringify(updated));
         return true;
       }
       return false;
     } catch (err) {
-      console.error('Error updating user profile:', err);
+      console.error('Error updating profile:', err);
       return false;
     }
   }, []);
@@ -637,327 +562,148 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       try {
         const dbRole = role === 'worker' ? 'tasker' : role;
-        const res = await api.put('/users/role', { role: dbRole });
-        const data = res.data;
-        const userObj = data.data?.user || data.user;
-        if (data.success && userObj) {
-          setDbUser(userObj);
-          localStorage.setItem('appUser', JSON.stringify(userObj));
+        const updated = await authService.updateRole(dbRole);
+        if (updated) {
+          setDbUser(updated);
+          localStorage.setItem('appUser', JSON.stringify(updated));
         }
-        // Refresh wallet balance when switching roles to ensure consistency
         await fetchProfile();
       } catch (err) {
-        console.error('Error updating database role:', err);
+        console.error('Error updating role in DB:', err);
       }
     }
   }, [fetchProfile]);
 
-  const addJob = useCallback(async (jobData: Omit<Job, 'id' | 'postedAt' | 'expiresAt' | 'status' | 'applicants' | 'hirerName' | 'hirerAvatar'>): Promise<string> => {
-    const id = 'j' + Date.now();
-    let createdTaskId = id;
-
+  const addJob = useCallback(async (jobData: any): Promise<string> => {
     try {
-      const res = await api.post('/tasks', {
+      const created = await taskService.createTask({
         title: jobData.title,
         description: jobData.description,
         category_id: jobData.category,
-        task_type: 'ONLINE',
-        work_mode: 'REMOTE',
-        post_type: 'RECRUITMENT',
+        task_type: jobData.taskType || 'ONLINE',
         budget_min: jobData.priceMin,
         budget_max: jobData.priceMax,
-        contact_phone: (currentUser as any)?.phone || '0900000000',
-        start_date: new Date().toISOString(),
-        location: {
+        post_type: jobData.postType || 'RECRUITMENT',
+        work_mode: jobData.workMode || 'REMOTE',
+        salary_unit: jobData.salaryUnit || 'PER_JOB',
+        employment_type: jobData.employmentType || 'ONE_TIME',
+        people_needed: jobData.peopleNeeded || 1,
+        contact_phone: jobData.contactPhone || currentUser.phone || '0900000000',
+        start_date: jobData.startDate || new Date().toISOString(),
+        hashtags: jobData.hashtags || [],
+        images: jobData.images || [],
+        location: jobData.location ? {
           location_type: 'TASK_LOCATION',
-          address: jobData.location?.address || '🌐 Làm việc Online (Toàn quốc)',
-          latitude: jobData.location?.lat || 10.7769,
-          longitude: jobData.location?.lng || 106.7009,
-        }
+          address: jobData.location.address || 'Làm việc Online',
+          latitude: jobData.location.lat || 10.7769,
+          longitude: jobData.location.lng || 106.7009,
+        } : undefined,
       });
-      if (res.data?.success && res.data?.data?.id) {
-        createdTaskId = res.data.data.id;
-        console.log('Task saved to backend database:', res.data.data);
-        await fetchJobs();
-      }
+
+      await fetchJobs();
+      return created.id;
     } catch (err) {
-      console.error('Error saving task to backend:', err);
+      console.error('Error adding job:', err);
       throw err;
     }
-
-    const postedAt = Date.now();
-    const newJob: Job = {
-      ...jobData,
-      id: createdTaskId,
-      postedAt,
-      expiresAt: postedAt + 30 * 24 * 3600 * 1000,
-      status: 'active',
-      hirerName: currentUser.name,
-      hirerAvatar: currentUser.avatar,
-      hirerId: currentUser.id,
-      applicants: [],
-    };
-    setJobs(prev => [newJob, ...prev]);
-    return createdTaskId;
-  }, [currentUser, fetchJobs]);
+  }, [currentUser.phone, fetchJobs]);
 
   const applyToJob = useCallback(async (jobId: string, worker: Worker, note: string, bidPrice: number): Promise<{ success: boolean; message?: string }> => {
-    let apiSuccess = false;
-    let errorMessage = '';
-
-    const token = localStorage.getItem('firebaseToken');
-    if (token) {
-      try {
-        const res = await api.post(`/tasks/${jobId}/applications`, {
-          bid_price: bidPrice,
-          estimated_time: '2 hours',
-          message: note
-        });
-        if (res.data?.success) {
-          apiSuccess = true;
-          console.log('Application bid saved to backend database:', res.data.data);
-          await fetchJobs();
-          setTimeout(() => {
-            window.dispatchEvent(new Event('notification-updated'));
-          }, 500);
-        }
-      } catch (err: any) {
-        console.error('Error saving application to backend:', err);
-        const status = err.response?.status;
-        const backendMsg = err.response?.data?.message;
-        if (status === 409) {
-          errorMessage = 'Bạn đã ứng tuyển công việc này rồi!';
-        } else if (backendMsg) {
-          errorMessage = backendMsg;
-        } else {
-          errorMessage = 'Không thể gửi đơn ứng tuyển. Vui lòng thử lại sau.';
-        }
-        return { success: false, message: errorMessage };
-      }
-    } else {
-      apiSuccess = true;
+    try {
+      await applicationService.createApplication(jobId, {
+        bid_price: bidPrice,
+        estimated_time: '1-2 ngày',
+        message: note,
+      });
+      await fetchJobs();
+      return { success: true, message: 'Ứng tuyển thành công!' };
+    } catch (err: any) {
+      const msg = err.response?.data?.message || (err.response?.status === 409 ? 'Bạn đã ứng tuyển công việc này rồi!' : 'Không thể gửi đơn ứng tuyển.');
+      return { success: false, message: msg };
     }
+  }, [fetchJobs]);
 
+  const matchJob = useCallback(async (jobId: string, workerId: string) => {
     const job = jobs.find(j => j.id === jobId);
-    if (job) {
-      const dist = haversineDistance(job.location.lat, job.location.lng, worker.lat, worker.lng);
-      const applicant: Applicant = {
-        workerId: worker.id,
-        name: worker.name,
-        avatar: worker.avatar,
-        lat: worker.lat,
-        lng: worker.lng,
-        distance: Math.round(dist * 10) / 10,
-        rating: worker.rating,
-        completedJobs: worker.completedJobs,
-        skills: worker.skills,
-        appliedAt: Date.now(),
-        note,
-        bidPrice: Math.max(job.priceMin, Math.min(job.priceMax, bidPrice)),
-      };
-      setJobs(prev => prev.map(j => {
-        if (j.id !== jobId) return j;
-        const alreadyApplied = j.applicants.some(a => a.workerId === worker.id);
-        if (alreadyApplied) return j;
-        const newApplicants = [...j.applicants, applicant].sort((a, b) => a.distance - b.distance);
-        return { ...j, applicants: newApplicants, aiMatchId: newApplicants[0]?.workerId };
-      }));
-    }
-
-    return { success: true, message: 'Ứng tuyển thành công!' };
-  }, [jobs, fetchJobs]);
-
-  const matchJob = useCallback((jobId: string, workerId: string) => {
-    // Check wallet balance for hirer
-    const job = jobs.find(j => j.id === jobId);
-    if (!job) return;
-    const winner = job.applicants.find(a => a.workerId === workerId);
-    const cost = winner?.bidPrice ?? job.price;
-    if (hirerWallet < cost) return; // Block if insufficient funds
-
-    // Optimistic UI update for job status
-    setJobs(prev => prev.map(j => {
-      if (j.id !== jobId) return j;
-      return {
-        ...j,
-        status: 'matched',
-        aiMatchId: workerId,
-        price: cost,
-      };
-    }));
-    if (workerId === currentUser.id) {
-      setWorkerStatus('on_job');
-      setWorkerCurrentJobId(jobId);
-    }
-
-    // Persist match to backend database if token exists
-    // Backend escrow system handles wallet deduction (holdForMatch)
-    const token = localStorage.getItem('firebaseToken');
-    if (token && winner?.id) {
-      api.post(`/tasks/${jobId}/manual-match`, { application_id: winner.id })
-      .then(res => {
-        if (res.data.success) {
-          console.log('Manual match saved to backend');
-          fetchProfile(); // Refresh wallet balance from DB (escrow deducted)
-        }
-      })
-      .catch(err => console.error('Error saving manual match to backend:', err));
-    } else {
-      // Offline fallback: deduct locally
-      setHirerWallet(prev => prev - cost);
-    }
-  }, [jobs, hirerWallet, currentUser.id, fetchProfile]);
-
-  // ── Close bidding: run AI scoring algo → auto-match winner ──
-  const closeBidding = useCallback((jobId: string) => {
-    const job = jobs.find(j => j.id === jobId);
-    if (!job || job.applicants.length === 0) return;
-
-    const scored = scoreApplicants(job);
-    const winner = scored[0];
-
-    // Check wallet balance
-    if (hirerWallet < winner.bidPrice) return;
-
-    // Optimistic UI update for job status
-    setJobs(prev => prev.map(j => {
-      if (j.id !== jobId) return j;
-      return {
-        ...j,
-        status: 'matched',
-        aiMatchId: winner.workerId,
-        price: winner.bidPrice,
-        applicants: scored,
-      };
-    }));
-
-    if (winner.workerId === currentUser.id) {
-      setWorkerStatus('on_job');
-      setWorkerCurrentJobId(jobId);
-    }
-
-    // Persist auto-match to backend database if token exists
-    // Backend escrow system handles wallet deduction (holdForMatch)
-    const token = localStorage.getItem('firebaseToken');
-    if (token) {
-      api.post(`/tasks/${jobId}/auto-match`)
-      .then(res => {
-        if (res.data.success) {
-          console.log('Auto-match saved to backend');
-          fetchProfile(); // Refresh wallet balance from DB (escrow deducted)
-        }
-      })
-      .catch(err => console.error('Error saving auto-match to backend:', err));
-    } else {
-      // Offline fallback: deduct locally
-      setHirerWallet(prev => prev - winner.bidPrice);
-    }
-  }, [jobs, hirerWallet, currentUser.id, fetchProfile]);
-
-  const completeJob = useCallback((jobId: string) => {
-    const job = jobs.find(j => j.id === jobId);
-    // Optimistic UI update for job status
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'completed' } : j));
-    
-    // Update worker status if the matched worker is the logged-in user
-    if (job && job.aiMatchId === currentUser.id) {
-      setWorkerStatus('available');
-      setWorkerCurrentJobId(null);
-    }
-
-    // Persist task completion status to backend if token exists
-    // Backend escrow system handles payment distribution (releaseForTask)
-    const token = localStorage.getItem('firebaseToken');
-    if (token) {
-      api.patch(`/tasks/${jobId}/status`, { status: 'COMPLETED' })
-      .then(res => {
-        if (res.data.success) {
-          console.log('Completed status saved to backend');
-          fetchProfile(); // Refresh wallet balance from DB (escrow released)
-        }
-      })
-      .catch(err => console.error('Error saving completed status to backend:', err));
-    } else {
-      // Offline fallback: add earnings locally
-      const earnings = job?.price ?? 0;
-      if (job && job.aiMatchId === currentUser.id) {
-        setWorkerWallet(prev => prev + earnings);
-      }
-    }
-  }, [jobs, currentUser.id, fetchProfile]);
-
-  const topUpWallet = useCallback(async (role: 'hirer' | 'worker', amount: number) => {
-    const token = localStorage.getItem('firebaseToken');
-    if (!token) {
-      if (role === 'hirer') setHirerWallet(prev => prev + amount);
-      else setWorkerWallet(prev => prev + amount);
-      return;
-    }
+    const applicant = job?.applicants.find(a => a.workerId === workerId);
+    if (!applicant?.id) return;
 
     try {
-      const res = await api.post('/wallet/topup/mock', { amount });
-      const data = res.data;
-      if (data.success && data.data) {
-        const balance = parseFloat(data.data.available_balance || data.data.balance || 0);
-        if (role === 'worker') {
-          setWorkerWallet(balance);
-          setHirerWallet(0);
-        } else {
-          setHirerWallet(balance);
-          setWorkerWallet(0);
-        }
-      }
-    } catch (e) {
-      console.error('Error topping up wallet on backend:', e);
-      // Fallback
-      if (role === 'hirer') setHirerWallet(prev => prev + amount);
-      else setWorkerWallet(prev => prev + amount);
+      await applicationService.manualMatch(jobId, applicant.id);
+      await fetchJobs();
+      await fetchProfile();
+    } catch (err) {
+      console.error('Error matching job:', err);
     }
-  }, []);
+  }, [jobs, fetchJobs, fetchProfile]);
+
+  const closeBidding = useCallback(async (jobId: string) => {
+    try {
+      await applicationService.autoMatch(jobId);
+      await fetchJobs();
+      await fetchProfile();
+    } catch (err) {
+      console.error('Error auto-matching job:', err);
+    }
+  }, [fetchJobs, fetchProfile]);
+
+  const completeJob = useCallback(async (jobId: string) => {
+    try {
+      await taskService.updateTaskStatus(jobId, 'COMPLETED');
+      await fetchJobs();
+      await fetchProfile();
+    } catch (err) {
+      console.error('Error completing job:', err);
+    }
+  }, [fetchJobs, fetchProfile]);
 
   const deleteJob = useCallback(async (jobId: string): Promise<boolean> => {
-    setJobs(prev => prev.filter(j => j.id !== jobId));
-    const token = localStorage.getItem('firebaseToken');
-    if (token) {
-      try {
-        const res = await api.delete(`/tasks/${jobId}`);
-        return res.data?.success || true;
-      } catch (err) {
-        console.error('Error deleting task on backend:', err);
-        return false;
-      }
+    try {
+      await taskService.deleteTask(jobId);
+      setJobs(prev => prev.filter(j => j.id !== jobId));
+      return true;
+    } catch (err) {
+      console.error('Error deleting job:', err);
+      return false;
     }
-    return true;
   }, []);
 
   const updateJob = useCallback(async (jobId: string, fields: Partial<Job>): Promise<boolean> => {
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...fields } : j));
-    const token = localStorage.getItem('firebaseToken');
-    if (token) {
-      try {
-        const res = await api.patch(`/tasks/${jobId}`, {
-          title: fields.title,
-          description: fields.description,
-          budget_min: fields.priceMin,
-          budget_max: fields.priceMax,
-        });
-        return res.data?.success || true;
-      } catch (err) {
-        console.error('Error updating task on backend:', err);
-        return false;
-      }
+    try {
+      await taskService.updateTask(jobId, {
+        title: fields.title,
+        description: fields.description,
+        budget_min: fields.priceMin,
+        budget_max: fields.priceMax,
+      });
+      await fetchJobs();
+      return true;
+    } catch (err) {
+      console.error('Error updating job:', err);
+      return false;
     }
-    return true;
+  }, [fetchJobs]);
+
+  const topUpWallet = useCallback(async (role: 'hirer' | 'worker', amount: number) => {
+    try {
+      const wallet = await walletService.topupMock(amount);
+      if (wallet) {
+        setHirerWallet(wallet.availableBalance);
+        setWorkerWallet(wallet.availableBalance);
+      }
+    } catch (err) {
+      console.error('Error topping up wallet:', err);
+    }
   }, []);
 
   return (
     <AppContext.Provider value={{
-      jobs, workers: [], currentUser,
+      jobs, categories, workers: [], currentUser,
       workerStatus, workerCurrentJobId,
       hirerWallet, workerWallet,
       addJob, applyToJob, matchJob, closeBidding, completeJob, deleteJob, updateJob, setUserRole, topUpWallet,
-      fetchJobs, fetchProfile, updateProfile,
-      firebaseUser, authLoading, logout
+      fetchJobs, fetchCategories, fetchProfile, updateProfile,
+      firebaseUser, authLoading, logout,
     }}>
       {children}
     </AppContext.Provider>
@@ -967,29 +713,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) {
-    // Return a safe fallback for isolated renders (e.g. Figma preview)
-    return {
-      jobs: [] as Job[],
-      workers: [] as Worker[],
-      currentUser: { id: '', role: 'hirer' as const, name: 'Guest', avatar: '' },
-      workerStatus: 'available' as const,
-      workerCurrentJobId: null as string | null,
-      hirerWallet: 0,
-      workerWallet: 0,
-      addJob: async () => '',
-      applyToJob: async () => ({ success: false }),
-      matchJob: () => {},
-      closeBidding: () => {},
-      completeJob: () => {},
-      setUserRole: () => {},
-      topUpWallet: () => {},
-      fetchJobs: async () => {},
-      fetchProfile: async () => {},
-      updateProfile: async () => false,
-      firebaseUser: null,
-      authLoading: false,
-      logout: async () => {},
-    } as AppContextType;
+    throw new Error('useApp must be used within an AppProvider');
   }
   return ctx;
 }
