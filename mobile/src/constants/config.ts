@@ -14,8 +14,12 @@
  *    - Hardcoded defaults represent secure production fallbacks.
  */
 
+<<<<<<< HEAD
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || 'https://graceful-playfulness-production.up.railway.app/api';
+=======
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://graceful-playfulness-production.up.railway.app/api';
+>>>>>>> main
 
 const Config = {
   API_BASE_URL,

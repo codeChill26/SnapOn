@@ -639,7 +639,7 @@
   <!-- Script for Mock Form Submission & Scrollspy Active Class -->
   <script>
     const getApiBaseUrl = () => {
-      // Connect to the deployed debug backend by default
+      // Connect to the deployed backend by default
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('local') === 'true') {
         return 'http://localhost:3000/api';

@@ -15,6 +15,9 @@ export interface Job {
   price: number;         // Final/accepted price (updated when matched)
   priceMin: number;      // Minimum budget set by hirer
   priceMax: number;      // Maximum budget set by hirer
+  workMode?: string;
+  taskType?: string;
+  postType?: string;
   location: { lat: number; lng: number; address: string };
   postedAt: number;
   expiresAt: number;
@@ -177,7 +180,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Load tasks on mount
   const fetchJobs = useCallback(async () => {
     try {
-      const res = await api.get('/tasks');
+      const res = await api.get('/tasks?status=OPEN&limit=50');
       const data = res.data;
       if (data.success && Array.isArray(data.data)) {
         // Map tasks to frontend format
@@ -191,6 +194,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           price: parseFloat(task.final_price || task.budget_min || 0),
           priceMin: parseFloat(task.budget_min || 0),
           priceMax: parseFloat(task.budget_max || 0),
+          workMode: task.work_mode || task.workMode || 'REMOTE',
+          taskType: task.task_type || task.taskType || 'ONLINE',
+          postType: task.post_type || task.postType || 'RECRUITMENT',
           location: task.locations && task.locations[0] ? {
             lat: parseFloat(task.locations[0].latitude || 10.7769),
             lng: parseFloat(task.locations[0].longitude || 106.7009),
@@ -289,7 +295,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         avatar: dbUser?.avatar_url || dbUser?.avatarUrl || '',
         email: dbUser?.email || '',
         phone: dbUser?.phone || '',
+<<<<<<< HEAD
         role: 'hirer' as const
+=======
+        bio: dbUser?.bio || '',
+        headline: dbUser?.headline || '',
+        skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
+        coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
+        role: 'hirer' as const,
+        dbUser: dbUser || null,
+>>>>>>> main
       }
     : userRole === 'admin'
     ? {
@@ -297,7 +312,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         name: dbUser?.full_name || dbUser?.fullName || 'Admin',
         avatar: dbUser?.avatar_url || dbUser?.avatarUrl || '',
         email: dbUser?.email || '',
+<<<<<<< HEAD
         role: 'admin' as const
+=======
+        bio: dbUser?.bio || '',
+        headline: dbUser?.headline || '',
+        skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
+        coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
+        role: 'admin' as const,
+        dbUser: dbUser || null,
+>>>>>>> main
       }
     : {
         id: dbUser?.id || 'worker',
@@ -305,7 +329,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         avatar: dbUser?.avatar_url || dbUser?.avatarUrl || '',
         email: dbUser?.email || '',
         phone: dbUser?.phone || '',
+<<<<<<< HEAD
         role: 'worker' as const
+=======
+        bio: dbUser?.bio || '',
+        headline: dbUser?.headline || '',
+        skills: Array.isArray(dbUser?.skills) ? dbUser.skills : [],
+        coverUrl: dbUser?.cover_url || dbUser?.coverUrl || '',
+        role: 'worker' as const,
+        dbUser: dbUser || null,
+>>>>>>> main
       };
 
   const logout = useCallback(async () => {
@@ -714,6 +747,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [jobs, currentUser.id, fetchProfile]);
 
   const topUpWallet = useCallback(async (role: 'hirer' | 'worker', amount: number) => {
+<<<<<<< HEAD
     // Escrow-per-job: backend đã GỠ nạp tiền vào ví.
     // Poster thanh toán trực tiếp từng job qua PayOS khi match.
     // Hàm này chỉ còn cập nhật số dư demo cục bộ (không gọi backend).
@@ -721,6 +755,76 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (role === 'hirer') setHirerWallet(prev => prev + amount);
     else setWorkerWallet(prev => prev + amount);
   }, []);
+=======
+    const token = localStorage.getItem('firebaseToken');
+    if (!token) {
+      if (role === 'hirer') setHirerWallet(prev => prev + amount);
+      else setWorkerWallet(prev => prev + amount);
+      return;
+    }
+
+    try {
+      const res = await api.post('/wallet/topup/mock', { amount });
+      const data = res.data;
+      if (data.success && data.data) {
+        const balance = parseFloat(data.data.available_balance || data.data.balance || 0);
+        if (role === 'worker') {
+          setWorkerWallet(balance);
+          setHirerWallet(0);
+        } else {
+          setHirerWallet(balance);
+          setWorkerWallet(0);
+        }
+      }
+    } catch (e) {
+      console.error('Error topping up wallet on backend:', e);
+      // Fallback
+      if (role === 'hirer') setHirerWallet(prev => prev + amount);
+      else setWorkerWallet(prev => prev + amount);
+    }
+  }, []);
+
+  const deleteJob = useCallback(async (jobId: string): Promise<boolean> => {
+    setJobs(prev => prev.filter(j => j.id !== jobId));
+    const token = localStorage.getItem('firebaseToken');
+    if (token) {
+      try {
+        const res = await api.delete(`/tasks/${jobId}`);
+        return res.data?.success || true;
+      } catch (err) {
+        console.error('Error deleting task on backend:', err);
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
+  const updateJob = useCallback(async (jobId: string, fields: Partial<Job>): Promise<boolean> => {
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...fields } : j));
+    const token = localStorage.getItem('firebaseToken');
+    if (token) {
+      try {
+        const res = await api.patch(`/tasks/${jobId}`, {
+          title: fields.title,
+          description: fields.description,
+          budget_min: fields.priceMin,
+          budget_max: fields.priceMax,
+        });
+        if (res.data?.success) {
+          await fetchJobs();
+          return true;
+        }
+        await fetchJobs();
+        return false;
+      } catch (err) {
+        console.error('Error updating task on backend:', err);
+        await fetchJobs();
+        return false;
+      }
+    }
+    return true;
+  }, [fetchJobs]);
+>>>>>>> main
 
   return (
     <AppContext.Provider value={{

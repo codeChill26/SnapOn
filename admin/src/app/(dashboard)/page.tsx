@@ -2,6 +2,9 @@ import React from 'react';
 import { prisma } from '@/lib/prisma';
 import KpiOverviewGrid, { KpiData } from '@/components/dashboard/KpiOverviewGrid';
 import GrowthAnalyticsCharts, { RawRecord } from '@/components/dashboard/GrowthAnalyticsCharts';
+import FinancialLedgerPanel from '@/components/dashboard/FinancialLedgerPanel';
+import WalletLedgerPanel, { UserWalletLedgerItem } from '@/components/dashboard/WalletLedgerPanel';
+import { RawEscrowItem } from '@/lib/financial-math';
 import PlatformHealthPanel from '@/components/dashboard/PlatformHealthPanel';
 import RecentActivityTables from '@/components/dashboard/RecentActivityTables';
 import TopStatisticsPanel from '@/components/dashboard/TopStatisticsPanel';
@@ -43,6 +46,8 @@ export default async function DashboardPage() {
   let rawUserRecords: RawRecord[] = [];
   let rawTaskRecords: RawRecord[] = [];
   let rawWithdrawRecords: RawRecord[] = [];
+  let escrowLedger: RawEscrowItem[] = [];
+  let userWalletLedger: UserWalletLedgerItem[] = [];
 
   let dbStatus: 'connected' | 'error' = 'connected';
   let dbErrorMessage: string | null = null;
@@ -73,6 +78,8 @@ export default async function DashboardPage() {
       fetchedRawUsers,
       fetchedRawTasks,
       fetchedRawWithdraws,
+      fetchedEscrows,
+      fetchedUserWallets,
     ] = await Promise.all([
       // 1. KPI Counts
       prisma.user.count(),
@@ -179,6 +186,30 @@ export default async function DashboardPage() {
         select: { id: true, user: { select: { createdAt: true } } },
         take: 2000,
       }),
+
+      // 6. Full Escrow Ledger Records for Cash Flow & 8% Revenue Schema Table
+      prisma.escrow.findMany({
+        take: 200,
+        orderBy: { id: 'desc' },
+        include: {
+          poster: { select: { fullName: true, email: true } },
+          tasker: { select: { fullName: true, email: true } },
+          task: { select: { title: true, createdAt: true, updatedAt: true } },
+        },
+      }),
+
+      // 7. User Wallets & PayOS Deposits Ledger Table
+      prisma.wallet.findMany({
+        take: 200,
+        orderBy: { balance: 'desc' },
+        include: {
+          user: { select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true } },
+          transactions: {
+            orderBy: { created_at: 'desc' },
+            take: 50,
+          },
+        },
+      }),
     ]);
 
     // Populate KPI Data
@@ -225,6 +256,48 @@ export default async function DashboardPage() {
     rawWithdrawRecords = fetchedRawWithdraws.map((w) => ({
       createdAt: w.user?.createdAt || now,
     }));
+
+    escrowLedger = fetchedEscrows.map((e) => ({
+      id: e.id,
+      taskId: e.taskId,
+      posterName: e.poster?.fullName || 'N/A',
+      posterEmail: e.poster?.email || 'N/A',
+      taskerName: e.tasker?.fullName || 'N/A',
+      taskerEmail: e.tasker?.email || 'N/A',
+      taskTitle: e.task?.title || 'Công việc không tên',
+      amount: Number(e.amount || 0),
+      platformFeeAmount: Number(e.platformFeeAmount || 0),
+      insuranceFeeAmount: Number(e.insuranceFeeAmount || 0),
+      status: e.status as 'HOLDING' | 'RELEASED' | 'REFUNDED',
+      createdAt: e.task?.createdAt,
+      updatedAt: e.task?.updatedAt,
+    }));
+
+    userWalletLedger = fetchedUserWallets.map((w) => {
+      const depositTx = w.transactions.find((tx) => tx.type === 'DEPOSIT') || w.transactions[0];
+      return {
+        userId: w.userId,
+        fullName: w.user?.fullName || 'N/A',
+        email: w.user?.email || 'N/A',
+        phone: w.user?.phone || null,
+        avatarUrl: w.user?.avatarUrl || null,
+        role: w.user?.role || 'USER',
+        balance: Number(w.balance || 0),
+        availableBalance: Number(w.availableBalance || 0),
+        lockedBalance: Number(w.lockedBalance || 0),
+        lastDepositAmount: Number(depositTx?.amount || 0),
+        lastDepositOrderCode: depositTx?.order_code ? depositTx.order_code.toString() : null,
+        lastDepositAt: depositTx?.created_at || null,
+        transactions: w.transactions.map((tx) => ({
+          id: tx.id,
+          type: tx.type,
+          amount: Number(tx.amount || 0),
+          status: tx.status,
+          order_code: tx.order_code ? tx.order_code.toString() : null,
+          created_at: tx.created_at,
+        })),
+      };
+    });
 
   } catch (error: any) {
     console.error('Failed to load dashboard data:', error);
@@ -286,7 +359,13 @@ export default async function DashboardPage() {
         withdrawRecords={rawWithdrawRecords}
       />
 
-      {/* SECTION 3: Health Status & Top Statistics */}
+      {/* SECTION 3: Excel Schema Cash Flow & 8% Platform Revenue Financial Ledger Table */}
+      <FinancialLedgerPanel escrows={escrowLedger} />
+
+      {/* SECTION 4: Excel Schema User Wallets & PayOS Deposits Ledger Table */}
+      <WalletLedgerPanel walletItems={userWalletLedger} />
+
+      {/* SECTION 5: Health Status & Top Statistics */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <PlatformHealthPanel
@@ -305,14 +384,14 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* SECTION 4: Recent Activity Tables */}
+      {/* SECTION 6: Recent Activity Tables */}
       <RecentActivityTables
         recentTasks={recentTasks}
         recentPayouts={recentPayouts}
         recentUsers={recentUsers}
       />
 
-      {/* SECTION 5: Quick Management Console Cards */}
+      {/* SECTION 7: Quick Management Console Cards */}
       <QuickActionsGrid />
     </div>
   );

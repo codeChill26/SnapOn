@@ -46,13 +46,13 @@ export default function TopStatisticsPanel({
             <h4 className="text-sm font-extrabold text-[#18181B]">Top Người Đăng Task</h4>
           </div>
           <Link href="/users" className="text-[11px] text-[#312F2C] font-bold hover:underline">
-            View users
+            Xem người dùng
           </Link>
         </div>
 
         <div className="space-y-2.5">
           {topPosters.length === 0 ? (
-            <p className="text-xs text-[#71717A] text-center py-4">No top posters available</p>
+            <p className="text-xs text-[#71717A] text-center py-4">Chưa có dữ liệu người đăng</p>
           ) : (
             topPosters.map((poster, index) => (
               <div key={poster.id} className="flex items-center justify-between p-2.5 rounded-xl bg-[#F4F4F5] border border-[#E4E4E7] text-xs">
@@ -71,7 +71,7 @@ export default function TopStatisticsPanel({
                   </div>
                 </div>
                 <span className="font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded text-[10px] border border-amber-300 shrink-0">
-                  {poster.taskCount} tasks
+                  {poster.taskCount} việc
                 </span>
               </div>
             ))
@@ -84,16 +84,16 @@ export default function TopStatisticsPanel({
         <div className="flex items-center justify-between border-b border-[#E4E4E7] pb-3">
           <div className="flex items-center gap-2">
             <Tag className="h-4 w-4 text-purple-600" />
-            <h4 className="text-sm font-extrabold text-[#18181B]">Top Danh Mục</h4>
+            <h4 className="text-sm font-extrabold text-[#18181B]">Top Danh Mục Popular</h4>
           </div>
           <Link href="/categories" className="text-[11px] text-[#312F2C] font-bold hover:underline">
-            Manage
+            Quản lý
           </Link>
         </div>
 
         <div className="space-y-2.5">
           {topCategories.length === 0 ? (
-            <p className="text-xs text-[#71717A] text-center py-4">No categories recorded</p>
+            <p className="text-xs text-[#71717A] text-center py-4">Chưa có danh mục</p>
           ) : (
             topCategories.map((cat, index) => (
               <div key={cat.id} className="flex items-center justify-between p-2.5 rounded-xl bg-[#F4F4F5] border border-[#E4E4E7] text-xs">
@@ -104,7 +104,7 @@ export default function TopStatisticsPanel({
                   <p className="font-bold text-[#18181B] truncate">{cat.name}</p>
                 </div>
                 <span className="font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded text-[10px] border border-purple-300 shrink-0">
-                  {cat.taskCount} tasks
+                  {cat.taskCount} việc
                 </span>
               </div>
             ))
@@ -117,16 +117,16 @@ export default function TopStatisticsPanel({
         <div className="flex items-center justify-between border-b border-[#E4E4E7] pb-3">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-blue-600" />
-            <h4 className="text-sm font-extrabold text-[#18181B]">Thành Viên Mới</h4>
+            <h4 className="text-sm font-extrabold text-[#18181B]">Thành Viên Mới Đăng Ký</h4>
           </div>
           <Link href="/users" className="text-[11px] text-[#312F2C] font-bold hover:underline">
-            View all
+            Xem tất cả
           </Link>
         </div>
 
         <div className="space-y-2.5">
           {newestMembers.length === 0 ? (
-            <p className="text-xs text-[#71717A] text-center py-4">No new members registered</p>
+            <p className="text-xs text-[#71717A] text-center py-4">Chưa có thành viên mới</p>
           ) : (
             newestMembers.map((member) => (
               <div key={member.id} className="flex items-center justify-between p-2.5 rounded-xl bg-[#F4F4F5] border border-[#E4E4E7] text-xs">

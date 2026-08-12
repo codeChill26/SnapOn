@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+<<<<<<< HEAD
 
 const CONFIGURED_API_URL = import.meta.env.VITE_API_BASE_URL;
 const DEPLOYED_API_URL =
@@ -49,18 +50,31 @@ export function resetBackendDetection(): void {
   resolvedBaseUrl = null;
   detectionPromise = null;
 }
+=======
+import { detectBackend } from '../utils/backendDetector';
+>>>>>>> main
 
 const api: AxiosInstance = axios.create({
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
+<<<<<<< HEAD
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   config.baseURL = await detectBackend();
 
   // sync-user carries a fresh token in its body; a stale stored token
   // in the Authorization header would override it and cause 401s.
   const isSyncUser = config.url?.includes('/auth/sync-user');
+=======
+let cachedBaseURL: string | null = null;
+
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  if (!cachedBaseURL) {
+    cachedBaseURL = await detectBackend();
+  }
+  config.baseURL = cachedBaseURL;
+>>>>>>> main
   const token = localStorage.getItem('firebaseToken');
   if (token && !isSyncUser) {
     config.headers.Authorization = `Bearer ${token}`;

@@ -58,7 +58,14 @@ export class UserRepository {
           },
           orderBy: { reviewedAt: 'desc' },
         },
-        wallet: true,
+        wallet: {
+          include: {
+            transactions: {
+              orderBy: { created_at: 'desc' },
+              take: 15,
+            },
+          },
+        },
         postedTasks: {
           include: {
             category: true,

@@ -56,7 +56,7 @@ export default function RecentActivityTables({
             <span>Task Mới Đăng Gần Đây</span>
           </h3>
           <Link href="/tasks" className="text-xs text-[#312F2C] font-bold hover:underline flex items-center gap-1">
-            View all <ArrowUpRight className="h-3 w-3" />
+            Xem tất cả <ArrowUpRight className="h-3 w-3" />
           </Link>
         </div>
 
@@ -74,7 +74,7 @@ export default function RecentActivityTables({
             <tbody className="divide-y divide-[#E4E4E7]">
               {recentTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-[#71717A]">No tasks created recently</td>
+                  <td colSpan={5} className="px-3 py-6 text-center text-[#71717A]">Chưa có công việc nào vừa đăng</td>
                 </tr>
               ) : (
                 recentTasks.map((task) => (
@@ -90,12 +90,12 @@ export default function RecentActivityTables({
                         />
                       ) : (
                         <div className="w-[32px] h-[32px] rounded bg-[#F4F4F5] border border-[#E4E4E7] flex items-center justify-center text-[7px] text-[#71717A] font-bold">
-                          No Img
+                          Không ảnh
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-[#18181B] font-semibold truncate max-w-[140px]">{task.title}</td>
-                    <td className="px-3 py-2 text-[#71717A] font-medium">{task.category?.name || 'General'}</td>
+                    <td className="px-3 py-2 text-[#71717A] font-medium">{task.category?.name || 'Chung'}</td>
                     <td className="px-3 py-2 truncate max-w-[100px] text-[#18181B] font-medium">{task.poster.fullName}</td>
                     <td className="px-3 py-2 text-right">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${
@@ -104,7 +104,7 @@ export default function RecentActivityTables({
                         task.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
                         'bg-zinc-100 text-zinc-700 border-zinc-200'
                       }`}>
-                        {task.status}
+                        {task.status === 'OPEN' ? 'ĐANG MỞ' : task.status === 'IN_PROGRESS' ? 'ĐANG LÀM' : task.status === 'COMPLETED' ? 'ĐÃ XONG' : task.status}
                       </span>
                     </td>
                   </tr>
@@ -123,7 +123,7 @@ export default function RecentActivityTables({
             <span>Yêu Cầu Rút Tiền Gần Đây</span>
           </h3>
           <Link href="/withdraws" className="text-xs text-[#312F2C] font-bold hover:underline flex items-center gap-1">
-            View all <ArrowUpRight className="h-3 w-3" />
+            Xem tất cả <ArrowUpRight className="h-3 w-3" />
           </Link>
         </div>
 
@@ -131,7 +131,7 @@ export default function RecentActivityTables({
           <table className="w-full text-left text-xs text-[#71717A]">
             <thead className="bg-[#F4F4F5] uppercase text-[10px] text-[#71717A] border-b border-[#E4E4E7]">
               <tr>
-                <th className="px-3 py-2.5 font-bold">User</th>
+                <th className="px-3 py-2.5 font-bold">Người dùng</th>
                 <th className="px-3 py-2.5 font-bold">Số tiền</th>
                 <th className="px-3 py-2.5 font-bold">Ngân hàng</th>
                 <th className="px-3 py-2.5 font-bold text-right">Trạng thái</th>
@@ -140,7 +140,7 @@ export default function RecentActivityTables({
             <tbody className="divide-y divide-[#E4E4E7]">
               {recentPayouts.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-[#71717A]">No withdrawal requests</td>
+                  <td colSpan={4} className="px-3 py-6 text-center text-[#71717A]">Chưa có yêu cầu rút tiền nào</td>
                 </tr>
               ) : (
                 recentPayouts.map((req) => (

@@ -24,35 +24,35 @@ export default function PlatformHealthPanel({
   const health = getHealthLevel();
 
   const healthBadge = {
-    GREEN: { label: 'Optimal System Health', color: 'bg-emerald-100 text-emerald-800 border-emerald-300', icon: CheckCircle2 },
-    YELLOW: { label: 'Attention Required', color: 'bg-amber-100 text-amber-800 border-amber-300', icon: AlertTriangle },
-    RED: { label: 'Critical Action Needed', color: 'bg-rose-100 text-rose-800 border-rose-300', icon: XCircle },
+    GREEN: { label: 'Hệ thống hoạt động Tối ưu', color: 'bg-emerald-100 text-emerald-800 border-emerald-300', icon: CheckCircle2 },
+    YELLOW: { label: 'Cần chú ý xử lý', color: 'bg-amber-100 text-amber-800 border-amber-300', icon: AlertTriangle },
+    RED: { label: 'Cần hành động khẩn cấp', color: 'bg-rose-100 text-rose-800 border-rose-300', icon: XCircle },
   }[health];
 
   const StatusIcon = healthBadge.icon;
 
   const indicators = [
     {
-      label: 'Database Connection',
-      value: dbStatus === 'connected' ? 'Connected' : 'Error',
+      label: 'Kết nối Cơ sở dữ liệu',
+      value: dbStatus === 'connected' ? 'Đã kết nối' : 'Mất kết nối',
       status: dbStatus === 'connected' ? 'GREEN' : 'RED',
       icon: Database,
     },
     {
-      label: 'Pending Withdrawals',
-      value: `${pendingPayouts} Queue`,
+      label: 'Yêu cầu Rút tiền chờ duyệt',
+      value: `${pendingPayouts} yêu cầu`,
       status: pendingPayouts > 10 ? 'RED' : pendingPayouts > 5 ? 'YELLOW' : 'GREEN',
       icon: Wallet,
     },
     {
-      label: 'Open User Reports',
-      value: `${pendingReports} Pending`,
+      label: 'Báo cáo vi phạm chờ xử lý',
+      value: `${pendingReports} báo cáo`,
       status: pendingReports > 10 ? 'RED' : pendingReports > 5 ? 'YELLOW' : 'GREEN',
       icon: Flag,
     },
     {
-      label: 'Account Deletions',
-      value: `${pendingDeletions} Pending`,
+      label: 'Yêu cầu Xóa tài khoản',
+      value: `${pendingDeletions} yêu cầu`,
       status: pendingDeletions > 5 ? 'RED' : pendingDeletions > 0 ? 'YELLOW' : 'GREEN',
       icon: ShieldAlert,
     },
