@@ -14,7 +14,7 @@
  *    - Hardcoded defaults represent secure production fallbacks.
  */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon-debug.onrender.com/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://graceful-playfulness-production.up.railway.app/api';
 
 const Config = {
   API_BASE_URL,

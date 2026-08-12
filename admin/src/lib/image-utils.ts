@@ -3,6 +3,12 @@
  * Resolves Cloudinary issues with unrenderable Apple .heic files by converting extensions to .jpg on the fly,
  * and adds /f_auto/ format auto-detection optimization.
  */
+const BACKEND_ORIGIN = (
+  process.env.NEXT_PUBLIC_BACKEND_URL || 'https://graceful-playfulness-production.up.railway.app'
+).replace(/\/+$/, '');
+
+const LEGACY_BACKEND_HOSTS = ['snapon-debug.onrender.com', 'snapon.onrender.com'];
+
 export function formatImageUrl(url: string | null | undefined): string {
   if (!url) return '';
 
@@ -17,14 +23,17 @@ export function formatImageUrl(url: string | null | undefined): string {
   const uploadIndex = formatted.indexOf('/uploads/');
   if (uploadIndex !== -1) {
     const uploadPath = formatted.slice(uploadIndex);
-    formatted = `https://snapon-debug.onrender.com${uploadPath}`;
+    formatted = `${BACKEND_ORIGIN}${uploadPath}`;
   } else if (formatted.startsWith('uploads/')) {
-    formatted = `https://snapon-debug.onrender.com/${formatted}`;
+    formatted = `${BACKEND_ORIGIN}/${formatted}`;
   }
 
-  // Replace outdated snapon.onrender.com with snapon-debug.onrender.com
-  if (formatted.includes('snapon.onrender.com')) {
-    formatted = formatted.replace('snapon.onrender.com', 'snapon-debug.onrender.com');
+  // Replace outdated Render hosts with the current backend origin
+  for (const legacyHost of LEGACY_BACKEND_HOSTS) {
+    if (formatted.includes(legacyHost)) {
+      formatted = formatted.replace(`https://${legacyHost}`, BACKEND_ORIGIN);
+      formatted = formatted.replace(`http://${legacyHost}`, BACKEND_ORIGIN);
+    }
   }
 
   // Handle Cloudinary hosted files

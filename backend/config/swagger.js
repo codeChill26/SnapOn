@@ -17,7 +17,7 @@ const options = {
         description: 'Development server',
       },
       {
-        url: "https://snapon-debug.onrender.com",
+        url: "https://graceful-playfulness-production.up.railway.app",
         description: "Production server",
       },
     ],

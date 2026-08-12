@@ -1,14 +1,18 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+import { detectBackend } from '../utils/backendDetector';
 
 const api: AxiosInstance = axios.create({
-  baseURL: API_BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+let cachedBaseURL: string | null = null;
+
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  if (!cachedBaseURL) {
+    cachedBaseURL = await detectBackend();
+  }
+  config.baseURL = cachedBaseURL;
   const token = localStorage.getItem('firebaseToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
