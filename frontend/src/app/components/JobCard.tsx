@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { Clock, Users, ChevronRight, Flame, Trophy } from 'lucide-react';
+import { Clock, Users, ChevronRight, Flame } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Job } from '../context/AppContext';
 import { CountdownTimer } from './CountdownTimer';

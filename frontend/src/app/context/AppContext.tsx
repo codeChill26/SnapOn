@@ -34,6 +34,7 @@ export interface Applicant {
   workerId: string;
   name: string;
   avatar: string;
+  avatar_url?: string;
   lat: number;
   lng: number;
   distance: number;
@@ -43,6 +44,7 @@ export interface Applicant {
   appliedAt: number;
   note: string;
   bidPrice: number;      // Worker's proposed price (within priceMin..priceMax)
+  status?: string;
   aiScore?: number;      // Computed by closeBidding (0–1)
   aiBreakdown?: {        // Score components for transparency
     distScore: number;
@@ -711,7 +713,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [currentUser, fetchJobs]);
 
   const applyToJob = useCallback(async (jobId: string, worker: Worker, note: string, bidPrice: number): Promise<{ success: boolean; message?: string }> => {
-    let apiSuccess = false;
     let errorMessage = '';
 
     const token = localStorage.getItem('firebaseToken');
@@ -723,7 +724,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           message: note
         });
         if (res.data?.success) {
-          apiSuccess = true;
           console.log('Application bid saved to backend database:', res.data.data);
           await fetchJobs();
           setTimeout(() => {
@@ -743,8 +743,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return { success: false, message: errorMessage };
       }
-    } else {
-      apiSuccess = true;
     }
 
     const job = jobs.find(j => j.id === jobId);
@@ -996,6 +994,8 @@ export function useApp() {
       matchJob: () => {},
       closeBidding: () => {},
       completeJob: () => {},
+      deleteJob: async () => false,
+      updateJob: async () => false,
       setUserRole: () => {},
       topUpWallet: () => {},
       fetchJobs: async () => {},

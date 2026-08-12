@@ -1,6 +1,6 @@
 import { useApp } from '../../context/AppContext';
 import { useState, useMemo } from 'react';
-import { Search, Filter, MapPin, Clock, DollarSign, Users, Eye, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Filter, MapPin, Clock, DollarSign, Users, Eye, CheckCircle } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Badge } from '../../components/ui/badge';

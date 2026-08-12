@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import {
-  ChevronLeft, MapPin, Clock, Users, Star, Sparkles, CheckCircle2, CheckCheck,
-  Bot, Award, MessageCircle, PartyPopper, Briefcase, Send, Lock, AlertCircle,
+  ChevronLeft, MapPin, Clock, Users, Star, CheckCircle2, CheckCheck,
+  Bot, Award, PartyPopper, Briefcase, Send, Lock, AlertCircle,
   ChevronDown, ChevronUp, User, ShieldCheck, TrendingDown, TrendingUp, Zap,
-  Target, BarChart3, FlameKindling, ExternalLink, X, Edit3, Trash2, Save
+  Target, BarChart3, FlameKindling, X, Edit3, Trash2, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, haversineDistance, scoreApplicants } from '../context/AppContext';
@@ -447,7 +447,6 @@ function HirerJobDetailView() {
   const { jobs, matchJob, closeBidding, completeJob, deleteJob, updateJob, hirerWallet } = useApp();
   const [manualPicked, setManualPicked] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
-  const [showMap, setShowMap] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [pulse, setPulse] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
@@ -551,10 +550,6 @@ function HirerJobDetailView() {
   const isCompleted = job.status === 'completed';
 
   const aiWinner = job.applicants.find(a => a.workerId === job.aiMatchId);
-  const allMarkers = job.applicants.map(a => ({
-    lat: a.lat, lng: a.lng, label: a.name,
-    color: a.workerId === job.aiMatchId ? 'green' : 'blue',
-  }));
 
   const handleManualMatch = (workerId: string) => {
     const applicant = job.applicants.find(a => a.workerId === workerId);
@@ -969,7 +964,6 @@ function HirerJobDetailView() {
           {job.applicants.map((applicant, idx) => {
             const isWinner   = applicant.workerId === job.aiMatchId;
             const isSelected = applicant.workerId === selectedWorkerId;
-            const scored     = previewScored?.find(s => s.workerId === applicant.workerId);
             const rank       = previewScored ? previewScored.findIndex(s => s.workerId === applicant.workerId) : idx;
 
             return (

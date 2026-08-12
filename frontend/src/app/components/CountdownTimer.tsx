@@ -26,7 +26,6 @@ export function CountdownTimer({ expiresAt, size = 'md', onExpire }: CountdownTi
     return () => clearInterval(id);
   }, [expiresAt, onExpire]);
 
-  const totalMs = expiresAt - (expiresAt - remaining - (Date.now() - expiresAt + remaining));
   const mins = Math.floor(remaining / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
   const progress = Math.max(0, remaining / (10 * 60 * 1000));

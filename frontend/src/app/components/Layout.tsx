@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckCircle, Bell, CheckCheck, X, Briefcase, ShieldCheck } from 'lucide-react';
+import { Home, Search, PlusCircle, User, Wallet, Activity, LogIn, LogOut, CheckCircle, Bell, CheckCheck, X, Briefcase } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useLocation, useNavigate, Link, Outlet } from 'react-router';
 import { SnapOnLogo } from './SnapOnLogo';
@@ -17,7 +17,7 @@ interface AppNotification {
   link?: string;
 }
 
-export function Layout({ children }: { children?: React.ReactNode }) {
+export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const {
@@ -311,7 +311,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     if (orderCode && (status === 'PAID' || code === '00')) {
       const verifyPayOSPayment = async () => {
         try {
-          const token = localStorage.getItem('firebaseToken');
           // Call check status API on backend to update database
           const res = await api.get(`/wallet/topup/payos/status/${orderCode}`);
           const statusData = res.data;
@@ -361,17 +360,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   const walletBalance = isWorker ? workerWallet : hirerWallet;
 
   const formatWallet = (n: number) => n.toLocaleString('vi-VN') + '₫';
-
-  // Pages that belong exclusively to each role
-  const HIRER_ONLY = ['/post'];
-  const WORKER_ONLY = ['/worker'];
-  const ADMIN_ONLY = ['/admin'];
-
-  const navItems = [
-    { path: '/', label: 'Trang chủ', icon: Home },
-    { path: isWorker ? '/worker' : '/post', label: isWorker ? 'Tìm việc' : 'Đăng việc', icon: isWorker ? Search : PlusCircle },
-    { path: '/profile', label: 'Hồ sơ', icon: User },
-  ];
 
   const currentJob = workerCurrentJobId ? jobs.find(j => j.id === workerCurrentJobId) : null;
 

@@ -1,6 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router';
 import { LayoutDashboard, Briefcase, Users, LogOut } from 'lucide-react';
-import { useState } from 'react';
 
 export function AdminRoot() {
   const location = useLocation();

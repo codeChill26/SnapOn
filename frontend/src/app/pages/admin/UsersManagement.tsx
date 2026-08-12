@@ -2,7 +2,6 @@ import { useApp } from '../../context/AppContext';
 import { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Star, Briefcase, MapPin, Eye, UserCircle, Users as UsersIcon } from 'lucide-react';
 import { Input } from '../../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Badge } from '../../components/ui/badge';
 import { Card } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -26,7 +25,6 @@ interface Hirer {
 export default function UsersManagement() {
   const { jobs } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
-  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'worker' | 'hirer'>('all');
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [selectedHirer, setSelectedHirer] = useState<Hirer | null>(null);
 

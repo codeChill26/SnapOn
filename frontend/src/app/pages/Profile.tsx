@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Star, Award, MapPin, Edit3, CheckCircle2, Clock, TrendingUp,
+  Star, MapPin, Edit3, CheckCircle2, Clock, TrendingUp,
   Briefcase, ChevronRight, Shield, Phone, Mail, Camera,
-  ThumbsUp, Zap, Users, BarChart2, Settings, Bell,
-  Lock, ChevronDown, ChevronUp, MessageCircle, Search,
-  Filter, SlidersHorizontal, Check, X, Plus, Trash2,
-  DollarSign, CalendarDays, BadgeCheck, CornerDownRight,
-  SmilePlus, Meh, Frown, TrendingDown, Package, Landmark, CreditCard,
+  ThumbsUp, Users, Settings, Bell,
+  Lock, Search, Check, X, Plus,
+  DollarSign, BadgeCheck, CornerDownRight,
+  SmilePlus, Meh, Frown, Landmark, CreditCard,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
@@ -121,9 +120,8 @@ interface Review {
   tags?: string[];
 }
 
-function FeedbackCard({ review, accentColor, onReply }: {
+function FeedbackCard({ review, onReply }: {
   review: Review;
-  accentColor: string;
   onReply: (id: string, text: string) => void;
 }) {
   const [showReply, setShowReply] = useState(false);
@@ -268,9 +266,8 @@ function FeedbackCard({ review, accentColor, onReply }: {
 }
 
 // ─── Full Feedback Panel ──────────────────────────────────────
-function FeedbackPanel({ reviews, accentColor, onReply }: {
+function FeedbackPanel({ reviews, onReply }: {
   reviews: Review[];
-  accentColor: string;
   onReply: (id: string, text: string) => void;
 }) {
   const [filterStar, setFilterStar] = useState<number | null>(null);
@@ -403,7 +400,7 @@ function FeedbackPanel({ reviews, accentColor, onReply }: {
       ) : (
         <div className="space-y-3">
           {filtered.map(r => (
-            <FeedbackCard key={r.id} review={r} accentColor={accentColor} onReply={onReply} />
+            <FeedbackCard key={r.id} review={r} onReply={onReply} />
           ))}
         </div>
       )}
@@ -545,12 +542,12 @@ function WorkerProfile() {
   }, 0);
   const avgRating   = workerReviews.reduce((s, r) => s + r.rating, 0) / (workerReviews.length || 1);
 
-  const TABS = [
+  const TABS: Array<{ key: 'profile' | 'history' | 'feedback' | 'settings'; label: string; icon: string; badge?: number }> = [
     { key: 'profile',  label: 'Hồ sơ',   icon: '👤' },
     { key: 'history',  label: 'Lịch sử', icon: '📋' },
     { key: 'feedback', label: 'Đánh giá', icon: '⭐', badge: workerReviews.length },
     { key: 'settings', label: 'Cài đặt', icon: '⚙️' },
-  ] as const;
+  ];
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-28 md:pb-10">
@@ -838,7 +835,7 @@ function WorkerProfile() {
 
           {/* ── FEEDBACK TAB ── */}
           {activeTab === 'feedback' && (
-            <FeedbackPanel reviews={workerReviews} accentColor="blue" onReply={handleReply} />
+            <FeedbackPanel reviews={workerReviews} onReply={handleReply} />
           )}
 
           {/* ── SETTINGS TAB ── */}
@@ -965,12 +962,12 @@ function HirerProfile() {
 
   const avgRating = hirerReviews.reduce((s, r) => s + r.rating, 0) / (hirerReviews.length || 1);
 
-  const TABS = [
+  const TABS: Array<{ key: 'overview' | 'jobs' | 'feedback' | 'settings'; label: string; icon: string; badge?: number }> = [
     { key: 'overview',  label: 'Tổng quan',  icon: '📊' },
     { key: 'jobs',      label: 'Việc đăng',  icon: '📝', badge: myJobs.length },
     { key: 'feedback',  label: 'Đánh giá',   icon: '⭐', badge: hirerReviews.length },
     { key: 'settings',  label: 'Cài đặt',    icon: '⚙️' },
-  ] as const;
+  ];
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-28 md:pb-10">
@@ -1187,7 +1184,7 @@ function HirerProfile() {
 
           {/* ── FEEDBACK TAB ── */}
           {activeTab === 'feedback' && (
-            <FeedbackPanel reviews={hirerReviews} accentColor="orange" onReply={handleReply} />
+            <FeedbackPanel reviews={hirerReviews} onReply={handleReply} />
           )}
 
           {/* ── SETTINGS TAB ── */}

@@ -195,7 +195,7 @@ function HeroSlideshow() {
     startTimers();
   };
 
-  const handleDragEnd = (event: any, info: any) => {
+  const handleDragEnd = (_event: any, info: any) => {
     const swipeThreshold = 50; // pixels
     if (info.offset.x < -swipeThreshold) {
       // Swiped left -> next slide
@@ -454,7 +454,7 @@ function HeroSlideshow() {
         <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6 mt-8">
           {/* Dots + progress */}
           <div className="flex items-center gap-2.5">
-            {SLIDES.map((s, i) => (
+            {SLIDES.map((_s, i) => (
               <button key={i} onClick={() => goTo(i)} className="relative flex items-center p-1 cursor-pointer">
                 {i === current ? (
                   <div className="relative h-2 rounded-full overflow-hidden shadow-inner" style={{ width: 48, background: 'rgba(255,255,255,0.2)' }}>

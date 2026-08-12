@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { PlusCircle, ChevronLeft, Clock, FileText, MapPin, CheckCircle, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
+import { PlusCircle, ChevronLeft, Clock, FileText, CheckCircle, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useApp, CATEGORIES } from '../context/AppContext';
-import { MapPicker } from '../components/MapPicker';
 
 interface FormData {
   title: string;

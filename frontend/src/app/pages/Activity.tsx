@@ -6,7 +6,7 @@ import {
   Zap, Wallet, CircleDollarSign, Timer,
   Sparkles, AlertCircle, BarChart3, Activity as ActivityIcon, XCircle,
   Search, SlidersHorizontal, X, Globe, User, ArrowUpDown,
-  Flame, Eye, Heart, ChevronDown, TrendingUp as TUp, Shield
+  Flame, Eye, TrendingUp as TUp, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, CATEGORIES, type Job } from '../context/AppContext';

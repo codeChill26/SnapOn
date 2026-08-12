@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Star, MapPin, Shield, BadgeCheck, Clock, Briefcase,
-  ThumbsUp, Zap, ChevronRight, Phone, Award, TrendingUp,
-  DollarSign, Users, MessageCircle,
+  X, Star, MapPin, Shield, BadgeCheck,
+  ThumbsUp, Zap, Award, TrendingUp, MessageCircle,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────

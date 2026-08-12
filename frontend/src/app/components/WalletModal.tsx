@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Wallet, CheckCircle, ArrowLeft, Sparkles, Shield, TrendingUp,
   CreditCard, Zap, Clock, ChevronRight, BadgeCheck, ArrowUpRight, Gift, ArrowDownLeft, Landmark, ChevronDown
@@ -153,7 +153,6 @@ export function WalletModal({ open, onClose, balance, isWorker, onTopUp }: Walle
       setErrorMsg('');
       setStep('loading');
 
-      const token = localStorage.getItem('firebaseToken');
       const res = await api.post('/wallet/topup/payos/create', { amount: selected });
       const data = res.data;
       if (!res.data.success) {

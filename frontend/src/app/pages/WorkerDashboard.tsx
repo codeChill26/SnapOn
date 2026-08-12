@@ -1,111 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Navigation, MapPin, Star, Award, Loader2, X, Send,
-  CheckCircle2, Search, Clock, AlertCircle, Briefcase, Flame, ChevronDown, ChevronUp,
+  MapPin, Star, Award, X, Send,
+  CheckCircle2, AlertCircle, Briefcase, Flame,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, CATEGORIES, haversineDistance, type Worker } from '../context/AppContext';
 import { JobCard } from '../components/JobCard';
-import { MapPicker } from '../components/MapPicker';
 import { CountdownTimer } from '../components/CountdownTimer';
 
 // ── Nominatim reverse geocode ──────────────────────────
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=vi`,
-      { headers: { 'User-Agent': 'SnapOn-App/1.0' } }
-    );
-    const data = await res.json();
-    if (data.display_name) return data.display_name.split(', ').slice(0, 4).join(', ');
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  } catch { return `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
-}
-
-// ── Address search (Nominatim) ─────────────────────────
-interface NominatimResult { place_id: number; display_name: string; lat: string; lon: string; }
-
-function LocationSearchBox({ onSelect }: { onSelect: (loc: { lat: number; lng: number; address: string }) => void }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<NominatimResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const search = async (q: string) => {
-    if (q.trim().length < 3) { setResults([]); setOpen(false); return; }
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&accept-language=vi&limit=5&countrycodes=vn`,
-        { headers: { 'User-Agent': 'SnapOn-App/1.0' } }
-      );
-      const data: NominatimResult[] = await res.json();
-      setResults(data);
-      setOpen(data.length > 0);
-    } catch { setResults([]); }
-    setLoading(false);
-  };
-
-  const handleChange = (v: string) => {
-    setQuery(v);
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => search(v), 500);
-  };
-
-  const handleSelect = (r: NominatimResult) => {
-    const parts = r.display_name.split(', ');
-    const address = parts.slice(0, 4).join(', ');
-    onSelect({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), address });
-    setQuery(address);
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative">
-      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-orange-300 focus-within:border-transparent">
-        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        <input
-          value={query}
-          onChange={e => handleChange(e.target.value)}
-          placeholder="Tìm địa chỉ... (vd: Quận 1, TP.HCM)"
-          className="flex-1 text-sm text-gray-700 bg-transparent outline-none placeholder-gray-400"
-        />
-        {loading && <Loader2 className="w-4 h-4 text-orange-400 animate-spin flex-shrink-0" />}
-        {query && !loading && (
-          <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }}>
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
-        )}
-      </div>
-      <AnimatePresence>
-        {open && results.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
-          >
-            {results.map(r => (
-              <button
-                key={r.place_id}
-                onClick={() => handleSelect(r)}
-                className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-orange-50 transition text-left border-b border-gray-50 last:border-0"
-              >
-                <MapPin className="w-3.5 h-3.5 text-orange-400 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-700 leading-snug">
-                  {r.display_name.split(', ').slice(0, 4).join(', ')}
-                </span>
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // ── Main Component ─────────────────────────────────────
 export default function WorkerDashboard() {
   const { jobs, applyToJob, workerStatus, workerCurrentJobId, currentUser, setUserRole } = useApp();
@@ -125,26 +29,20 @@ export default function WorkerDashboard() {
     completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
   };
 
-  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number; address: string }>({
+  const [myLocation] = useState<{ lat: number; lng: number; address: string }>({
     lat: 10.7769,
     lng: 106.7009,
     address: 'Quận 1, TP. Hồ Chí Minh',
   });
-  const [geoLoading, setGeoLoading] = useState(false);
-  const [geoError, setGeoError] = useState<string | null>(null);
-  const [radiusKm, setRadiusKm] = useState(5);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'price' | 'newest'>('distance');
-  const [showMap, setShowMap] = useState(false);
 
   // Apply modal
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
   const [applyNote, setApplyNote] = useState('');
   const [applyBid, setApplyBid] = useState(0);
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
-  const [applySuccess, setApplySuccess] = useState(false);
   const [sending, setSending] = useState(false);
-
   const currentJob = workerCurrentJobId ? jobs.find(j => j.id === workerCurrentJobId) : null;
   const isOnJob = workerStatus === 'on_job';
 
@@ -171,35 +69,6 @@ export default function WorkerDashboard() {
     if (sortBy === 'price') return b.job.price - a.job.price;
     return b.job.postedAt - a.job.postedAt;
   });
-
-  const useGPS = () => {
-    if (!navigator.geolocation) {
-      setGeoError('Trình duyệt không hỗ trợ GPS. Hãy tìm kiếm địa chỉ bên dưới.');
-      return;
-    }
-    setGeoLoading(true);
-    setGeoError(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        const address = await reverseGeocode(lat, lng);
-        setMyLocation({ lat, lng, address });
-        setGeoLoading(false);
-        setGeoError(null);
-      },
-      (err) => {
-        setGeoLoading(false);
-        if (err.code === 1) {
-          setGeoError('GPS bị chặn trong môi trường này (permissions policy). Hãy tìm địa chỉ bằng ô tìm kiếm bên dưới.');
-        } else if (err.code === 2) {
-          setGeoError('Không xác định được vị trí. Hãy tìm địa chỉ thủ công.');
-        } else {
-          setGeoError('Hết thời gian chờ GPS. Hãy tìm địa chỉ thủ công.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  };
 
   const openApply = (jobId: string) => {
     if (isOnJob) return;
