@@ -156,8 +156,13 @@ export default function WorkerDashboard() {
       distance: haversineDistance(myLocation.lat, myLocation.lng, job.location?.lat || 10.7769, job.location?.lng || 106.7009),
     }))
     .filter(({ job, distance }) => {
-      const isOnline = !job.location?.address || job.location.address.toLowerCase().includes('online') || (job as any).workMode === 'REMOTE' || (job as any).taskType === 'ONLINE';
-      return isOnline || distance <= radiusKm;
+      const isOnline = !job.location?.address ||
+        job.location.address.toLowerCase().includes('online') ||
+        job.workMode === 'REMOTE' ||
+        job.taskType === 'ONLINE' ||
+        (job as any).work_mode === 'REMOTE' ||
+        (job as any).task_type === 'ONLINE';
+      return isOnline || distance <= 50;
     })
     .filter(({ job }) => !activeCategory || job.category === activeCategory);
 
@@ -200,6 +205,12 @@ export default function WorkerDashboard() {
     if (isOnJob) return;
     const job = jobs.find(j => j.id === jobId);
     if (job) {
+      const isMyOwnJob = job.hirerId === currentUser.id || job.hirerId === (currentUser as any).dbUser?.id;
+      if (isMyOwnJob) {
+        setToastState({ show: true, message: 'Đây là bài đăng của bạn! Bạn không thể tự nộp đơn ứng tuyển.', isError: true });
+        setTimeout(() => setToastState({ show: false, message: '', isError: false }), 3500);
+        return;
+      }
       const mid = Math.round((job.priceMin + job.priceMax) / 2 / 10000) * 10000;
       setApplyBid(mid);
     }
@@ -561,8 +572,8 @@ export default function WorkerDashboard() {
       {/* ── SORT ── */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <p className="text-gray-700" style={{ fontWeight: 600 }}>
-          {sortedJobs.length} công việc Online
-          <span className="text-gray-400 text-sm font-normal"> (Toàn quốc)</span>
+          {sortedJobs.length} công việc đang tuyển
+          <span className="text-gray-400 text-sm font-normal"> (Mới nhất)</span>
         </p>
         <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
           {[{ key: 'price', label: '💰 Giá thầu cao' }, { key: 'newest', label: '🕐 Mới nhất' }].map(({ key, label }) => (
@@ -592,6 +603,10 @@ export default function WorkerDashboard() {
               {isOnJob ? (
                 <div className="absolute bottom-4 right-4 bg-gray-500/90 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm" style={{ fontWeight: 600 }}>
                   🔒 Đang bận
+                </div>
+              ) : (job.hirerId === currentUser.id || job.hirerId === (currentUser as any).dbUser?.id) ? (
+                <div className="absolute bottom-4 right-4 bg-amber-500 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md cursor-default" style={{ fontWeight: 600 }}>
+                  📌 Bài của bạn
                 </div>
               ) : (appliedJobs.has(job.id) || job.applicants.some(a => a.workerId === currentUser.id)) ? (
                 <div className="absolute bottom-4 right-4 bg-green-500 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md" style={{ fontWeight: 600 }}>

@@ -522,14 +522,19 @@ function HirerJobDetailView() {
   const handleSaveEdit = async () => {
     if (!job) return;
     setIsSavingEdit(true);
-    await updateJob(job.id, {
+    const success = await updateJob(job.id, {
       title: editTitle,
       description: editDesc,
       priceMin: editPriceMin,
       priceMax: editPriceMax,
     });
     setIsSavingEdit(false);
-    setShowEditModal(false);
+    if (success) {
+      setShowEditModal(false);
+      setWalletError(null);
+    } else {
+      setWalletError('Không thể lưu chỉnh sửa bài đăng. Vui lòng thử lại!');
+    }
   };
 
   useEffect(() => {
