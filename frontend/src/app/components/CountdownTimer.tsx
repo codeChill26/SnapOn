@@ -44,7 +44,6 @@ export function CountdownTimer({ expiresAt, size = 'md', onExpire }: CountdownTi
       </div>
     );
   }
-
   const isExpired = remaining <= 0;
   const isUrgent = remaining > 0 && remaining < 2 * 3600 * 1000; // Under 2 hours
 

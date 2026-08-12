@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Wallet, CheckCircle, ArrowLeft, Sparkles, Shield, TrendingUp,
   CreditCard, Zap, Clock, ChevronRight, BadgeCheck, ArrowUpRight, Gift, ArrowDownLeft, Landmark, ChevronDown
@@ -57,7 +57,7 @@ function Particle({ delay, isWorker }: { delay: number; isWorker: boolean }) {
 }
 
 export function WalletModal({ open, onClose, balance, isWorker, mode: propMode, onTopUp }: WalletModalProps) {
-  const { fetchProfile, currentUser, hirerWallet, workerWallet, topUpWallet } = useApp();
+  const { fetchProfile, currentUser, hirerWallet, workerWallet, topUpWallet, updateProfile } = useApp();
   const effectiveIsWorker = isWorker !== undefined ? isWorker : (propMode === 'worker' || currentUser?.role === 'worker');
   const effectiveBalance = balance !== undefined ? balance : (effectiveIsWorker ? workerWallet : hirerWallet);
   const effectiveOnTopUp = onTopUp || ((amount: number) => topUpWallet(effectiveIsWorker ? 'worker' : 'hirer', amount));
@@ -119,8 +119,8 @@ export function WalletModal({ open, onClose, balance, isWorker, mode: propMode, 
       setInitialBalance(effectiveBalance);
       setOrderCode(null);
 
-      const savedBank = localStorage.getItem('userBankName') || '';
-      const savedAcc = localStorage.getItem('userBankAccountNumber') || '';
+      const savedBank = localStorage.getItem('userBankName') || currentUser?.bankName || '';
+      const savedAcc = localStorage.getItem('userBankAccountNumber') || currentUser?.bankAccountNumber || '';
       setBankName(savedBank);
       setBankAccountNumber(savedAcc);
     }
@@ -158,7 +158,6 @@ export function WalletModal({ open, onClose, balance, isWorker, mode: propMode, 
       setErrorMsg('');
       setStep('loading');
 
-      const token = localStorage.getItem('firebaseToken');
       const res = await api.post('/wallet/topup/payos/create', { amount: selected });
       const data = res.data;
       if (!res.data.success) {
@@ -256,6 +255,10 @@ export function WalletModal({ open, onClose, balance, isWorker, mode: propMode, 
       if (res.data.success) {
         localStorage.setItem('userBankName', bankName.trim());
         localStorage.setItem('userBankAccountNumber', bankAccountNumber.trim());
+        await updateProfile({
+          bankName: bankName.trim(),
+          bankAccountNumber: bankAccountNumber.trim(),
+        }).catch(() => {});
         setWithdrawSuccess(true);
         setWithdrawAmount('');
         await fetchProfile();
@@ -1052,7 +1055,11 @@ export function WalletModal({ open, onClose, balance, isWorker, mode: propMode, 
       isOpen={bankModalOpen}
       onClose={() => setBankModalOpen(false)}
       selectedBank={bankName}
-      onSelectBank={(selected) => setBankName(selected)}
+      onSelectBank={(selected) => {
+        setBankName(selected);
+        localStorage.setItem('userBankName', selected);
+        updateProfile({ bankName: selected }).catch(() => {});
+      }}
     />
   </>
   );

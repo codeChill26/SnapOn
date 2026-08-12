@@ -1,112 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Navigation, MapPin, Star, Award, Loader2, X, Send,
-  CheckCircle2, Search, Clock, AlertCircle, Briefcase, Flame, ChevronDown, ChevronUp,
+  MapPin, Star, Award, X, Send,
+  CheckCircle2, AlertCircle, Briefcase, Flame,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, CATEGORIES, haversineDistance, type Worker } from '../context/AppContext';
 import { JobCard } from '../components/JobCard';
-import { MapPicker } from '../components/MapPicker';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { useScrollRestore } from '../hooks/useScrollRestore';
 
 // ── Nominatim reverse geocode ──────────────────────────
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=vi`,
-      { headers: { 'User-Agent': 'SnapOn-App/1.0' } }
-    );
-    const data = await res.json();
-    if (data.display_name) return data.display_name.split(', ').slice(0, 4).join(', ');
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  } catch { return `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
-}
-
-// ── Address search (Nominatim) ─────────────────────────
-interface NominatimResult { place_id: number; display_name: string; lat: string; lon: string; }
-
-function LocationSearchBox({ onSelect }: { onSelect: (loc: { lat: number; lng: number; address: string }) => void }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<NominatimResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const search = async (q: string) => {
-    if (q.trim().length < 3) { setResults([]); setOpen(false); return; }
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&accept-language=vi&limit=5&countrycodes=vn`,
-        { headers: { 'User-Agent': 'SnapOn-App/1.0' } }
-      );
-      const data: NominatimResult[] = await res.json();
-      setResults(data);
-      setOpen(data.length > 0);
-    } catch { setResults([]); }
-    setLoading(false);
-  };
-
-  const handleChange = (v: string) => {
-    setQuery(v);
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => search(v), 500);
-  };
-
-  const handleSelect = (r: NominatimResult) => {
-    const parts = r.display_name.split(', ');
-    const address = parts.slice(0, 4).join(', ');
-    onSelect({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), address });
-    setQuery(address);
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative">
-      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-orange-300 focus-within:border-transparent">
-        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        <input
-          value={query}
-          onChange={e => handleChange(e.target.value)}
-          placeholder="Tìm địa chỉ... (vd: Quận 1, TP.HCM)"
-          className="flex-1 text-sm text-gray-700 bg-transparent outline-none placeholder-gray-400"
-        />
-        {loading && <Loader2 className="w-4 h-4 text-orange-400 animate-spin flex-shrink-0" />}
-        {query && !loading && (
-          <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }}>
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
-        )}
-      </div>
-      <AnimatePresence>
-        {open && results.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
-          >
-            {results.map(r => (
-              <button
-                key={r.place_id}
-                onClick={() => handleSelect(r)}
-                className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-orange-50 transition text-left border-b border-gray-50 last:border-0"
-              >
-                <MapPin className="w-3.5 h-3.5 text-orange-400 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-700 leading-snug">
-                  {r.display_name.split(', ').slice(0, 4).join(', ')}
-                </span>
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // ── Main Component ─────────────────────────────────────
 export default function WorkerDashboard() {
   const { jobs, applyToJob, workerStatus, workerCurrentJobId, currentUser, setUserRole } = useApp();
@@ -127,26 +31,20 @@ export default function WorkerDashboard() {
     completedJobs: parseInt((currentUser as any).completed_jobs) || 0,
   };
 
-  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number; address: string }>({
+  const [myLocation] = useState<{ lat: number; lng: number; address: string }>({
     lat: 10.7769,
     lng: 106.7009,
     address: 'Quận 1, TP. Hồ Chí Minh',
   });
-  const [geoLoading, setGeoLoading] = useState(false);
-  const [geoError, setGeoError] = useState<string | null>(null);
-  const [radiusKm, setRadiusKm] = useState(5);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'price' | 'newest'>('distance');
-  const [showMap, setShowMap] = useState(false);
 
   // Apply modal
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
   const [applyNote, setApplyNote] = useState('');
   const [applyBid, setApplyBid] = useState(0);
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
-  const [applySuccess, setApplySuccess] = useState(false);
   const [sending, setSending] = useState(false);
-
   const currentJob = workerCurrentJobId ? jobs.find(j => j.id === workerCurrentJobId) : null;
   const isOnJob = workerStatus === 'on_job';
 
@@ -173,35 +71,6 @@ export default function WorkerDashboard() {
     if (sortBy === 'price') return b.job.price - a.job.price;
     return b.job.postedAt - a.job.postedAt;
   });
-
-  const useGPS = () => {
-    if (!navigator.geolocation) {
-      setGeoError('Trình duyệt không hỗ trợ GPS. Hãy tìm kiếm địa chỉ bên dưới.');
-      return;
-    }
-    setGeoLoading(true);
-    setGeoError(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        const address = await reverseGeocode(lat, lng);
-        setMyLocation({ lat, lng, address });
-        setGeoLoading(false);
-        setGeoError(null);
-      },
-      (err) => {
-        setGeoLoading(false);
-        if (err.code === 1) {
-          setGeoError('GPS bị chặn trong môi trường này (permissions policy). Hãy tìm địa chỉ bằng ô tìm kiếm bên dưới.');
-        } else if (err.code === 2) {
-          setGeoError('Không xác định được vị trí. Hãy tìm địa chỉ thủ công.');
-        } else {
-          setGeoError('Hết thời gian chờ GPS. Hãy tìm địa chỉ thủ công.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  };
 
   const openApply = (jobId: string) => {
     if (isOnJob) return;
@@ -266,9 +135,8 @@ export default function WorkerDashboard() {
             initial={{ opacity: 0, y: -30, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-20 left-1/2 -translate-x-1/2 z-[9999] text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 ${
-              toastState.isError ? 'bg-amber-600' : 'bg-green-500'
-            }`}
+            className={`fixed top-20 left-1/2 -translate-x-1/2 z-[9999] text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 ${toastState.isError ? 'bg-amber-600' : 'bg-green-500'
+              }`}
           >
             {toastState.isError ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
             <span style={{ fontWeight: 600 }}>{toastState.message}</span>
@@ -301,11 +169,10 @@ export default function WorkerDashboard() {
                 </div>
 
                 {/* Header */}
-                <div className={`px-5 py-4 flex items-center justify-between ${
-                  applyingJob.applicants.length === 0
-                    ? 'bg-gradient-to-r from-green-600 to-emerald-600'
-                    : 'bg-gradient-to-r from-orange-500 to-amber-500'
-                }`}>
+                <div className={`px-5 py-4 flex items-center justify-between ${applyingJob.applicants.length === 0
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600'
+                  : 'bg-gradient-to-r from-orange-500 to-amber-500'
+                  }`}>
                   <div>
                     <p className="text-white/80 text-xs">Ứng tuyển</p>
                     <h3 className="text-white" style={{ fontWeight: 700 }}>{applyingJob.title}</h3>
@@ -342,7 +209,7 @@ export default function WorkerDashboard() {
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs text-gray-400">Khoảng giá</div>
                       <div className="text-orange-500 text-xs" style={{ fontWeight: 700 }}>
-                        {(applyingJob.priceMin/1000).toFixed(0)}K–{(applyingJob.priceMax/1000).toFixed(0)}K₫
+                        {(applyingJob.priceMin / 1000).toFixed(0)}K–{(applyingJob.priceMax / 1000).toFixed(0)}K₫
                       </div>
                     </div>
                   </div>
@@ -375,10 +242,10 @@ export default function WorkerDashboard() {
                       {/* Track labels */}
                       <div className="flex justify-between text-xs mt-1">
                         <span className="text-green-600" style={{ fontWeight: 600 }}>
-                          {(applyingJob.priceMin/1000).toFixed(0)}K₫ min
+                          {(applyingJob.priceMin / 1000).toFixed(0)}K₫ min
                         </span>
                         <span className="text-orange-500" style={{ fontWeight: 600 }}>
-                          {(applyingJob.priceMax/1000).toFixed(0)}K₫ max
+                          {(applyingJob.priceMax / 1000).toFixed(0)}K₫ max
                         </span>
                       </div>
                     </div>
@@ -389,8 +256,8 @@ export default function WorkerDashboard() {
                       const tier = ratio < 0.25
                         ? { label: '🔥 Rất cạnh tranh', bg: 'bg-green-100', text: 'text-green-700', bar: 'bg-green-500', w: '90%' }
                         : ratio < 0.55
-                        ? { label: '✅ Cạnh tranh tốt', bg: 'bg-blue-100', text: 'text-blue-700', bar: 'bg-blue-500', w: '60%' }
-                        : { label: '⚖️ Trung bình', bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-400', w: '35%' };
+                          ? { label: '✅ Cạnh tranh tốt', bg: 'bg-blue-100', text: 'text-blue-700', bar: 'bg-blue-500', w: '60%' }
+                          : { label: '⚖️ Trung bình', bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-400', w: '35%' };
                       return (
                         <div className={`${tier.bg} rounded-xl p-3`}>
                           <div className="flex items-center justify-between mb-1.5">
@@ -439,9 +306,8 @@ export default function WorkerDashboard() {
                     disabled={sending}
                     whileHover={{ scale: sending ? 1 : 1.02 }}
                     whileTap={{ scale: 0.96 }}
-                    className={`flex-1 py-3 rounded-xl text-white text-sm flex items-center justify-center gap-2 transition shadow-lg ${
-                      sending ? 'bg-orange-400' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
-                    }`}
+                    className={`flex-1 py-3 rounded-xl text-white text-sm flex items-center justify-center gap-2 transition shadow-lg ${sending ? 'bg-orange-400' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
+                      }`}
                     style={{ fontWeight: 700 }}>
                     {sending ? (
                       <>

@@ -2,15 +2,13 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router';
 import {
   UserCircle, Mail, Phone, MapPin, Camera, Star, Briefcase,
-  ChevronRight, Edit3, LogOut, Sparkles, Plus, X,
-  BadgeCheck, Landmark, RefreshCw, Wallet, Check,
+  Edit3, LogOut, Plus, X, BadgeCheck, Landmark, RefreshCw, Wallet, Check,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useApp, Job } from '../context/AppContext';
 import { authService } from '../../services/authService';
 import { profileService } from '../../services/profileService';
-import { applicationService } from '../../services/applicationService';
-import { PublicProfile, Task, ProfileReview, TaskApplication } from '../../types';
+import { PublicProfile, Task, ProfileReview } from '../../types';
 import { JobCard } from '../components/JobCard';
 import { WalletModal } from '../components/WalletModal';
 import { BankSelectModal } from '../components/BankSelectModal';
@@ -25,8 +23,8 @@ function mapTaskToJob(task: Task): Job {
   const isExpired = task.applicationDeadline ? new Date(task.applicationDeadline).getTime() < Date.now() : false;
   const status: Job['status'] =
     task.status === 'COMPLETED' ? 'completed' :
-    task.status === 'IN_PROGRESS' || task.status === 'ACCEPTED' ? 'matched' :
-    task.status === 'CANCELLED' || isExpired ? 'expired' : 'active';
+      task.status === 'IN_PROGRESS' || task.status === 'ACCEPTED' ? 'matched' :
+        task.status === 'CANCELLED' || isExpired ? 'expired' : 'active';
 
   const loc = task.locations && task.locations.length > 0 ? task.locations[0] : null;
 
@@ -59,7 +57,6 @@ function mapTaskToJob(task: Task): Job {
 export default function Profile() {
   const {
     currentUser,
-    firebaseUser,
     updateProfile,
     setUserRole,
     logout,
@@ -73,16 +70,13 @@ export default function Profile() {
 
   // Profile data from backend
   const [publicData, setPublicData] = useState<PublicProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState<ProfileReview[]>([]);
   const [recruitmentJobs, setRecruitmentJobs] = useState<Job[]>([]);
   const [serviceOfferJobs, setServiceOfferJobs] = useState<Job[]>([]);
-  const [myApplications, setMyApplications] = useState<TaskApplication[]>([]);
 
   // Modals
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [bankModalOpen, setBankModalOpen] = useState(false);
-  const [editingProfile, setEditingProfile] = useState(false);
 
   // Form states for profile editing
   const [fullName, setFullName] = useState(currentUser.name || '');
@@ -91,8 +85,8 @@ export default function Profile() {
   const [phone, setPhone] = useState(currentUser.phone || '');
   const [skills, setSkills] = useState<string[]>(currentUser.skills || []);
   const [newSkillInput, setNewSkillInput] = useState('');
-  const [bankName, setBankName] = useState(currentUser.bankName || '');
-  const [bankAccountNumber, setBankAccountNumber] = useState(currentUser.bankAccountNumber || '');
+  const [bankName, setBankName] = useState(() => currentUser.bankName || localStorage.getItem('userBankName') || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(() => currentUser.bankAccountNumber || localStorage.getItem('userBankAccountNumber') || '');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -108,27 +102,24 @@ export default function Profile() {
     setBio(currentUser.bio || '');
     setPhone(currentUser.phone || '');
     setSkills(currentUser.skills || []);
-    setBankName(currentUser.bankName || '');
-    setBankAccountNumber(currentUser.bankAccountNumber || '');
+    setBankName(currentUser.bankName || localStorage.getItem('userBankName') || '');
+    setBankAccountNumber(currentUser.bankAccountNumber || localStorage.getItem('userBankAccountNumber') || '');
   }, [currentUser]);
 
-  // Load public profile, reviews, applications, and posts directly from API
+  // Load public profile, reviews, and posts directly from API
   const loadProfileData = async () => {
     if (!currentUser.id) return;
-    setLoading(true);
     try {
-      const [pubRes, revRes, recruitRes, serviceRes, appRes] = await Promise.all([
+      const [pubRes, revRes, recruitRes, serviceRes] = await Promise.all([
         profileService.getPublicProfile(currentUser.id).catch(() => null),
         profileService.getPublicReviews(currentUser.id, 1, 20).catch(() => ({ data: [] })),
         profileService.getPublicPosts(currentUser.id, 'RECRUITMENT', 1, 20).catch(() => ({ data: [] })),
         profileService.getPublicPosts(currentUser.id, 'SERVICE_OFFER', 1, 20).catch(() => ({ data: [] })),
-        applicationService.getMyApplications().catch(() => []),
       ]);
 
       if (pubRes) setPublicData(pubRes);
       if (revRes && revRes.data) setReviews(revRes.data);
       if (Array.isArray(revRes)) setReviews(revRes);
-      if (Array.isArray(appRes)) setMyApplications(appRes);
 
       if (recruitRes && recruitRes.data) {
         setRecruitmentJobs(recruitRes.data.map((t: Task) => mapTaskToJob(t)));
@@ -138,8 +129,6 @@ export default function Profile() {
       }
     } catch (err) {
       console.error('Error loading profile data:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -201,18 +190,22 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
+      const cleanBankName = bankName.trim();
+      const cleanBankAccountNumber = bankAccountNumber.trim();
+      if (cleanBankName) localStorage.setItem('userBankName', cleanBankName);
+      if (cleanBankAccountNumber) localStorage.setItem('userBankAccountNumber', cleanBankAccountNumber);
+
       const ok = await updateProfile({
         fullName,
         headline,
         bio,
         phone,
         skills,
-        bankName,
-        bankAccountNumber,
+        bankName: cleanBankName,
+        bankAccountNumber: cleanBankAccountNumber,
       });
       if (ok) {
         setSaveSuccess(true);
-        setEditingProfile(false);
         setTimeout(() => setSaveSuccess(false), 3000);
         await fetchProfile();
         await loadProfileData();
@@ -363,10 +356,7 @@ export default function Profile() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setActiveTab(4);
-                    setEditingProfile(true);
-                  }}
+                  onClick={() => setActiveTab(4)}
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gray-900 hover:bg-black text-white text-xs font-bold shadow transition cursor-pointer"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -387,17 +377,15 @@ export default function Profile() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`relative px-4 py-3 text-xs md:text-sm font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
-                    activeTab === tab.id
-                      ? 'text-orange-600'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
+                  className={`relative px-4 py-3 text-xs md:text-sm font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${activeTab === tab.id
+                    ? 'text-orange-600'
+                    : 'text-gray-500 hover:text-gray-900'
+                    }`}
                 >
                   <span>{tab.label}</span>
                   {tab.badge !== null && tab.badge > 0 && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                      activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
                       {tab.badge}
                     </span>
                   )}
@@ -427,7 +415,7 @@ export default function Profile() {
                   <span>Giới thiệu</span>
                 </h3>
                 <button
-                  onClick={() => { setActiveTab(4); setEditingProfile(true); }}
+                  onClick={() => setActiveTab(4)}
                   className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
                 >
                   Sửa
@@ -500,19 +488,13 @@ export default function Profile() {
                 <span className="text-xs font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Landmark className="w-4 h-4" /> Liên kết ngân hàng
                 </span>
-                <button
-                  onClick={() => setBankModalOpen(true)}
-                  className="text-xs text-orange-300 hover:text-white font-bold underline cursor-pointer"
-                >
-                  Đổi
-                </button>
               </div>
 
-              {currentUser.bankName && currentUser.bankAccountNumber ? (
+              {(currentUser.bankName || bankName || localStorage.getItem('userBankName')) && (currentUser.bankAccountNumber || bankAccountNumber || localStorage.getItem('userBankAccountNumber')) ? (
                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 mb-4">
-                  <p className="text-xs text-gray-300 font-medium">{currentUser.bankName}</p>
+                  <p className="text-xs text-gray-300 font-medium">{currentUser.bankName || bankName || localStorage.getItem('userBankName')}</p>
                   <p className="font-mono font-black text-lg tracking-wider text-white mt-0.5">
-                    {currentUser.bankAccountNumber}
+                    {currentUser.bankAccountNumber || bankAccountNumber || localStorage.getItem('userBankAccountNumber')}
                   </p>
                   <p className="text-[11px] text-orange-200 mt-1 uppercase">{currentUser.name}</p>
                 </div>
@@ -886,7 +868,10 @@ export default function Profile() {
         onClose={() => setBankModalOpen(false)}
         selectedBank={bankName}
         onSelect={(bank) => {
-          setBankName(bank.name);
+          const selectedName = bank.shortName || bank.name;
+          setBankName(selectedName);
+          localStorage.setItem('userBankName', selectedName);
+          updateProfile({ bankName: selectedName }).catch(() => { });
           setBankModalOpen(false);
         }}
       />

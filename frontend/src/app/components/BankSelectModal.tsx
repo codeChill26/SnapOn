@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, X, Check, Landmark } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
