@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { auth } from '../imports/firebase';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://snapon-debug.onrender.com/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://graceful-playfulness-production.up.railway.app/api';
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE,

@@ -17,14 +17,14 @@ export function formatImageUrl(url: string | null | undefined): string {
   const uploadIndex = formatted.indexOf('/uploads/');
   if (uploadIndex !== -1) {
     const uploadPath = formatted.slice(uploadIndex);
-    formatted = `https://snapon-debug.onrender.com${uploadPath}`;
+    formatted = `https://graceful-playfulness-production.up.railway.app${uploadPath}`;
   } else if (formatted.startsWith('uploads/')) {
-    formatted = `https://snapon-debug.onrender.com/${formatted}`;
+    formatted = `https://graceful-playfulness-production.up.railway.app/${formatted}`;
   }
 
-  // Replace outdated snapon.onrender.com with snapon-debug.onrender.com
-  if (formatted.includes('snapon.onrender.com')) {
-    formatted = formatted.replace('snapon.onrender.com', 'snapon-debug.onrender.com');
+  // Replace outdated render domains with Railway URL
+  if (formatted.includes('onrender.com')) {
+    formatted = formatted.replace(/snapon(-debug)?\.onrender\.com/g, 'graceful-playfulness-production.up.railway.app');
   }
 
   // Handle Cloudinary hosted files

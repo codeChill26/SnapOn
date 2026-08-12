@@ -35,8 +35,12 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .map(o => o.trim())
   .filter(o => o.length > 0);
 
-// Always allow Vercel policy web origins to bypass CORS on backend
+// Always allow production web domains & Vercel policy web origins to bypass CORS on backend
 const complianceOrigins = [
+  'https://snaponvn.tech',
+  'http://snaponvn.tech',
+  'https://www.snaponvn.tech',
+  'http://www.snaponvn.tech',
   'https://snapon-policy.vercel.app',
   'https://snapon.vercel.app'
 ];

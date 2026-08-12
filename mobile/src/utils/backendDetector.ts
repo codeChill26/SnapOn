@@ -2,7 +2,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import Config from '../constants/config';
 
-const DEPLOYED_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snapon-debug.onrender.com/api';
+const DEPLOYED_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://graceful-playfulness-production.up.railway.app/api';
 
 // Extract Metro bundler host IP dynamically (e.g., "192.168.100.206:8081" -> "192.168.100.206")
 const metroHost = Constants.expoConfig?.hostUri?.split(':')[0];
