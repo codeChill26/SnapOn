@@ -139,23 +139,6 @@ export const useHomeTasks = () => {
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
   }, []);
 
-  useEffect(() => {
-    const subCreated = DeviceEventEmitter.addListener('task_created', (newTask) => {
-      setTasks(prev => [newTask, ...prev]);
-    });
-    const subUpdated = DeviceEventEmitter.addListener('task_updated', (updatedTask) => {
-      setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    });
-    const subSaved = DeviceEventEmitter.addListener('task_saved_changed', ({ taskId, isSaved }) => {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isSaved } : t));
-    });
-    return () => {
-      subCreated.remove();
-      subUpdated.remove();
-      subSaved.remove();
-    };
-  }, []);
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
@@ -261,6 +244,25 @@ export const useHomeTasks = () => {
     void fetchTasks();
   }, [fetchTasks]);
 
+  useEffect(() => {
+    const subCreated = DeviceEventEmitter.addListener('task_created', (newTask) => {
+      setTasks(prev => [newTask, ...prev.filter(t => t.id !== newTask.id)]);
+      void fetchTasks({ showLoading: false });
+    });
+    const subUpdated = DeviceEventEmitter.addListener('task_updated', (updatedTask) => {
+      setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+      void fetchTasks({ showLoading: false });
+    });
+    const subSaved = DeviceEventEmitter.addListener('task_saved_changed', ({ taskId, isSaved }) => {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isSaved } : t));
+    });
+    return () => {
+      subCreated.remove();
+      subUpdated.remove();
+      subSaved.remove();
+    };
+  }, [fetchTasks]);
+
   useFocusEffect(
     useCallback(() => {
       if (!didInitialFocusRef.current) {
@@ -268,7 +270,7 @@ export const useHomeTasks = () => {
         return;
       }
       const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
-      if (timeSinceLastFetch > 30000) {
+      if (timeSinceLastFetch > 3000) {
         void fetchTasks({ showLoading: false });
       }
     }, [fetchTasks])

@@ -77,7 +77,7 @@ const createInitialFormState = (initialPostType: 'RECRUITMENT' | 'SERVICE_OFFER'
   budgetMaxInput: '',
   activePricePreset: null,
   salaryUnit: 'PER_JOB',
-  workMode: 'ONSITE',
+  workMode: 'REMOTE',
   employmentType: 'ONE_TIME',
   address: '',
   peopleNeeded: 1,
@@ -200,9 +200,6 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
     } else if (formState.budgetMinInput && formState.budgetMaxInput && rawMin > rawMax) {
       errors.budget = 'Giá tối thiểu không được lớn hơn giá tối đa.';
     }
-    if (formState.workMode === 'ONSITE' && !formState.address.trim()) {
-      errors.address = 'Địa chỉ là bắt buộc khi làm việc tại chỗ.';
-    }
     if (!formState.contactPhone.trim()) {
       errors.contactPhone = 'Số điện thoại liên hệ là bắt buộc.';
     }
@@ -234,11 +231,9 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
   const isFormValid = useMemo(() => {
     if (!formState.title.trim() || formState.title.length < 5) return false;
     if (!formState.description.trim() || formState.description.length < 10) return false;
-    if (!formState.fieldId || !formState.subcategoryId) return false;
     const rawMin = getRawPrice(formState.budgetMinInput);
     const rawMax = getRawPrice(formState.budgetMaxInput);
     if (rawMin <= 0 || rawMax <= 0 || rawMin > rawMax) return false;
-    if (formState.workMode === 'ONSITE' && !formState.address.trim()) return false;
     if (!formState.contactPhone.trim()) return false;
     if (formState.postType === 'RECRUITMENT') {
       if (formState.peopleNeeded < 1) return false;
@@ -285,7 +280,7 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
               budgetMinInput: draft.budgetMinInput || '',
               budgetMaxInput: draft.budgetMaxInput || '',
               salaryUnit: draft.salaryUnit || 'PER_JOB',
-              workMode: draft.workMode || 'ONSITE',
+              workMode: draft.workMode === 'ONSITE' ? 'REMOTE' : (draft.workMode || 'REMOTE'),
               employmentType: draft.employmentType || 'ONE_TIME',
               address: draft.address || '',
               peopleNeeded: draft.peopleNeeded || 1,
@@ -584,17 +579,22 @@ export const usePostJob = ({ editingTaskId, initialPostType, navigation }: UsePo
         applicationDeadline = new Date(Date.now() + formState.selectedDeadlinePreset * 86400000).toISOString();
       }
 
+      const defaultField = categoriesList[0];
+      const finalFieldId = formState.fieldId || defaultField?.id || 'general';
+      const defaultSkill = defaultField?.subcategories?.[0];
+      const finalSkillIds = formState.subcategoryId ? [formState.subcategoryId] : (defaultSkill?.id ? [defaultSkill.id] : []);
+
       const payload = {
         title: formState.title,
         description: formState.description,
-        category_id: formState.fieldId!,
+        category_id: finalFieldId,
         task_type: 'ONLINE',
         budget_min: budgetMin,
         budget_max: budgetMax,
         deadline_start: new Date().toISOString(),
         deadline_end: new Date(Date.now() + 30 * 86400000).toISOString(),
         application_deadline: applicationDeadline,
-        skill_ids: [formState.subcategoryId!],
+        skill_ids: finalSkillIds,
         images: imageUrls,
         post_type: formState.postType,
         work_mode: formState.workMode,

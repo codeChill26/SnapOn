@@ -7,6 +7,7 @@ interface PostJobBasicInfoProps {
   postType: 'RECRUITMENT' | 'SERVICE_OFFER';
   subcategoryName: string | undefined;
   workMode: 'ONSITE' | 'REMOTE' | 'NEGOTIABLE';
+  selectedWorkModeLabel: string;
   address: string;
   setAddress: (addr: string) => void;
   title: string;
@@ -15,12 +16,14 @@ interface PostJobBasicInfoProps {
   setDescription: (desc: string) => void;
   validationErrors: Record<string, string>;
   onPressCategory: () => void;
+  onPressWorkMode: () => void;
 }
 
 export const PostJobBasicInfo: React.FC<PostJobBasicInfoProps> = ({
   postType,
   subcategoryName,
   workMode,
+  selectedWorkModeLabel,
   address,
   setAddress,
   title,
@@ -29,20 +32,57 @@ export const PostJobBasicInfo: React.FC<PostJobBasicInfoProps> = ({
   setDescription,
   validationErrors,
   onPressCategory,
+  onPressWorkMode,
 }) => {
   const theme = useTheme();
 
   return (
     <View>
-      {/* GRID: LĨNH VỰC & ĐỊA ĐIỂM */}
-      <View style={[styles.rowGrid, { marginBottom: theme.spacing.lg, gap: theme.spacing.md }]}>
+      {/* CÔNG VIỆC CỤ THỂ */}
+      <View style={[styles.section, { marginBottom: theme.spacing.lg }]}>
+        <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Công việc *</Text>
         <TouchableOpacity
-          style={styles.gridColumn}
+          style={[
+            styles.selectorBox,
+            {
+              backgroundColor: theme.colors.background.secondary,
+              borderColor: validationErrors.category ? theme.colors.status.error : theme.colors.border.subtle,
+              borderRadius: theme.radius.small,
+              paddingHorizontal: theme.spacing.md,
+            },
+          ]}
           onPress={onPressCategory}
           accessibilityRole="button"
           accessibilityLabel="Chọn công việc cụ thể"
         >
-          <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Công việc *</Text>
+          <Text
+            style={[
+              styles.selectorText,
+              { color: subcategoryName ? theme.colors.text.primary : theme.colors.text.muted },
+            ]}
+            numberOfLines={1}
+          >
+            {subcategoryName || 'Chọn công việc'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={theme.colors.text.secondary} />
+        </TouchableOpacity>
+        {validationErrors.category ? (
+          <Text style={[styles.inlineErrorText, { color: theme.colors.status.error }]}>
+            {validationErrors.category}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* GRID: HÌNH THỨC & ĐỊA ĐIỂM */}
+      <View style={[styles.rowGrid, { marginBottom: theme.spacing.lg, gap: theme.spacing.md }]}>
+        {/* HÌNH THỨC LÀM VIỆC */}
+        <TouchableOpacity
+          style={styles.gridColumn}
+          onPress={onPressWorkMode}
+          accessibilityRole="button"
+          accessibilityLabel="Chọn hình thức làm việc"
+        >
+          <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>Hình thức *</Text>
           <View
             style={[
               styles.gridSelectorBox,
@@ -55,38 +95,40 @@ export const PostJobBasicInfo: React.FC<PostJobBasicInfoProps> = ({
             ]}
           >
             <Text style={[styles.gridSelectorText, { color: theme.colors.text.primary }]} numberOfLines={1}>
-              {subcategoryName || 'Chọn công việc'}
+              {selectedWorkModeLabel}
             </Text>
             <Ionicons name="chevron-down" size={16} color={theme.colors.text.secondary} />
           </View>
         </TouchableOpacity>
 
+        {/* ĐỊA ĐIỂM (LOCKED - HIỆN CHO BẢN CẬP NHẬT TIẾP THEO) */}
         <View style={styles.gridColumn}>
-          <Text style={[styles.gridLabel, { color: theme.colors.text.primary }]}>
-            Địa điểm {workMode === 'ONSITE' ? '*' : ''}
-          </Text>
-          <TextInput
+          <View style={styles.gridHeaderRow}>
+            <Text style={[styles.gridLabel, { color: theme.colors.text.primary, marginBottom: 0 }]}>
+              Địa điểm
+            </Text>
+            <View style={styles.lockedBadge}>
+              <Ionicons name="lock-closed" size={10} color="#94A3B8" />
+              <Text style={styles.lockedBadgeText}>Sắp ra mắt</Text>
+            </View>
+          </View>
+          <View
             style={[
               styles.gridInputBox,
+              styles.lockedInputBox,
               {
-                backgroundColor: theme.colors.background.secondary,
-                borderColor: validationErrors.address ? theme.colors.status.error : theme.colors.border.subtle,
+                backgroundColor: '#F8FAFC',
+                borderColor: theme.colors.border.subtle,
                 borderRadius: theme.radius.small,
-                color: theme.colors.text.primary,
                 paddingHorizontal: theme.spacing.md,
               },
-              workMode === 'REMOTE' && styles.disabledSelectorBox,
             ]}
-            placeholder={workMode === 'REMOTE' ? 'Làm từ xa (Remote)' : 'Nhập địa điểm'}
-            placeholderTextColor={theme.colors.text.muted}
-            value={address}
-            onChangeText={setAddress}
-            editable={workMode !== 'REMOTE'}
-            accessibilityLabel="Ô nhập địa điểm làm việc"
-          />
-          {validationErrors.address ? (
-            <Text style={[styles.inlineErrorText, { color: theme.colors.status.error }]}>{validationErrors.address}</Text>
-          ) : null}
+          >
+            <Text style={styles.lockedInputText} numberOfLines={1}>
+              Toàn quốc (Online)
+            </Text>
+            <Ionicons name="location-outline" size={16} color="#94A3B8" />
+          </View>
         </View>
       </View>
 
@@ -161,6 +203,12 @@ const styles = StyleSheet.create({
   gridColumn: {
     flex: 1,
   },
+  gridHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   gridLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -172,9 +220,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  disabledSelectorBox: {
-    opacity: 0.5,
   },
   gridSelectorText: {
     fontSize: 14,
@@ -188,11 +233,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+  },
+  lockedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  lockedInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    opacity: 0.85,
+  },
+  lockedInputText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+    flex: 1,
+    marginRight: 4,
+  },
   section: {},
   sectionLabel: {
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 8,
+  },
+  selectorBox: {
+    flexDirection: 'row',
+    height: 48,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectorText: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 4,
   },
   inputBox: {
     height: 48,

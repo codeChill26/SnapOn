@@ -196,6 +196,7 @@ export const PostJobScreen: React.FC = () => {
             postType={postType}
             subcategoryName={subcategoryName}
             workMode={workMode}
+            selectedWorkModeLabel={selectedWorkModeLabel}
             address={address}
             setAddress={setAddress}
             title={title}
@@ -204,6 +205,7 @@ export const PostJobScreen: React.FC = () => {
             setDescription={setDescription}
             validationErrors={validationErrors}
             onPressCategory={() => setCategoryModalVisible(true)}
+            onPressWorkMode={() => setWorkModeModalVisible(true)}
           />
 
           {/* BUDGET SECTION */}
@@ -222,7 +224,6 @@ export const PostJobScreen: React.FC = () => {
           {/* REQUIREMENTS SECTION */}
           <PostJobRequirements
             postType={postType}
-            workMode={workMode}
             experienceLevel={experienceLevel}
             selectedExpLabel={selectedExpLabel}
             educationLevel={educationLevel}
@@ -244,7 +245,6 @@ export const PostJobScreen: React.FC = () => {
             minHeightCm={minHeightCm}
             maxHeightCm={maxHeightCm}
             validationErrors={validationErrors}
-            setWorkModeModalVisible={setWorkModeModalVisible}
             setEmploymentModalVisible={setEmploymentModalVisible}
             setDatePickerVisible={setDatePickerVisible}
             setExperienceModalVisible={setExperienceModalVisible}

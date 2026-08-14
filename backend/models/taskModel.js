@@ -275,7 +275,7 @@ const taskModel = {
            LIMIT 1
          ) sub ON true
          ${whereClause}
-         ORDER BY t.id DESC
+         ORDER BY t.created_at DESC, t.id DESC
          LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}`,
         [...params, currentUserId || null, currentLimit, offset]
       )
@@ -412,7 +412,7 @@ const taskModel = {
            LIMIT 1
          ) sub ON true
          WHERE t.poster_id = $1
-         ORDER BY t.id DESC
+         ORDER BY t.created_at DESC, t.id DESC
          LIMIT $2 OFFSET $3`,
         [posterId, currentLimit, offset]
       )

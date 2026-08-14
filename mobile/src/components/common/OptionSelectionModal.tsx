@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 interface Option {
   label: string;
   value: string;
+  disabled?: boolean;
+  disabledBadge?: string;
 }
 
 interface OptionSelectionModalProps {
@@ -60,22 +62,37 @@ export const OptionSelectionModal: React.FC<OptionSelectionModalProps> = ({
             keyExtractor={(item) => item.value}
             renderItem={({ item }) => {
               const isSelected = selectedValue === item.value;
+              const isDisabled = !!item.disabled;
               return (
                 <TouchableOpacity
-                  style={[styles.item, isSelected && styles.itemSelected]}
+                  style={[
+                    styles.item,
+                    isSelected && styles.itemSelected,
+                    isDisabled && styles.itemDisabled,
+                  ]}
                   onPress={() => {
+                    if (isDisabled) return;
                     onSelect(item.value);
                     onClose();
                   }}
-                  activeOpacity={0.7}
+                  disabled={isDisabled}
+                  activeOpacity={isDisabled ? 1 : 0.7}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityState={{ selected: isSelected, disabled: isDisabled }}
                   accessibilityLabel={item.label}
                 >
-                  <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
-                    {item.label}
-                  </Text>
-                  {isSelected && (
+                  <View style={styles.itemLabelRow}>
+                    <Text style={[styles.itemText, isSelected && styles.itemTextSelected, isDisabled && styles.itemTextDisabled]}>
+                      {item.label}
+                    </Text>
+                    {isDisabled && (
+                      <View style={styles.disabledBadge}>
+                        <Ionicons name="lock-closed" size={11} color="#94A3B8" />
+                        <Text style={styles.disabledBadgeText}>{item.disabledBadge || 'Sắp ra mắt'}</Text>
+                      </View>
+                    )}
+                  </View>
+                  {isSelected && !isDisabled && (
                     <Ionicons name="checkmark" size={20} color="#007AFF" />
                   )}
                 </TouchableOpacity>
@@ -142,10 +159,36 @@ const styles = StyleSheet.create({
   itemSelected: {
     backgroundColor: '#F8FAFC',
   },
+  itemDisabled: {
+    opacity: 0.6,
+  },
+  itemLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  disabledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  disabledBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
   itemText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#334155',
+  },
+  itemTextDisabled: {
+    color: '#94A3B8',
   },
   itemTextSelected: {
     color: '#007AFF',

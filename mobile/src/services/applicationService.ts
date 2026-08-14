@@ -74,10 +74,13 @@ export const applicationService = {
   async getMyApplicationForTask(
     taskId: string
   ): Promise<TaskApplication | null> {
-    const response = await api.get<ApiResponse<any>>(
-      `/tasks/${taskId}/my-application`
-    );
-    return response.data.data ? mapApplicationFromApi(response.data.data) : null;
+    try {
+      const myApps = await this.getMyApplications();
+      const found = myApps.find((a) => String(a.taskId) === String(taskId));
+      return found || null;
+    } catch {
+      return null;
+    }
   },
 
   async withdrawApplication(id: string): Promise<TaskApplication> {
