@@ -1,7 +1,7 @@
 export const WORK_MODES = [
-  { label: 'Tại chỗ (Onsite)', value: 'ONSITE' },
   { label: 'Từ xa (Remote)', value: 'REMOTE' },
   { label: 'Theo thỏa thuận', value: 'NEGOTIABLE' },
+  { label: 'Tại chỗ (Onsite)', value: 'ONSITE', disabled: true, disabledBadge: 'Sắp ra mắt' },
 ];
 
 export const SALARY_UNITS = [

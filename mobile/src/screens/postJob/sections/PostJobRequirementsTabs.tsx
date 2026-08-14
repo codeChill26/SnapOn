@@ -5,7 +5,6 @@ import { useTheme } from '../../../theme';
 
 interface PostJobRequirementsTabsProps {
   postType: 'RECRUITMENT' | 'SERVICE_OFFER';
-  workMode: 'ONSITE' | 'REMOTE' | 'NEGOTIABLE';
   experienceLevel: string;
   selectedExpLabel: string;
   educationLevel: string;
@@ -16,7 +15,6 @@ interface PostJobRequirementsTabsProps {
   maxAge: number | null;
   minHeightCm: number | null;
   maxHeightCm: number | null;
-  setWorkModeModalVisible: (val: boolean) => void;
   setExperienceModalVisible: (val: boolean) => void;
   setEducationModalVisible: (val: boolean) => void;
   setHeightModalVisible: (val: boolean) => void;
@@ -26,7 +24,6 @@ interface PostJobRequirementsTabsProps {
 
 export const PostJobRequirementsTabs: React.FC<PostJobRequirementsTabsProps> = ({
   postType,
-  workMode,
   experienceLevel,
   selectedExpLabel,
   educationLevel,
@@ -37,7 +34,6 @@ export const PostJobRequirementsTabs: React.FC<PostJobRequirementsTabsProps> = (
   maxAge,
   minHeightCm,
   maxHeightCm,
-  setWorkModeModalVisible,
   setExperienceModalVisible,
   setEducationModalVisible,
   setHeightModalVisible,
@@ -50,28 +46,6 @@ export const PostJobRequirementsTabs: React.FC<PostJobRequirementsTabsProps> = (
     <View style={[styles.section, { marginBottom: theme.spacing.xl }]}>
       <Text style={[styles.sectionLabel, { color: theme.colors.text.primary }]}>Yêu cầu ứng viên / Thông tin năng lực</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.reqTabsScroll, { gap: theme.spacing.xs }]}>
-        <TouchableOpacity
-          style={[
-            styles.reqTab,
-            { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.subtle, borderRadius: theme.radius.small, paddingHorizontal: theme.spacing.md },
-            workMode !== 'ONSITE' && [styles.reqTabActive, { borderColor: theme.colors.brand.primary, backgroundColor: theme.colors.brand.primarySoft }],
-          ]}
-          onPress={() => setWorkModeModalVisible(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Chọn hình thức làm việc yêu cầu"
-        >
-          <Text
-            style={[
-              styles.reqTabText,
-              { color: theme.colors.text.secondary },
-              workMode !== 'ONSITE' && [styles.reqTabTextActive, { color: theme.colors.brand.primaryDark }],
-            ]}
-          >
-            {workMode === 'REMOTE' ? 'Làm từ xa' : workMode === 'NEGOTIABLE' ? 'Làm linh hoạt' : 'Hình thức'}
-          </Text>
-          <Ionicons name="chevron-down" size={14} color={workMode !== 'ONSITE' ? theme.colors.brand.primary : theme.colors.text.secondary} />
-        </TouchableOpacity>
-
         <TouchableOpacity
           style={[
             styles.reqTab,

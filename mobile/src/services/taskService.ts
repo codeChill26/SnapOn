@@ -61,21 +61,21 @@ export const mapTaskFromApi = (data: any): Task => {
     categoryId: data.category_id || data.categoryId,
     title: data.title,
     description: data.description,
-    taskType: data.task_type || data.taskType,
-    status: data.status,
-    budgetMin: data.budget_min !== undefined ? Number(data.budget_min) : Number(data.budgetMin),
-    budgetMax: data.budget_max !== undefined ? Number(data.budget_max) : Number(data.budgetMax),
-    finalPrice: data.final_price !== undefined ? Number(data.final_price) : (data.finalPrice ? Number(data.finalPrice) : undefined),
-    deadlineStart: data.deadline_start || data.deadlineStart,
-    deadlineEnd: data.deadline_end || data.deadlineEnd,
-    allowInsurance: data.allow_insurance !== undefined ? data.allow_insurance : data.allowInsurance,
-    createdAt: data.created_at || data.createdAt,
-    applicationDeadline: data.application_deadline || data.applicationDeadline,
-    closedAt: data.closed_at || data.closedAt,
-    closedById: data.closed_by_id || data.closedById,
-    closedReason: data.closed_reason || data.closedReason,
-    posterName: data.poster_name || data.posterName,
-    categoryName: data.category_name || data.categoryName,
+    taskType: data.task_type || data.taskType || 'ONLINE',
+    status: data.status || 'OPEN',
+    budgetMin: data.budget_min !== undefined ? Number(data.budget_min) : Number(data.budgetMin || 0),
+    budgetMax: data.budget_max !== undefined ? Number(data.budget_max) : Number(data.budgetMax || 0),
+    finalPrice: data.final_price !== undefined ? Number(data.final_price) : (data.finalPrice !== undefined ? Number(data.finalPrice) : undefined),
+    deadlineStart: data.deadline_start || data.deadlineStart || undefined,
+    deadlineEnd: data.deadline_end || data.deadlineEnd || undefined,
+    allowInsurance: data.allow_insurance !== undefined ? data.allow_insurance : (data.allowInsurance ?? false),
+    createdAt: data.created_at || data.createdAt || new Date().toISOString(),
+    applicationDeadline: data.application_deadline || data.applicationDeadline || null,
+    closedAt: data.closed_at || data.closedAt || null,
+    closedById: data.closed_by_id || data.closedById || null,
+    closedReason: data.closed_reason || data.closedReason || null,
+    posterName: data.poster_name || data.posterName || (data.poster?.fullName) || 'Người dùng',
+    categoryName: data.category_name || data.categoryName || '',
     field: (() => {
       if (!data.field) return undefined;
       const f = typeof data.field === 'string' ? JSON.parse(data.field) : data.field;
@@ -115,10 +115,10 @@ export const mapTaskFromApi = (data: any): Task => {
       avatarUrl: data.poster_avatar || (data.poster && data.poster.avatarUrl),
     } as any : undefined,
     images: data.images || [],
-    postType: data.post_type || data.postType,
-    workMode: data.work_mode || data.workMode,
-    salaryUnit: data.salary_unit || data.salaryUnit,
-    employmentType: data.employment_type || data.employmentType,
+    postType: data.post_type || data.postType || 'RECRUITMENT',
+    workMode: data.work_mode || data.workMode || 'REMOTE',
+    salaryUnit: data.salary_unit || data.salaryUnit || 'PER_JOB',
+    employmentType: data.employment_type || data.employmentType || 'ONE_TIME',
     peopleNeeded: data.people_needed !== undefined ? data.people_needed : data.peopleNeeded,
     contactPhone: data.contact_phone !== undefined ? data.contact_phone : data.contactPhone,
     startDate: data.start_date || data.startDate,
@@ -182,6 +182,26 @@ export const taskService = {
     if (filters.post_type) params.post_type = filters.post_type;
 
     const response = await api.get<any>('/tasks', { params });
+
+    if (__DEV__) {
+      const total = response.data?.pagination?.total ?? (response.data?.data?.length || 0);
+      const first = response.data?.data?.[0];
+      console.log('========== JOB API DEBUG ==========');
+      console.log('REQUEST URL: /tasks');
+      console.log('QUERY PARAMS:', JSON.stringify(params));
+      console.log('RESPONSE STATUS:', response.status);
+      console.log('TOTAL JOBS:', total);
+      console.log('FIRST JOB:', first ? {
+        id: first.id,
+        title: first.title,
+        post_type: first.post_type,
+        category_name: first.category_name,
+        category_id: first.category_id,
+        status: first.status,
+      } : 'No jobs found');
+      console.log('===================================');
+    }
+
     return {
       data: (response.data.data || []).map(mapTaskFromApi),
       pagination: response.data.pagination || { page: 1, limit: 10, total: 0, totalPages: 0 },

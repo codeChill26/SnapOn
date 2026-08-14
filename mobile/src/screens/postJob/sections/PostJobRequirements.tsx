@@ -7,7 +7,6 @@ import { PostJobRequirementsTabs } from './PostJobRequirementsTabs';
 
 interface PostJobRequirementsProps {
   postType: 'RECRUITMENT' | 'SERVICE_OFFER';
-  workMode: 'ONSITE' | 'REMOTE' | 'NEGOTIABLE';
   experienceLevel: string;
   selectedExpLabel: string;
   educationLevel: string;
@@ -30,7 +29,6 @@ interface PostJobRequirementsProps {
   maxHeightCm: number | null;
   validationErrors: Record<string, string>;
   
-  setWorkModeModalVisible: (val: boolean) => void;
   setEmploymentModalVisible: (val: boolean) => void;
   setDatePickerVisible: (val: boolean) => void;
   setExperienceModalVisible: (val: boolean) => void;
@@ -42,7 +40,6 @@ interface PostJobRequirementsProps {
 
 export const PostJobRequirements: React.FC<PostJobRequirementsProps> = ({
   postType,
-  workMode,
   experienceLevel,
   selectedExpLabel,
   educationLevel,
@@ -65,7 +62,6 @@ export const PostJobRequirements: React.FC<PostJobRequirementsProps> = ({
   maxHeightCm,
   validationErrors,
   
-  setWorkModeModalVisible,
   setEmploymentModalVisible,
   setDatePickerVisible,
   setExperienceModalVisible,
@@ -107,7 +103,6 @@ export const PostJobRequirements: React.FC<PostJobRequirementsProps> = ({
 
       <PostJobRequirementsTabs
         postType={postType}
-        workMode={workMode}
         experienceLevel={experienceLevel}
         selectedExpLabel={selectedExpLabel}
         educationLevel={educationLevel}
@@ -118,7 +113,6 @@ export const PostJobRequirements: React.FC<PostJobRequirementsProps> = ({
         maxAge={maxAge}
         minHeightCm={minHeightCm}
         maxHeightCm={maxHeightCm}
-        setWorkModeModalVisible={setWorkModeModalVisible}
         setExperienceModalVisible={setExperienceModalVisible}
         setEducationModalVisible={setEducationModalVisible}
         setHeightModalVisible={setHeightModalVisible}

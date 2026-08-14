@@ -135,7 +135,7 @@ export const HomeMarketplaceHeader: React.FC<HomeMarketplaceHeaderProps> = React
               <View style={styles.pillLeft}>
                 <Ionicons name="grid" size={18} color={HomeTheme.colors.primary} style={styles.pillIcon} />
                 <Text style={styles.pillText} numberOfLines={1}>
-                  {selectedCategoryName || 'Danh mục công việc'}
+                  {selectedCategoryName || 'Tất cả danh mục'}
                 </Text>
               </View>
               <Ionicons name="chevron-down" size={16} color={HomeTheme.colors.textSecondary} />

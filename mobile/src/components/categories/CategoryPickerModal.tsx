@@ -77,7 +77,8 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
   const handleClearSelection = useCallback(() => {
     setSearchQuery('');
     onClear();
-  }, [onClear]);
+    onClose();
+  }, [onClear, onClose]);
 
   // Find active field info
   const activeField = useMemo(() => {
@@ -212,25 +213,49 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
     );
   };
 
-  // Header row "Tất cả [lĩnh vực]"
+  // Header rows: "Tất cả danh mục" & "Tất cả [lĩnh vực đang chọn]"
   const renderAllFieldRow = () => {
-    const isSelected = selectedFieldId === activeField.id && !selectedSubcategoryId;
+    const isAllCategoriesSelected = !selectedFieldId && !selectedSubcategoryId;
+    const isFieldSelected = selectedFieldId === activeField.id && !selectedSubcategoryId;
+
     return (
-      <TouchableOpacity
-        style={[styles.row, isSelected && styles.rowSelected]}
-        onPress={() => onSelectField(activeField)}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={`Tất cả ${activeField.name}`}
-        accessibilityState={{ selected: isSelected }}
-      >
-        <Text style={[styles.rowText, isSelected && styles.rowTextSelected, styles.rowTextAll]}>
-          Tất cả {activeField.name}
-        </Text>
-        {isSelected && (
-          <Ionicons name="checkmark" size={20} color={HomeTheme.colors.primary} />
-        )}
-      </TouchableOpacity>
+      <View style={styles.headerRowsContainer}>
+        {/* Option 1: Tất cả danh mục (Toàn bộ việc làm) */}
+        <TouchableOpacity
+          style={[styles.row, isAllCategoriesSelected && styles.rowSelected]}
+          onPress={handleClearSelection}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Tất cả danh mục (Xem toàn bộ công việc)"
+          accessibilityState={{ selected: isAllCategoriesSelected }}
+        >
+          <View style={styles.resultCol}>
+            <Text style={[styles.rowText, isAllCategoriesSelected && styles.rowTextSelected, styles.rowTextAll]}>
+              🌐 Tất cả danh mục (Toàn bộ việc làm)
+            </Text>
+          </View>
+          {isAllCategoriesSelected && (
+            <Ionicons name="checkmark" size={20} color={HomeTheme.colors.primary} />
+          )}
+        </TouchableOpacity>
+
+        {/* Option 2: Tất cả trong lĩnh vực hiện tại */}
+        <TouchableOpacity
+          style={[styles.row, isFieldSelected && styles.rowSelected, styles.subHeaderRow]}
+          onPress={() => onSelectField(activeField)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Tất cả ${activeField.name}`}
+          accessibilityState={{ selected: isFieldSelected }}
+        >
+          <Text style={[styles.rowText, isFieldSelected && styles.rowTextSelected, styles.rowTextAll]}>
+            📁 Tất cả {activeField.name}
+          </Text>
+          {isFieldSelected && (
+            <Ionicons name="checkmark" size={20} color={HomeTheme.colors.primary} />
+          )}
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -532,6 +557,14 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
+  },
+  headerRowsContainer: {
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E5E7EB',
+  },
+  subHeaderRow: {
+    backgroundColor: '#FFFFFF',
   },
   row: {
     minHeight: 58,
