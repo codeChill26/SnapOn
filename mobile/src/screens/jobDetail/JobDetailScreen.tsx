@@ -611,7 +611,17 @@ export const JobDetailScreen: React.FC = () => {
                       },
                     ]}
                   >
-                    <View style={styles.workerMgmtHeader}>
+                    <TouchableOpacity
+                      style={styles.workerMgmtHeader}
+                      onPress={() => {
+                        if (workerApp.taskerId) {
+                          navigation.navigate('PublicProfile', { userId: workerApp.taskerId });
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Xem trang cá nhân của ${workerApp.taskerName || 'ứng viên'}`}
+                    >
                       <UserAvatar name={workerApp.taskerName || 'N/A'} avatarUrl={workerApp.taskerAvatar} size={36} />
                       <View style={[styles.workerMgmtInfo, { marginLeft: theme.spacing.sm }]}>
                         <Text style={[styles.workerMgmtName, { color: theme.colors.text.primary }]}>
@@ -634,11 +644,45 @@ export const JobDetailScreen: React.FC = () => {
                             ? 'Đã hoàn thành'
                             : workerApp.assignmentStatus === 'IN_PROGRESS'
                             ? 'Đang làm việc'
-                            : 'Chờ bạn xác nhận'}
+                            : 'Chờ người làm xác nhận'}
                         </Text>
                       </View>
-                    </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: theme.colors.brand.primary, fontWeight: '600', marginRight: 2 }}>
+                          Xem hồ sơ
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.colors.brand.primary} />
+                      </View>
+                    </TouchableOpacity>
                     <View style={styles.workerMgmtActions}>
+                      <TouchableOpacity
+                        style={[styles.mgmtBtn, { backgroundColor: theme.colors.brand.primary }]}
+                        onPress={() => {
+                          navigation.navigate('ChatDetail', {
+                            otherUserId: workerApp.taskerId,
+                            otherUserName: workerApp.taskerName || 'Người làm việc',
+                            otherUserAvatar: workerApp.taskerAvatar,
+                          });
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Nhắn tin cho ${workerApp.taskerName}`}
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.mgmtBtnText}>Nhắn tin</Text>
+                      </TouchableOpacity>
+
+                      {workerApp.taskerPhone ? (
+                        <TouchableOpacity
+                          style={[styles.mgmtBtn, { backgroundColor: '#10B981' }]}
+                          onPress={() => Linking.openURL(`tel:${workerApp.taskerPhone}`)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Gọi điện cho ${workerApp.taskerName}`}
+                        >
+                          <Ionicons name="call-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.mgmtBtnText}>Gọi điện</Text>
+                        </TouchableOpacity>
+                      ) : null}
+
                       {workerApp.assignmentStatus === 'IN_PROGRESS' && (
                         <TouchableOpacity
                           style={[styles.mgmtBtn, styles.mgmtBtnComplete]}

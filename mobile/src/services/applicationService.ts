@@ -15,6 +15,7 @@ export const mapApplicationFromApi = (data: any): TaskApplication => {
     createdAt: data.created_at || data.createdAt,
     taskerName: data.tasker_name || data.taskerName,
     taskerAvatar: data.tasker_avatar || data.taskerAvatar,
+    taskerPhone: data.tasker_phone || data.taskerPhone,
     taskerRating: data.average_rating !== undefined ? Number(data.average_rating) : (data.taskerRating !== undefined ? Number(data.taskerRating) : undefined),
     // Support both `score` (top-level from ranked API) and `scores.total`
     score: data.score !== undefined
