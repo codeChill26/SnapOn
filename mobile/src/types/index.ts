@@ -155,6 +155,7 @@ export interface TaskApplication {
   createdAt: string;
   taskerName?: string;
   taskerAvatar?: string;
+  taskerPhone?: string;
   taskerRating?: number;
   score?: number;
   taskTitle?: string;

@@ -114,7 +114,7 @@ const TaskQueryController = {
           postType: post_type,
           workMode: work_mode,
           salaryUnit: salary_unit,
-          currentUserId: req.user.id,
+          currentUserId: req.user ? req.user.id : null,
         });
       }
 

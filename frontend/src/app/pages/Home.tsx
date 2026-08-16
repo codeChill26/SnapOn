@@ -69,7 +69,7 @@ const DEFAULT_SLIDES = [
 ];
 
 const SLIDE_DURATION = 5000;
-const ITEMS_PER_PAGE = 9;
+const ITEMS_PER_PAGE = 10;
 
 function CountStat({ target, suffix, label, delay = 0 }: { target: number; suffix: string; label: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -359,7 +359,16 @@ export default function Home() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
+  const [jumpInput, setJumpInput] = useState('');
   const jobListRef = useRef<HTMLDivElement>(null);
+
+  const handleJumpToPage = () => {
+    const p = parseInt(jumpInput.trim(), 10);
+    if (!isNaN(p) && p >= 1 && p <= totalPages) {
+      handlePageChange(p);
+      setJumpInput('');
+    }
+  };
 
   // Search debounce
   useEffect(() => {
@@ -822,42 +831,64 @@ export default function Home() {
 
             {/* ── PAGINATION CONTROLS ── */}
             {totalPages > 1 && (
-              <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-gray-200/80 shadow-sm">
-                <p className="text-xs font-semibold text-gray-500">
-                  Hiển thị <span className="font-bold text-gray-900">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> –{' '}
-                  <span className="font-bold text-gray-900">{Math.min(currentPage * ITEMS_PER_PAGE, sortedJobs.length)}</span> trên{' '}
-                  <span className="font-bold text-orange-600">{sortedJobs.length}</span> công việc
-                </p>
+              <div className="mt-12 flex flex-col items-center gap-4 bg-white p-5 rounded-3xl border border-gray-200/80 shadow-sm">
+                <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+                  <p className="text-xs font-semibold text-gray-500">
+                    Hiển thị <span className="font-bold text-gray-900">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> –{' '}
+                    <span className="font-bold text-gray-900">{Math.min(currentPage * ITEMS_PER_PAGE, sortedJobs.length)}</span> trên{' '}
+                    <span className="font-bold text-orange-600">{sortedJobs.length}</span> công việc
+                  </p>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none transition"
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Trước
-                  </button>
-
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <div className="flex items-center gap-1.5 flex-wrap justify-center">
                     <button
-                      key={page}
-                      onClick={() => handlePageChange(page)}
-                      className={`w-9 h-9 rounded-xl text-xs font-bold transition ${
-                        currentPage === page
-                          ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30 scale-105'
-                          : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
-                      }`}
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
                     >
-                      {page}
+                      <ChevronLeft className="w-4 h-4" /> Trước
                     </button>
-                  ))}
 
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`w-9 h-9 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          currentPage === page
+                            ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30 scale-105'
+                            : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+                    >
+                      Sau <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Jump to Page Row */}
+                <div className="flex items-center justify-center gap-2 pt-3 border-t border-gray-100 w-full">
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={jumpInput}
+                    onChange={e => setJumpInput(e.target.value)}
+                    placeholder={String(currentPage)}
+                    className="w-16 h-9 rounded-xl border border-gray-200 text-center font-bold text-xs text-gray-900 outline-none focus:border-orange-500"
+                  />
+                  <span className="text-xs font-semibold text-gray-500">/ {totalPages}</span>
                   <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none transition"
+                    onClick={handleJumpToPage}
+                    className="px-4 h-9 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow transition cursor-pointer"
                   >
-                    Sau <ChevronRight className="w-4 h-4" />
+                    Đi đến
                   </button>
                 </div>
               </div>
