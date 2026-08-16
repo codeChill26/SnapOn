@@ -1,13 +1,30 @@
 const pool = require('../config/db');
 
 const notificationModel = {
-  async create({ userId, title, content, type = 'GENERAL', taskId = null }) {
+  async create({ userId, title, content, type = 'GENERAL', taskId = null }, dbClient = null) {
+    const db = dbClient || pool;
+
+    try {
+      const dupCheck = await db.query(
+        `SELECT * FROM notifications
+         WHERE user_id = $1 AND title = $2 AND content = $3
+           AND created_at >= NOW() - INTERVAL '10 seconds'
+         LIMIT 1`,
+        [userId, title, content]
+      );
+      if (dupCheck.rows.length > 0) {
+        return dupCheck.rows[0];
+      }
+    } catch (e) {
+      // ignore check error
+    }
+
     const query = `
       INSERT INTO notifications (id, user_id, title, content, type, task_id, is_read, created_at)
       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, false, NOW())
       RETURNING *
     `;
-    const res = await pool.query(query, [userId, title, content, type, taskId]);
+    const res = await db.query(query, [userId, title, content, type, taskId]);
     return res.rows[0];
   },
 

@@ -215,10 +215,11 @@ router.get('/withdrawals', verifyFirebaseToken, authorize('ADMIN'), async (req, 
 router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN'), async (req, res, next) => {
   const { id } = req.params;
   const withDbTx = require('../utils/withDbTx');
+  const notificationModel = require('../models/notificationModel');
   try {
     const result = await withDbTx(async (db) => {
       const txRes = await db.query(
-        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
+        `SELECT wt.*, w.id as wallet_id, w.user_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
         [id]
       );
       if (txRes.rows.length === 0) {
@@ -255,6 +256,18 @@ router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN')
         );
       }
 
+      if (tx.user_id) {
+        await notificationModel.create(
+          {
+            userId: tx.user_id,
+            title: 'Yêu cầu rút tiền được phê duyệt',
+            content: `Yêu cầu rút ${amt.toLocaleString('vi-VN')}đ của bạn đã được Admin chấp nhận và chuyển khoản thành công.`,
+            type: 'WALLET',
+          },
+          db
+        ).catch(() => {});
+      }
+
       return updatedTx.rows[0];
     });
 
@@ -268,10 +281,11 @@ router.patch('/withdrawals/:id/approve', verifyFirebaseToken, authorize('ADMIN')
 router.patch('/withdrawals/:id/reject', verifyFirebaseToken, authorize('ADMIN'), async (req, res, next) => {
   const { id } = req.params;
   const withDbTx = require('../utils/withDbTx');
+  const notificationModel = require('../models/notificationModel');
   try {
     const result = await withDbTx(async (db) => {
       const txRes = await db.query(
-        `SELECT wt.*, w.id as wallet_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
+        `SELECT wt.*, w.id as wallet_id, w.user_id FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE wt.id = $1 OR wt.reference_id = $1 FOR UPDATE`,
         [id]
       );
       if (txRes.rows.length === 0) {
@@ -297,6 +311,18 @@ router.patch('/withdrawals/:id/reject', verifyFirebaseToken, authorize('ADMIN'),
           `UPDATE withdraw_requests SET status = 'REJECTED' WHERE id = $1`,
           [tx.reference_id]
         );
+      }
+
+      if (tx.user_id) {
+        await notificationModel.create(
+          {
+            userId: tx.user_id,
+            title: 'Yêu cầu rút tiền bị từ chối',
+            content: `Yêu cầu rút ${parseFloat(tx.amount).toLocaleString('vi-VN')}đ của bạn đã bị từ chối.`,
+            type: 'WALLET',
+          },
+          db
+        ).catch(() => {});
       }
 
       return updatedTx.rows[0];

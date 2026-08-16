@@ -109,6 +109,9 @@ export const getStatusLabel = (status: string): string => {
     RELEASED: 'Đã giải ngân',
     REFUNDED: 'Đã hoàn tiền',
     DISPUTED: 'Đang tranh chấp',
+    SUCCESS: 'Thành công',
+    FAILED: 'Thất bại',
+    EXPIRED: 'Hết hạn',
   };
   return statusMap[status] || status;
 };

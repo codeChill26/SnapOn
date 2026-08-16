@@ -36,6 +36,8 @@ const mapTransaction = (raw: any): WalletTransaction => {
     amount: Number(raw.amount),
     status: raw.status ? raw.status.toUpperCase() as any : 'PENDING',
     referenceId: raw.reference_id || raw.referenceId,
+    bankName: raw.bank_name || raw.bankName,
+    bankAccountNumber: raw.bank_account_number || raw.bankAccountNumber,
     createdAt: raw.created_at || raw.createdAt,
   };
 };
@@ -64,14 +66,14 @@ export const walletService = {
   }> {
     const params: Record<string, string> = {};
     if (cursor) params.cursor = cursor;
-    const response = await api.get<ApiResponse<{
-      transactions: any[];
-      nextCursor?: string;
-    }>>('/wallet/transactions', { params });
+    const response = await api.get<ApiResponse<any>>('/wallet/transactions', { params });
     
+    const rawData = response.data.data;
+    const rawList = Array.isArray(rawData) ? rawData : (rawData?.transactions || []);
+
     return {
-      transactions: (response.data.data.transactions || []).map(mapTransaction),
-      nextCursor: response.data.data.nextCursor,
+      transactions: rawList.map(mapTransaction),
+      nextCursor: (response.data as any).pagination?.cursor || rawData?.nextCursor,
     };
   },
 
@@ -99,6 +101,16 @@ export const walletService = {
 
   async withdraw(payload: { amount: number; bankName: string; bankAccountNumber: string }): Promise<void> {
     await api.post('/wallet/withdraw', payload);
+    this.invalidateCache();
+  },
+
+  async updateWithdrawal(id: string, payload: { amount: number; bankName: string; bankAccountNumber: string }): Promise<void> {
+    await api.put(`/wallet/withdraw/${id}`, payload);
+    this.invalidateCache();
+  },
+
+  async cancelWithdrawal(id: string): Promise<void> {
+    await api.delete(`/wallet/withdraw/${id}`);
     this.invalidateCache();
   },
 };

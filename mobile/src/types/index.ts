@@ -189,8 +189,10 @@ export interface WalletTransaction {
   walletId: string;
   type: 'DEPOSIT' | 'WITHDRAW' | 'ESCROW_HOLD' | 'ESCROW_RELEASE' | 'REFUND' | 'PLATFORM_FEE';
   amount: number;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED';
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
   referenceId?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
   description?: string;
   createdAt: string;
 }

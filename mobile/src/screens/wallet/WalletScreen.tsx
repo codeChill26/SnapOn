@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Modal } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import { AppColors } from '../../theme';
@@ -27,6 +27,13 @@ export const WalletScreen: React.FC = () => {
   const [pendingOrderCode, setPendingOrderCode] = useState<number | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [topupError, setTopupError] = useState<string>('');
+
+  const [selectedTx, setSelectedTx] = useState<WalletTransaction | null>(null);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editBankName, setEditBankName] = useState('');
+  const [editBankAccount, setEditBankAccount] = useState('');
+  const [editAmountText, setEditAmountText] = useState('');
+  const [submittingAction, setSubmittingAction] = useState(false);
 
   useEffect(() => {
     if (route.params?.scrollToHistory && historyY > 0) {
@@ -156,162 +163,439 @@ export const WalletScreen: React.FC = () => {
     setPendingOrderCode(null);
   };
 
+  const handleOpenDetail = (tx: WalletTransaction) => {
+    setSelectedTx(tx);
+  };
+
+  const handleOpenEdit = () => {
+    if (!selectedTx) return;
+    setEditBankName(selectedTx.bankName || '');
+    setEditBankAccount(selectedTx.bankAccountNumber || '');
+    setEditAmountText(selectedTx.amount.toString());
+    setIsEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedTx) return;
+    const numAmt = parseInt(editAmountText.replace(/[^0-9]/g, ''), 10);
+    if (isNaN(numAmt) || numAmt < 10000) {
+      Alert.alert('Lỗi', 'Số tiền rút tối thiểu là 10.000đ.');
+      return;
+    }
+    if (numAmt > 2000000) {
+      Alert.alert('Lỗi', 'Số tiền rút mỗi lần tối đa là 2.000.000đ.');
+      return;
+    }
+    if (!editBankName.trim() || !editBankAccount.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ tên ngân hàng và số tài khoản.');
+      return;
+    }
+
+    try {
+      setSubmittingAction(true);
+      await walletService.updateWithdrawal(selectedTx.id, {
+        amount: numAmt,
+        bankName: editBankName.trim(),
+        bankAccountNumber: editBankAccount.trim(),
+      });
+      Alert.alert('Thành công', 'Đã cập nhật yêu cầu rút tiền thành công!');
+      setIsEditModalVisible(false);
+      setSelectedTx(null);
+      loadWalletData();
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.message || 'Không thể cập nhật yêu cầu rút tiền.');
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  const handleCancelWithdrawal = async () => {
+    if (!selectedTx) return;
+    Alert.alert(
+      'Xác nhận hủy',
+      `Bạn có chắc chắn muốn hủy yêu cầu rút ${formatCurrency(selectedTx.amount)} không?`,
+      [
+        { text: 'Bỏ qua', style: 'cancel' },
+        {
+          text: 'Hủy yêu cầu',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setSubmittingAction(true);
+              await walletService.cancelWithdrawal(selectedTx.id);
+              Alert.alert('Thành công', 'Đã hủy yêu cầu rút tiền.');
+              setSelectedTx(null);
+              loadWalletData();
+            } catch (err: any) {
+              Alert.alert('Lỗi', err.message || 'Không thể hủy yêu cầu rút tiền.');
+            } finally {
+              setSubmittingAction(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) return <LoadingSpinner fullScreen />;
 
   return (
-    <ScrollView 
-      ref={scrollViewRef} 
-      style={styles.container} 
-      contentContainerStyle={styles.content}
-    >
-      <Card style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Số dư khả dụng</Text>
-        <Text style={styles.balanceAmount}>
-          {formatCurrency(wallet?.availableBalance || 0)}
-        </Text>
-        <View style={styles.balanceRow}>
-          <View style={styles.balanceItem}>
-            <Text style={styles.balanceItemLabel}>Tổng số dư</Text>
-            <Text style={styles.balanceItemValue}>
-              {formatCurrency(wallet?.balance || 0)}
-            </Text>
-          </View>
-          <View style={styles.balanceDivider} />
-          <View style={styles.balanceItem}>
-            <Text style={styles.balanceItemLabel}>Đang khóa</Text>
-            <Text style={styles.balanceItemValue}>
-              {formatCurrency(wallet?.lockedBalance || 0)}
-            </Text>
-          </View>
-        </View>
-      </Card>
-
-      {pendingOrderCode && (
-        <Card style={styles.pendingCard}>
-          <Text style={styles.pendingTitle}>Đang xử lý nạp tiền (PayOS)</Text>
-          <Text style={styles.pendingDesc}>
-            Vui lòng hoàn tất thanh toán trên trình duyệt của bạn cho đơn hàng #{pendingOrderCode}.
+    <View style={{ flex: 1 }}>
+      <ScrollView 
+        ref={scrollViewRef} 
+        style={styles.container} 
+        contentContainerStyle={styles.content}
+      >
+        <Card style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>Số dư khả dụng</Text>
+          <Text style={styles.balanceAmount}>
+            {formatCurrency(wallet?.availableBalance || 0)}
           </Text>
-          <View style={styles.pendingButtons}>
-            <Button
-              title="Kiểm tra kết quả"
-              onPress={handleCheckPaymentStatus}
-              size="md"
-              loading={checkingPayment}
-              style={styles.pendingBtn}
-            />
-            <Button
-              title="Hủy/Đóng"
-              onPress={handleCancelPendingPayment}
-              variant="outline"
-              size="md"
-              style={styles.pendingBtn}
-              disabled={checkingPayment}
-            />
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceItem}>
+              <Text style={styles.balanceItemLabel}>Tổng số dư</Text>
+              <Text style={styles.balanceItemValue}>
+                {formatCurrency(wallet?.balance || 0)}
+              </Text>
+            </View>
+            <View style={styles.balanceDivider} />
+            <View style={styles.balanceItem}>
+              <Text style={styles.balanceItemLabel}>Đang khóa</Text>
+              <Text style={styles.balanceItemValue}>
+                {formatCurrency(wallet?.lockedBalance || 0)}
+              </Text>
+            </View>
           </View>
         </Card>
-      )}
 
-      {!route.params?.scrollToHistory && (
-        <Card style={styles.topupCard} variant="glass">
-          <Text style={styles.sectionTitle}>Nạp tiền</Text>
-          <View style={styles.presetRow}>
-            {TOPUP_PRESETS.map(amount => (
-              <TouchableOpacity
-                key={amount}
-                style={[
-                  styles.presetChip,
-                  topupAmount === amount && styles.presetChipActive,
-                ]}
-                onPress={() => handlePresetSelect(amount)}
-              >
-                <Text
+        {pendingOrderCode && (
+          <Card style={styles.pendingCard}>
+            <Text style={styles.pendingTitle}>Đang xử lý nạp tiền (PayOS)</Text>
+            <Text style={styles.pendingDesc}>
+              Vui lòng hoàn tất thanh toán trên trình duyệt của bạn cho đơn hàng #{pendingOrderCode}.
+            </Text>
+            <View style={styles.pendingButtons}>
+              <Button
+                title="Kiểm tra kết quả"
+                onPress={handleCheckPaymentStatus}
+                size="md"
+                loading={checkingPayment}
+                style={styles.pendingBtn}
+              />
+              <Button
+                title="Hủy/Đóng"
+                onPress={handleCancelPendingPayment}
+                variant="outline"
+                size="md"
+                style={styles.pendingBtn}
+                disabled={checkingPayment}
+              />
+            </View>
+          </Card>
+        )}
+
+        {!route.params?.scrollToHistory && (
+          <Card style={styles.topupCard} variant="glass">
+            <Text style={styles.sectionTitle}>Nạp tiền</Text>
+            <View style={styles.presetRow}>
+              {TOPUP_PRESETS.map(amount => (
+                <TouchableOpacity
+                  key={amount}
                   style={[
-                    styles.presetText,
-                    topupAmount === amount && styles.presetTextActive,
+                    styles.presetChip,
+                    topupAmount === amount && styles.presetChipActive,
                   ]}
+                  onPress={() => handlePresetSelect(amount)}
                 >
-                  {amount >= 1000000
-                    ? `${(amount / 1000000).toFixed(1)}M`
-                    : `${amount / 1000}K`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.presetText,
+                      topupAmount === amount && styles.presetTextActive,
+                    ]}
+                  >
+                    {amount >= 1000000
+                      ? `${(amount / 1000000).toFixed(1)}M`
+                      : `${amount / 1000}K`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          <Input
-            label="Số tiền nạp tự chọn (đ)"
-            placeholder="Nhập số tiền (1.000đ – 50.000.000đ)"
-            value={customAmountText}
-            onChangeText={handleCustomAmountChange}
-            keyboardType="numeric"
-            error={topupError || undefined}
-          />
+            <Input
+              label="Số tiền nạp tự chọn (đ)"
+              placeholder="Nhập số tiền (1.000đ – 50.000.000đ)"
+              value={customAmountText}
+              onChangeText={handleCustomAmountChange}
+              keyboardType="numeric"
+              error={topupError || undefined}
+            />
 
+            <Button
+              title={topupAmount >= 1000 && !topupError ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền hợp lệ'}
+              onPress={handleTopup}
+              size="lg"
+              style={styles.topupButton}
+              disabled={topupAmount < 1000 || !!topupError}
+              loading={checkingPayment && !pendingOrderCode}
+            />
+          </Card>
+        )}
 
-
-          <Button
-            title={topupAmount >= 1000 && !topupError ? `Nạp ${formatCurrency(topupAmount)}` : 'Vui lòng nhập số tiền hợp lệ'}
-            onPress={handleTopup}
-            size="lg"
-            style={styles.topupButton}
-            disabled={topupAmount < 1000 || !!topupError}
-            loading={checkingPayment && !pendingOrderCode}
-          />
-        </Card>
-      )}
-
-      {!route.params?.hideHistory && (
-        <View 
-          style={styles.section}
-          onLayout={(e) => {
-            setHistoryY(e.nativeEvent.layout.y);
-          }}
-        >
-          <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
-          {transactions.length === 0 ? (
-            <Card style={styles.emptyCard} variant="glass">
-              <Text style={styles.emptyText}>Chưa có giao dịch nào</Text>
-            </Card>
-          ) : (
-            transactions.map(tx => (
-              <Card key={tx.id} style={styles.txCard} variant="glass">
-                <View style={styles.txRow}>
-                  <View style={styles.txLeft}>
-                    <Text style={styles.txType}>
-                      {tx.type === 'DEPOSIT' ? 'Nạp tiền' :
-                       tx.type === 'WITHDRAW' ? 'Rút tiền' :
-                       tx.type === 'ESCROW_HOLD' ? 'Giữ tiền' :
-                       tx.type === 'ESCROW_RELEASE' ? 'Giải ngân' :
-                       tx.type === 'REFUND' ? 'Hoàn tiền' : 'Phí'}
-                    </Text>
-                    <Text style={styles.txDate}>{formatDate(tx.createdAt)}</Text>
-                  </View>
-                  <View style={styles.txRight}>
-                    <Text style={[
-                      styles.txAmount,
-                      tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
-                        ? styles.txPositive
-                        : styles.txNegative,
-                    ]}>
-                      {tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
-                        ? '+'
-                        : '-'}
-                      {formatCurrency(tx.amount)}
-                    </Text>
-                    <Badge
-                      label={getStatusLabel(tx.status)}
-                      variant={tx.status === 'SUCCESS' ? 'success' : tx.status === 'PENDING' ? 'warning' : 'error'}
-                      size="sm"
-                    />
-                  </View>
-                </View>
+        {!route.params?.hideHistory && (
+          <View 
+            style={styles.section}
+            onLayout={(e) => {
+              setHistoryY(e.nativeEvent.layout.y);
+            }}
+          >
+            <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
+            {transactions.length === 0 ? (
+              <Card style={styles.emptyCard} variant="glass">
+                <Text style={styles.emptyText}>Chưa có giao dịch nào</Text>
               </Card>
-            ))
-          )}
-        </View>
-      )}
-    </ScrollView>
+            ) : (
+              transactions.map(tx => {
+                const statusInfo = (() => {
+                  if (tx.status === 'SUCCESS') {
+                    return { label: 'Thành công', variant: 'success' as const };
+                  }
+                  if (tx.status === 'FAILED') {
+                    return { label: 'Thất bại', variant: 'error' as const };
+                  }
+                  if (tx.status === 'CANCELLED') {
+                    return { label: 'Đã hủy', variant: 'error' as const };
+                  }
+                  if (tx.status === 'EXPIRED') {
+                    return { label: 'Hết hạn', variant: 'error' as const };
+                  }
+                  if (tx.type === 'WITHDRAW' && tx.status === 'PENDING') {
+                    return { label: 'Chờ duyệt', variant: 'warning' as const };
+                  }
+                  if (tx.type === 'DEPOSIT' && tx.status === 'PENDING') {
+                    return { label: 'Chờ thanh toán', variant: 'warning' as const };
+                  }
+                  if (tx.type === 'ESCROW_HOLD') {
+                    return { label: 'Thành công', variant: 'success' as const };
+                  }
+                  return {
+                    label: getStatusLabel(tx.status),
+                    variant: (tx.status === 'PENDING' ? 'warning' : 'success') as 'warning' | 'success',
+                  };
+                })();
+
+                return (
+                  <TouchableOpacity
+                    key={tx.id}
+                    activeOpacity={0.75}
+                    onPress={() => handleOpenDetail(tx)}
+                  >
+                    <Card style={styles.txCard} variant="glass">
+                      <View style={styles.txRow}>
+                        <View style={styles.txLeft}>
+                          <Text style={styles.txType}>
+                            {tx.type === 'DEPOSIT' ? 'Nạp tiền' :
+                             tx.type === 'WITHDRAW' ? 'Rút tiền' :
+                             tx.type === 'ESCROW_HOLD' ? 'Giữ tiền' :
+                             tx.type === 'ESCROW_RELEASE' ? 'Giải ngân' :
+                             tx.type === 'REFUND' ? 'Hoàn tiền' : 'Phí'}
+                          </Text>
+                          <Text style={styles.txDate}>{formatDate(tx.createdAt)}</Text>
+                        </View>
+                        <View style={styles.txRight}>
+                          <Text style={[
+                            styles.txAmount,
+                            tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
+                              ? styles.txPositive
+                              : styles.txNegative,
+                          ]}>
+                            {tx.type === 'DEPOSIT' || tx.type === 'ESCROW_RELEASE' || tx.type === 'REFUND'
+                              ? '+'
+                              : '-'}
+                            {formatCurrency(tx.amount)}
+                          </Text>
+                          <Badge
+                            label={statusInfo.label}
+                            variant={statusInfo.variant}
+                            size="sm"
+                          />
+                        </View>
+                      </View>
+                    </Card>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Transaction Detail Modal */}
+      <Modal
+        visible={!!selectedTx}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedTx(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedTx(null)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard}>
+            {selectedTx && (
+              <>
+                <Text style={styles.modalTitle}>Chi tiết giao dịch</Text>
+                <View style={styles.modalDivider} />
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Loại giao dịch:</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedTx.type === 'DEPOSIT' ? 'Nạp tiền vào ví' :
+                     selectedTx.type === 'WITHDRAW' ? 'Rút tiền từ ví' :
+                     selectedTx.type === 'ESCROW_HOLD' ? 'Giữ tiền đặt cọc' :
+                     selectedTx.type === 'ESCROW_RELEASE' ? 'Giải ngân công việc' :
+                     selectedTx.type === 'REFUND' ? 'Hoàn tiền ví' : 'Phí ứng dụng'}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Số tiền:</Text>
+                  <Text style={[styles.detailValue, styles.detailAmountText]}>
+                    {formatCurrency(selectedTx.amount)}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Thời gian:</Text>
+                  <Text style={styles.detailValue}>{formatDate(selectedTx.createdAt)}</Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Trạng thái:</Text>
+                  <Badge
+                    label={
+                      selectedTx.status === 'SUCCESS' ? 'Thành công' :
+                      selectedTx.status === 'FAILED' ? 'Thất bại' :
+                      selectedTx.status === 'CANCELLED' ? 'Đã hủy' :
+                      selectedTx.type === 'WITHDRAW' && selectedTx.status === 'PENDING' ? 'Chờ duyệt' :
+                      selectedTx.type === 'DEPOSIT' && selectedTx.status === 'PENDING' ? 'Chờ thanh toán' :
+                      getStatusLabel(selectedTx.status)
+                    }
+                    variant={
+                      selectedTx.status === 'SUCCESS' ? 'success' :
+                      selectedTx.status === 'PENDING' ? 'warning' : 'error'
+                    }
+                    size="sm"
+                  />
+                </View>
+
+                {selectedTx.type === 'WITHDRAW' && (
+                  <>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Ngân hàng:</Text>
+                      <Text style={styles.detailValue}>{selectedTx.bankName || 'Chưa cập nhật'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Số tài khoản:</Text>
+                      <Text style={styles.detailValue}>{selectedTx.bankAccountNumber || 'Chưa cập nhật'}</Text>
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.modalActions}>
+                  {selectedTx.type === 'WITHDRAW' && selectedTx.status === 'PENDING' && (
+                    <>
+                      <Button
+                        title="Chỉnh sửa"
+                        onPress={handleOpenEdit}
+                        size="md"
+                        style={{ flex: 1, marginRight: 8 }}
+                      />
+                      <Button
+                        title="Hủy đơn"
+                        onPress={handleCancelWithdrawal}
+                        variant="outline"
+                        size="md"
+                        style={{ flex: 1, borderColor: Colors.error }}
+                        textStyle={{ color: Colors.error }}
+                        loading={submittingAction}
+                      />
+                    </>
+                  )}
+                  <Button
+                    title="Đóng"
+                    onPress={() => setSelectedTx(null)}
+                    variant="outline"
+                    size="md"
+                    style={{ flex: selectedTx.type === 'WITHDRAW' && selectedTx.status === 'PENDING' ? 0.8 : 1 }}
+                  />
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Withdrawal Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsEditModalVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Chỉnh sửa đơn rút tiền</Text>
+            <View style={styles.modalDivider} />
+
+            <Input
+              label="Tên ngân hàng"
+              placeholder="VD: Vietcombank, MB Bank, Techcombank"
+              value={editBankName}
+              onChangeText={setEditBankName}
+            />
+
+            <Input
+              label="Số tài khoản"
+              placeholder="Nhập số tài khoản ngân hàng"
+              value={editBankAccount}
+              onChangeText={setEditBankAccount}
+              keyboardType="numeric"
+            />
+
+            <Input
+              label="Số tiền rút (VNĐ)"
+              placeholder="Tối đa 2.000.000đ"
+              value={editAmountText}
+              onChangeText={setEditAmountText}
+              keyboardType="numeric"
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                title="Lưu thay đổi"
+                onPress={handleSaveEdit}
+                size="md"
+                style={{ flex: 1, marginRight: 8 }}
+                loading={submittingAction}
+              />
+              <Button
+                title="Hủy"
+                onPress={() => setIsEditModalVisible(false)}
+                variant="outline"
+                size="md"
+                style={{ flex: 1 }}
+                disabled={submittingAction}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 };
 
@@ -505,5 +789,60 @@ const styles = StyleSheet.create({
   },
   txNegative: {
     color: Colors.error,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: AppColors.text.primary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: AppColors.border.subtle,
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: AppColors.text.secondary,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AppColors.text.primary,
+  },
+  detailAmountText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 10,
   },
 });

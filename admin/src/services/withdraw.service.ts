@@ -61,16 +61,27 @@ export class WithdrawService {
           },
         });
 
-        // Create transaction history
-        await tx.walletTransaction.create({
-          data: {
-            walletId: wallet.id,
-            type: WalletTransactionType.WITHDRAW,
-            amount: withdraw.amount,
-            status: TransactionStatus.SUCCESS,
-            referenceId: withdraw.id,
-          },
+        // Update existing transaction history or create if not present
+        const existingTx = await tx.walletTransaction.findFirst({
+          where: { referenceId: withdraw.id, type: WalletTransactionType.WITHDRAW },
         });
+
+        if (existingTx) {
+          await tx.walletTransaction.update({
+            where: { id: existingTx.id },
+            data: { status: TransactionStatus.SUCCESS },
+          });
+        } else {
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              type: WalletTransactionType.WITHDRAW,
+              amount: withdraw.amount,
+              status: TransactionStatus.SUCCESS,
+              referenceId: withdraw.id,
+            },
+          });
+        }
 
         // Update request status
         return tx.withdrawRequest.update({
@@ -79,7 +90,18 @@ export class WithdrawService {
         });
       });
     } else if (status === WithdrawStatus.REJECTED) {
-      return this.withdrawRepository.updateStatus(id, WithdrawStatus.REJECTED);
+      return prisma.$transaction(async (tx) => {
+        // Update existing pending transaction history to FAILED
+        await tx.walletTransaction.updateMany({
+          where: { referenceId: withdraw.id, type: WalletTransactionType.WITHDRAW },
+          data: { status: TransactionStatus.FAILED },
+        });
+
+        return tx.withdrawRequest.update({
+          where: { id },
+          data: { status: WithdrawStatus.REJECTED },
+        });
+      });
     }
 
     throw new BadRequestError(`Unsupported withdrawal status: ${status}`);

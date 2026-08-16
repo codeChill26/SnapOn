@@ -72,6 +72,24 @@ router.post(
   walletController.withdraw
 );
 
+router.put(
+  '/withdraw/:id',
+  authenticate,
+  [
+    body('amount').notEmpty().isFloat({ min: 10000 }),
+    body('bankName').notEmpty().isString(),
+    body('bankAccountNumber').notEmpty().isString(),
+  ],
+  validate,
+  walletController.updateWithdrawal
+);
+
+router.delete(
+  '/withdraw/:id',
+  authenticate,
+  walletController.cancelWithdrawal
+);
+
 // ==========================================
 // PayOS Integration Routes (Mobile Flow)
 // ==========================================

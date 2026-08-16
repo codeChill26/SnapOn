@@ -83,6 +83,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     const amount = parseInt(amountText, 10);
     if (!amount || amount < 1000) {
       Alert.alert('Lỗi', 'Vui lòng nhập số tiền rút hợp lệ (tối thiểu 1.000đ)');
@@ -218,7 +220,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             title="Gửi yêu cầu rút"
             onPress={handleSubmit}
             loading={isSubmitting}
-            disabled={!amountText || !!errorText || !bankAccountNumber}
+            disabled={!amountText || !!errorText || !bankAccountNumber || isSubmitting}
             style={{ flex: 1 }}
           />
         </View>

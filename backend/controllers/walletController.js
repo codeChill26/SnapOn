@@ -160,6 +160,39 @@ const walletController = {
   },
 
   /**
+   * PUT /api/wallet/withdraw/:id
+   */
+  async updateWithdrawal(req, res) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const { amount, bankName, bankAccountNumber } = req.body;
+      const result = await walletService.updateWithdrawRequest(userId, id, { amount, bankName, bankAccountNumber });
+      return success(res, result, 'Withdrawal request updated successfully.');
+    } catch (err) {
+      console.error('Update withdrawal error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to update withdrawal request.', status);
+    }
+  },
+
+  /**
+   * DELETE /api/wallet/withdraw/:id
+   */
+  async cancelWithdrawal(req, res) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const result = await walletService.cancelWithdrawRequest(userId, id);
+      return success(res, result, 'Withdrawal request cancelled successfully.');
+    } catch (err) {
+      console.error('Cancel withdrawal error:', err);
+      const status = err.statusCode || 500;
+      return error(res, err.message || 'Failed to cancel withdrawal request.', status);
+    }
+  },
+
+  /**
    * GET /api/wallet/topup/payos/success (Mobile Webview redirect page)
    */
   async payosSuccess(req, res) {

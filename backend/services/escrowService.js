@@ -107,7 +107,7 @@ const escrowService = {
         walletId: posterWallet.id,
         type: 'ESCROW_HOLD',
         amount: amt,
-        status: 'PENDING',
+        status: 'SUCCESS',
         referenceId: escrow.id,
       },
       db

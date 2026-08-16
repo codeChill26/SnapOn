@@ -239,11 +239,13 @@ export const ProfileScreen: React.FC = () => {
       <View style={styles.headerContainer}>
         {/* Custom Header Navigation Bar */}
         <View style={styles.navBar}>
-          {!isOwnProfile ? (
+          {navigation.canGoBack() ? (
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => navigation.goBack()}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Quay lại"
             >
               <Ionicons name="arrow-back" size={24} color={Colors.text} />
             </TouchableOpacity>

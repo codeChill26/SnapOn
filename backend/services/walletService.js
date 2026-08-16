@@ -1,5 +1,6 @@
 const walletModel = require('../models/walletModel');
 const walletTransactionModel = require('../models/walletTransactionModel');
+const notificationModel = require('../models/notificationModel');
 const withDbTx = require('../utils/withDbTx');
 const payos = require('../config/payos');
 const pool = require('../config/db');
@@ -62,6 +63,16 @@ const walletService = {
         db
       );
 
+      await notificationModel.create(
+        {
+          userId,
+          title: 'Nạp tiền vào ví thành công',
+          content: `Bạn đã nạp thành công ${amt.toLocaleString('vi-VN')}đ vào tài khoản ví SnapOn.`,
+          type: 'WALLET',
+        },
+        db
+      ).catch(() => {});
+
       const w = updated.rows[0];
       return {
         id: w.id,
@@ -94,6 +105,11 @@ const walletService = {
           AND wt.status = 'PENDING'
           AND wr.status IN ('APPROVED', 'REJECTED')
       `);
+      await pool.query(`
+        UPDATE wallet_transactions
+        SET status = 'SUCCESS'
+        WHERE type = 'ESCROW_HOLD' AND status = 'PENDING'
+      `);
     } catch (e) {
       console.error('Error auto-syncing withdraw transactions:', e);
     }
@@ -105,8 +121,17 @@ const walletService = {
     const total = parseInt(countRes.rows[0].total);
 
     const result = await pool.query(
-      `SELECT wt.*, wr.status as req_status
+      `SELECT wt.*, 
+              wr.status as req_status, 
+              COALESCE(wr.bank_name, u.bank_name, (
+                SELECT bank_name FROM withdraw_requests WHERE user_id = w.user_id AND bank_name IS NOT NULL ORDER BY created_at DESC LIMIT 1
+              )) as bank_name, 
+              COALESCE(wr.bank_account_number, u.bank_account_number, (
+                SELECT bank_account_number FROM withdraw_requests WHERE user_id = w.user_id AND bank_account_number IS NOT NULL ORDER BY created_at DESC LIMIT 1
+              )) as bank_account_number
        FROM wallet_transactions wt
+       JOIN wallets w ON wt.wallet_id = w.id
+       LEFT JOIN users u ON w.user_id = u.id
        LEFT JOIN withdraw_requests wr ON wt.reference_id = wr.id
        WHERE wt.wallet_id = $1
        ORDER BY wt.created_at DESC
@@ -119,8 +144,14 @@ const walletService = {
       if (row.type === 'WITHDRAW' && row.req_status) {
         if (row.req_status === 'REJECTED') status = 'FAILED';
         if (row.req_status === 'APPROVED') status = 'SUCCESS';
+        if (row.req_status === 'CANCELLED') status = 'CANCELLED';
       }
-      return { ...row, status };
+      return {
+        ...row,
+        status,
+        bank_name: row.bank_name || null,
+        bank_account_number: row.bank_account_number || null,
+      };
     });
 
     return {
@@ -315,6 +346,19 @@ const walletService = {
           [transaction.wallet_id, amount]
         );
         console.log(`✅ Credited ${amount} to wallet ${transaction.wallet_id} for transaction ${transaction.id}`);
+
+        const wRes = await db.query('SELECT user_id FROM wallets WHERE id = $1', [transaction.wallet_id]);
+        if (wRes.rows[0]?.user_id) {
+          await notificationModel.create(
+            {
+              userId: wRes.rows[0].user_id,
+              title: 'Nạp tiền vào ví thành công',
+              content: `Bạn đã nạp thành công ${Number(amount).toLocaleString('vi-VN')}đ qua PayOS vào ví SnapOn.`,
+              type: 'WALLET',
+            },
+            db
+          ).catch(() => {});
+        }
       } else {
         console.log(`❌ Transaction ${transaction.id} failed in PayOS payload`);
       }
@@ -368,6 +412,19 @@ const walletService = {
             [transaction.wallet_id, amt]
           );
           console.log(`✅ [CheckStatus] Credited ${amt} to wallet ${transaction.wallet_id} for transaction ${transaction.id}`);
+
+          const wRes = await db.query('SELECT user_id FROM wallets WHERE id = $1', [transaction.wallet_id]);
+          if (wRes.rows[0]?.user_id) {
+            await notificationModel.create(
+              {
+                userId: wRes.rows[0].user_id,
+                title: 'Nạp tiền vào ví thành công',
+                content: `Bạn đã nạp thành công ${amt.toLocaleString('vi-VN')}đ qua PayOS vào ví SnapOn.`,
+                type: 'WALLET',
+              },
+              db
+            ).catch(() => {});
+          }
         }
       }
 
@@ -444,6 +501,16 @@ const walletService = {
         [tx.id]
       );
 
+      await notificationModel.create(
+        {
+          userId,
+          title: 'Nạp tiền vào ví thành công',
+          content: `Bạn đã nạp thành công ${amount.toLocaleString('vi-VN')}đ qua PayOS vào ví SnapOn.`,
+          type: 'WALLET',
+        },
+        db
+      ).catch(() => {});
+
       const w = updatedWallet.rows[0];
       return {
         wallet: {
@@ -476,6 +543,9 @@ const walletService = {
     }
 
     return withDbTx(async (db) => {
+      // 0. Strict row lock on users table to enforce serial execution across concurrent requests
+      await db.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [userId]);
+
       const wallet = await walletModel.lockByUserId(userId, db);
       if (!wallet) {
         throw new CustomError('Ví người dùng không tồn tại.', 404);
@@ -486,16 +556,30 @@ const walletService = {
         throw new CustomError(`Số dư khả dụng không đủ để rút. Số dư hiện có: ${avail.toLocaleString('vi-VN')}đ`, 400);
       }
 
-      // 1. Check if user already has an active pending withdrawal request
+      // 1. Check if user already has an active pending withdrawal request in withdraw_requests
       const pendingCheck = await db.query(
-        `SELECT id FROM wallet_transactions
-         WHERE wallet_id = $1 AND type = 'WITHDRAW' AND status = 'PENDING'
+        `SELECT id FROM withdraw_requests
+         WHERE user_id = $1 AND status = 'PENDING'
          LIMIT 1`,
-        [wallet.id]
+        [userId]
       );
       if (pendingCheck.rows.length > 0) {
         throw new CustomError(
           'Bạn đang có 1 yêu cầu rút tiền đang chờ Admin xét duyệt. Vui lòng chờ Admin xử lý xong trước khi tạo yêu cầu mới.',
+          400
+        );
+      }
+
+      // 1b. Strict 30-second anti-duplicate cooldown check on withdraw_requests table
+      const recentCheck = await db.query(
+        `SELECT id FROM withdraw_requests
+         WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '30 seconds'
+         LIMIT 1`,
+        [userId]
+      );
+      if (recentCheck.rows.length > 0) {
+        throw new CustomError(
+          'Yêu cầu rút tiền vừa được gửi. Vui lòng chờ ít nhất 30 giây trước khi gửi yêu cầu tiếp theo.',
           400
         );
       }
@@ -543,6 +627,21 @@ const walletService = {
         db
       );
 
+      await db.query(
+        `UPDATE users SET bank_name = $2, bank_account_number = $3 WHERE id = $1`,
+        [userId, bankName.trim(), bankAccountNumber.trim()]
+      ).catch(() => {});
+
+      await notificationModel.create(
+        {
+          userId,
+          title: 'Đã tạo yêu cầu rút tiền',
+          content: `Yêu cầu rút ${amt.toLocaleString('vi-VN')}đ về tài khoản ${bankName.trim()} (${bankAccountNumber.trim()}) đã được tạo và đang chờ Admin xét duyệt.`,
+          type: 'WALLET',
+        },
+        db
+      ).catch(() => {});
+
       return {
         transactionId: tx.id,
         withdrawRequestId: withdrawReq.id,
@@ -551,6 +650,133 @@ const walletService = {
         bankAccountNumber: bankAccountNumber.trim(),
         status: 'PENDING',
         message: `Yêu cầu rút ${amt.toLocaleString('vi-VN')}đ đã được gửi thành công! Admin sẽ kiểm tra và xét duyệt.`,
+      };
+    });
+  },
+
+  /**
+   * Update a pending withdrawal request
+   */
+  async updateWithdrawRequest(userId, withdrawId, { amount, bankName, bankAccountNumber }) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new CustomError('Số tiền rút không hợp lệ', 400);
+    }
+    if (amt > 2000000) {
+      throw new CustomError('Số tiền rút mỗi lần tối đa là 2.000.000đ.', 400);
+    }
+    if (!bankName || !bankAccountNumber) {
+      throw new CustomError('Vui lòng cung cấp đầy đủ thông tin ngân hàng và số tài khoản.', 400);
+    }
+
+    return withDbTx(async (db) => {
+      const wallet = await walletModel.lockByUserId(userId, db);
+      if (!wallet) throw new CustomError('Ví không tồn tại', 404);
+
+      const txRes = await db.query(
+        `SELECT wt.*, wr.status as req_status
+         FROM wallet_transactions wt
+         LEFT JOIN withdraw_requests wr ON wt.reference_id = wr.id
+         WHERE (wt.id = $1 OR wt.reference_id = $1) AND wt.wallet_id = $2 AND wt.type = 'WITHDRAW'
+         FOR UPDATE`,
+        [withdrawId, wallet.id]
+      );
+
+      if (txRes.rows.length === 0) {
+        throw new CustomError('Không tìm thấy yêu cầu rút tiền', 404);
+      }
+
+      const tx = txRes.rows[0];
+      const status = tx.req_status || tx.status;
+
+      if (status !== 'PENDING') {
+        throw new CustomError('Chỉ có thể chỉnh sửa yêu cầu rút tiền đang ở trạng thái Chờ duyệt.', 400);
+      }
+
+      const avail = parseFloat(wallet.available_balance);
+      if (avail < amt) {
+        throw new CustomError(`Số dư khả dụng không đủ. Số dư hiện có: ${avail.toLocaleString('vi-VN')}đ`, 400);
+      }
+
+      if (tx.reference_id) {
+        await db.query(
+          `UPDATE withdraw_requests
+           SET amount = $1, bank_name = $2, bank_account_number = $3, updated_at = NOW()
+           WHERE id = $4`,
+          [amt, bankName.trim(), bankAccountNumber.trim(), tx.reference_id]
+        );
+      }
+
+      const updatedTx = await db.query(
+        `UPDATE wallet_transactions
+         SET amount = $1
+         WHERE id = $2
+         RETURNING *`,
+        [amt, tx.id]
+      );
+
+      return {
+        ...updatedTx.rows[0],
+        bank_name: bankName.trim(),
+        bank_account_number: bankAccountNumber.trim(),
+        message: 'Cập nhật yêu cầu rút tiền thành công!',
+      };
+    });
+  },
+
+  /**
+   * Cancel (Delete) a pending withdrawal request
+   */
+  async cancelWithdrawRequest(userId, withdrawId) {
+    return withDbTx(async (db) => {
+      const wallet = await walletModel.lockByUserId(userId, db);
+      if (!wallet) throw new CustomError('Ví không tồn tại', 404);
+
+      const txRes = await db.query(
+        `SELECT wt.*, wr.status as req_status
+         FROM wallet_transactions wt
+         LEFT JOIN withdraw_requests wr ON wt.reference_id = wr.id
+         WHERE (wt.id = $1 OR wt.reference_id = $1) AND wt.wallet_id = $2 AND wt.type = 'WITHDRAW'
+         FOR UPDATE`,
+        [withdrawId, wallet.id]
+      );
+
+      if (txRes.rows.length === 0) {
+        throw new CustomError('Không tìm thấy yêu cầu rút tiền', 404);
+      }
+
+      const tx = txRes.rows[0];
+      const status = tx.req_status || tx.status;
+
+      if (status !== 'PENDING') {
+        throw new CustomError('Chỉ có thể hủy yêu cầu rút tiền đang ở trạng thái Chờ duyệt.', 400);
+      }
+
+      if (tx.reference_id) {
+        await db.query(
+          `UPDATE withdraw_requests SET status = 'CANCELLED' WHERE id = $1`,
+          [tx.reference_id]
+        );
+      }
+
+      await db.query(
+        `UPDATE wallet_transactions SET status = 'CANCELLED' WHERE id = $1`,
+        [tx.id]
+      );
+
+      await notificationModel.create(
+        {
+          userId,
+          title: 'Đã hủy yêu cầu rút tiền',
+          content: `Yêu cầu rút ${parseFloat(tx.amount).toLocaleString('vi-VN')}đ đã được hủy thành công.`,
+          type: 'WALLET',
+        },
+        db
+      ).catch(() => {});
+
+      return {
+        success: true,
+        message: 'Đã hủy yêu cầu rút tiền thành công.',
       };
     });
   },
