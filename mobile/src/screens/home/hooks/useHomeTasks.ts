@@ -145,6 +145,11 @@ export const useHomeTasks = () => {
   const [categoriesList, setCategoriesList] = useState<JobField[]>([]);
   const [savingTaskIds, setSavingTaskIds] = useState<Record<string, boolean>>({});
 
+  // Pagination states (10 items per page)
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTasks, setTotalTasks] = useState(0);
+
   // Use search and filters sub-hooks
   const search = useHomeSearch();
   const filters = useHomeFilters(categoriesList, search.handleResetSearch);
@@ -185,10 +190,28 @@ export const useHomeTasks = () => {
     void loadCachedTasks();
   }, [setTasks]);
 
-  // Fetching tasks from backend
+  // Reset to page 1 whenever filters change
+  const isFirstRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    setPage(1);
+  }, [
+    search.debouncedSearch,
+    filters.selectedFieldId,
+    filters.selectedSubcategoryId,
+    filters.postTypeFilter,
+    filters.statusFilter,
+    filters.activeSort,
+  ]);
+
+  // Fetching tasks from backend with page and limit=10
   const fetchTasks = useCallback(
-    async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+    async ({ showLoading = true, targetPage }: { showLoading?: boolean; targetPage?: number } = {}) => {
       const currentRequestId = ++latestRequestRef.current;
+      const pageToFetch = targetPage !== undefined ? targetPage : page;
 
       try {
         if (showLoading) {
@@ -196,8 +219,8 @@ export const useHomeTasks = () => {
         }
 
         const params: Record<string, string | number> = {
-          page: 1,
-          limit: 20,
+          page: pageToFetch,
+          limit: 10,
         };
 
         if (filters.selectedSubcategoryId) {
@@ -219,8 +242,13 @@ export const useHomeTasks = () => {
         if (currentRequestId === latestRequestRef.current) {
           const newTasks = result.data ?? [];
           setTasks(newTasks);
+          setPage(pageToFetch);
+          setTotalPages(result.pagination?.totalPages || 1);
+          setTotalTasks(result.pagination?.total || newTasks.length);
           lastFetchTimeRef.current = Date.now();
-          AsyncStorage.setItem('@snapon/cache_tasks', JSON.stringify(newTasks)).catch(() => {});
+          if (pageToFetch === 1) {
+            AsyncStorage.setItem('@snapon/cache_tasks', JSON.stringify(newTasks)).catch(() => {});
+          }
         }
       } catch (error) {
         if (__DEV__) {
@@ -237,12 +265,12 @@ export const useHomeTasks = () => {
         }
       }
     },
-    [search.debouncedSearch, filters.selectedFieldId, filters.selectedSubcategoryId, filters.postTypeFilter, setTasks]
+    [page, search.debouncedSearch, filters.selectedFieldId, filters.selectedSubcategoryId, filters.postTypeFilter, setTasks]
   );
 
   useEffect(() => {
     void fetchTasks();
-  }, [fetchTasks]);
+  }, [search.debouncedSearch, filters.selectedFieldId, filters.selectedSubcategoryId, filters.postTypeFilter]);
 
   useEffect(() => {
     const subCreated = DeviceEventEmitter.addListener('task_created', (newTask) => {
@@ -279,8 +307,16 @@ export const useHomeTasks = () => {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setBannerRefreshKey((current) => current + 1);
-    void fetchTasks({ showLoading: false });
+    void fetchTasks({ showLoading: false, targetPage: 1 });
   }, [fetchTasks]);
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage < 1 || newPage > totalPages || newPage === page) return;
+      void fetchTasks({ showLoading: true, targetPage: newPage });
+    },
+    [page, totalPages, fetchTasks]
+  );
 
   const handleToggleSaved = useCallback(
     async (task: Task) => {
@@ -365,6 +401,9 @@ export const useHomeTasks = () => {
       savingTaskIds,
       hasActiveFilter,
       sortedTasks,
+      page,
+      totalPages,
+      totalTasks,
     },
     actions: {
       setSearchQuery: search.setSearchQuery,
@@ -381,6 +420,7 @@ export const useHomeTasks = () => {
       handleToggleSaved,
       handleClearSearch: search.handleClearSearch,
       handleSubmitSearch: search.handleSubmitSearch,
+      handlePageChange,
     },
   };
 };

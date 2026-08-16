@@ -37,7 +37,7 @@ const applicationController = {
           err.statusCode = 404;
           throw err;
         }
-        
+
         const { fromDbTaskStatus } = require('../utils/dbEnum');
         const taskVal = {
           ...dbTask,
@@ -182,7 +182,7 @@ const applicationController = {
       // Paginated query
       const result = await pool.query(
         `SELECT ta.*,
-                u.full_name AS tasker_name, u.avatar_url AS tasker_avatar,
+                u.full_name AS tasker_name, u.avatar_url AS tasker_avatar, u.phone AS tasker_phone,
                 tp.average_rating, tp.bio, tp.location_text,
                 at.id AS assignment_id,
                 at.status AS assignment_status

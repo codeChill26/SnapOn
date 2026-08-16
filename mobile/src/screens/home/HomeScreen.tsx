@@ -1,8 +1,14 @@
 import React, { useCallback, useMemo } from 'react';
 import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -32,6 +38,8 @@ export const HomeScreen: React.FC = () => {
   const { user } = useAuth();
   const theme = useTheme();
 
+  const flashListRef = React.useRef<any>(null);
+
   const {
     state: {
       loading,
@@ -51,6 +59,9 @@ export const HomeScreen: React.FC = () => {
       savingTaskIds,
       hasActiveFilter,
       sortedTasks,
+      page,
+      totalPages,
+      totalTasks,
     },
     actions: {
       setSearchQuery,
@@ -67,11 +78,13 @@ export const HomeScreen: React.FC = () => {
       handleToggleSaved,
       handleClearSearch,
       handleSubmitSearch,
+      handlePageChange,
     }
   } = useHomeTasks();
 
   const [notifModalVisible, setNotifModalVisible] = React.useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = React.useState(0);
+  const [jumpInput, setJumpInput] = React.useState('');
 
   const fetchUnreadNotifCount = useCallback(async () => {
     try {
@@ -85,6 +98,43 @@ export const HomeScreen: React.FC = () => {
   React.useEffect(() => {
     fetchUnreadNotifCount();
   }, [fetchUnreadNotifCount]);
+
+  const handleJumpToPage = useCallback(() => {
+    const target = parseInt(jumpInput.trim(), 10);
+    if (!isNaN(target) && target >= 1 && target <= totalPages) {
+      handlePageChange(target);
+      flashListRef.current?.scrollToOffset({ offset: 360, animated: true });
+      setJumpInput('');
+      Keyboard.dismiss();
+    } else {
+      Alert.alert('Trang không hợp lệ', `Vui lòng nhập số trang từ 1 đến ${totalPages}.`);
+    }
+  }, [jumpInput, totalPages, handlePageChange]);
+
+  const getPageNumbers = useCallback((current: number, total: number): (number | string)[] => {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [];
+    pages.push(1);
+    if (current > 3) {
+      pages.push('...');
+    }
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) {
+      if (!pages.includes(i)) {
+        pages.push(i);
+      }
+    }
+    if (current < total - 2) {
+      pages.push('...');
+    }
+    if (!pages.includes(total)) {
+      pages.push(total);
+    }
+    return pages;
+  }, []);
 
   const handleJobPress = useCallback(
     (task: Task) => {
@@ -200,6 +250,164 @@ export const HomeScreen: React.FC = () => {
       </View>
     );
   }, [loading, hasActiveFilter, handleResetFilters, theme]);
+
+  const listFooterComponent = useMemo(() => {
+    if (totalPages <= 1) {
+      return <View style={[styles.listFooter, { backgroundColor: theme.colors.background.secondary }]} />;
+    }
+
+    const pageNumbers = getPageNumbers(page, totalPages);
+
+    return (
+      <View
+        style={[
+          styles.paginationContainer,
+          {
+            backgroundColor: theme.colors.background.secondary,
+            borderColor: theme.colors.border.subtle,
+          },
+        ]}
+      >
+        <Text style={[styles.paginationInfoText, { color: theme.colors.text.secondary }]}>
+          Hiển thị trang <Text style={{ fontWeight: '800', color: theme.colors.text.primary }}>{page}</Text> /{' '}
+          <Text style={{ fontWeight: '800', color: theme.colors.text.primary }}>{totalPages}</Text>{' '}
+          ({totalTasks > 0 ? totalTasks : sortedTasks.length} việc)
+        </Text>
+
+        <View style={styles.paginationControlsRow}>
+          <TouchableOpacity
+            style={[
+              styles.pageBtn,
+              {
+                borderColor: theme.colors.border.subtle,
+                backgroundColor: page === 1 ? theme.colors.background.primary : theme.colors.brand.primarySoft,
+                opacity: page === 1 ? 0.4 : 1,
+              },
+            ]}
+            disabled={page === 1 || loading}
+            onPress={() => {
+              handlePageChange(page - 1);
+              flashListRef.current?.scrollToOffset({ offset: 360, animated: true });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Trang trước"
+          >
+            <Ionicons name="chevron-back" size={14} color={theme.colors.brand.primary} />
+            <Text style={[styles.pageBtnText, { color: theme.colors.brand.primary, marginLeft: 2 }]}>Trước</Text>
+          </TouchableOpacity>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.pageNumbersScroll}
+            contentContainerStyle={styles.pageNumbersScrollContainer}
+          >
+            {pageNumbers.map((p, idx) => {
+              if (typeof p === 'string') {
+                return (
+                  <Text key={`ellipsis-${idx}`} style={[styles.ellipsisText, { color: theme.colors.text.secondary }]}>
+                    ...
+                  </Text>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[
+                    styles.pageNumberPill,
+                    p === page
+                      ? { backgroundColor: theme.colors.brand.primary, borderColor: theme.colors.brand.primary }
+                      : { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.subtle },
+                  ]}
+                  disabled={p === page || loading}
+                  onPress={() => {
+                    handlePageChange(p);
+                    flashListRef.current?.scrollToOffset({ offset: 360, animated: true });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Trang ${p}`}
+                >
+                  <Text
+                    style={[
+                      styles.pageNumberText,
+                      p === page ? { color: '#FFFFFF', fontWeight: '800' } : { color: theme.colors.text.primary },
+                    ]}
+                  >
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[
+              styles.pageBtn,
+              {
+                borderColor: theme.colors.border.subtle,
+                backgroundColor: page === totalPages ? theme.colors.background.primary : theme.colors.brand.primarySoft,
+                opacity: page === totalPages ? 0.4 : 1,
+              },
+            ]}
+            disabled={page === totalPages || loading}
+            onPress={() => {
+              handlePageChange(page + 1);
+              flashListRef.current?.scrollToOffset({ offset: 360, animated: true });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Trang sau"
+          >
+            <Text style={[styles.pageBtnText, { color: theme.colors.brand.primary, marginRight: 2 }]}>Sau</Text>
+            <Ionicons name="chevron-forward" size={14} color={theme.colors.brand.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Jump to Page Row ([ TextInput ] / totalPages  [ Đi đến ]) */}
+        <View style={styles.jumpToPageRow}>
+          <TextInput
+            style={[
+              styles.jumpInput,
+              {
+                backgroundColor: theme.colors.background.primary,
+                borderColor: theme.colors.border.subtle,
+                color: theme.colors.text.primary,
+              },
+            ]}
+            keyboardType="number-pad"
+            value={jumpInput}
+            onChangeText={setJumpInput}
+            placeholder={String(page)}
+            placeholderTextColor={theme.colors.text.secondary}
+            maxLength={4}
+            onFocus={() => {
+              setTimeout(() => {
+                flashListRef.current?.scrollToEnd({ animated: true });
+              }, 150);
+            }}
+            returnKeyType="done"
+            onSubmitEditing={handleJumpToPage}
+          />
+          <Text style={[styles.jumpTotalText, { color: theme.colors.text.secondary }]}>
+            / {totalPages}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.jumpBtn,
+              {
+                backgroundColor: theme.colors.brand.primary,
+              },
+            ]}
+            disabled={loading}
+            onPress={handleJumpToPage}
+            accessibilityRole="button"
+            accessibilityLabel="Đi đến trang"
+          >
+            <Text style={styles.jumpBtnText}>Đi đến</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }, [page, totalPages, totalTasks, sortedTasks.length, loading, jumpInput, handleJumpToPage, getPageNumbers, handlePageChange, theme]);
 
   const listHeader = useMemo(
     () => (
@@ -422,7 +630,7 @@ export const HomeScreen: React.FC = () => {
                 : 'Việc mới dành cho bạn'}
             </Text>
             <Text style={[styles.listCount, { color: theme.colors.brand.primary }]}>
-              {loading ? '...' : `${sortedTasks.length} việc`}
+              {loading ? '...' : `${totalTasks > 0 ? totalTasks : sortedTasks.length} việc`}
             </Text>
           </View>
         </View>
@@ -442,6 +650,7 @@ export const HomeScreen: React.FC = () => {
       statusFilter,
       debouncedSearch,
       loading,
+      totalTasks,
       sortedTasks.length,
       handleCategorySelect,
       handleResetFilters,
@@ -457,8 +666,13 @@ export const HomeScreen: React.FC = () => {
   const SafeFlashList = FlashList as any;
 
   return (
-    <View style={[styles.mainContainer, { backgroundColor: theme.colors.background.secondary }]}>
+    <KeyboardAvoidingView
+      style={[styles.mainContainer, { backgroundColor: theme.colors.background.secondary }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+    >
       <SafeFlashList
+        ref={flashListRef}
         style={[styles.list, { backgroundColor: theme.colors.background.secondary }]}
         data={taskRows}
         keyExtractor={(item: Task[]) => String(item[0].id)}
@@ -466,7 +680,7 @@ export const HomeScreen: React.FC = () => {
         estimatedItemSize={220}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmptyComponent}
-        ListFooterComponent={<View style={[styles.listFooter, { backgroundColor: theme.colors.background.secondary }]} />}
+        ListFooterComponent={listFooterComponent}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -497,7 +711,7 @@ export const HomeScreen: React.FC = () => {
         onClose={() => setNotifModalVisible(false)}
         onRefreshUnreadCount={fetchUnreadNotifCount}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -521,7 +735,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 24,
+    paddingBottom: 40,
   },
   headerWrapper: {
     backgroundColor: '#F7F8FA',
@@ -638,6 +852,99 @@ const styles = StyleSheet.create({
     color: '#667085',
   },
   statusFilterTextActive: {
+    fontWeight: '700',
+  },
+  paginationContainer: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 16,
+    marginBottom: 32,
+    marginHorizontal: 16,
+    alignItems: 'center',
+  },
+  paginationInfoText: {
+    fontSize: 12,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  paginationControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  pageNumbersScroll: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  pageNumbersScrollContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
+    gap: 4,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 36,
+  },
+  pageBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pageNumberPill: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumberText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ellipsisText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginHorizontal: 1,
+  },
+  jumpToPageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    gap: 8,
+  },
+  jumpInput: {
+    width: 54,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 8,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 4,
+  },
+  jumpTotalText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  jumpBtn: {
+    paddingHorizontal: 16,
+    height: 38,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jumpBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
 });
